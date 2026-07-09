@@ -1,0 +1,115 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "consiliency-spec"
+version = "0.1.0"
+description = "Public Consiliency canon-core v2 package: Rust core, dep-free TypeScript/Python canon ports, vectors, and public schemas."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Consilience Labs LLC" }]
+requires-python = ">=3.10"
+keywords = ["consiliency", "spec", "canon", "canonicalization", "schema"]
+
+[project.optional-dependencies]
+ingest = ["unicodedata2==16.0.0"]
+
+[project.urls]
+Homepage = "https://github.com/Consiliency/consiliency-spec"
+Issues = "https://github.com/Consiliency/consiliency-spec/issues"
+Repository = "https://github.com/Consiliency/consiliency-spec"
+
+[tool.hatch.build]
+exclude = [
+  "**/__pycache__/**",
+  "**/*.pyc",
+  "**/*.pyo",
+  "**/.pytest_cache/**",
+  "**/target/**",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["consiliency_spec"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"canon/SPEC.md" = "consiliency_spec/_data/canon/SPEC.md"
+"canon/README.md" = "consiliency_spec/_data/canon/README.md"
+"canon/bindings" = "consiliency_spec/_data/canon/bindings"
+"canon/conformance" = "consiliency_spec/_data/canon/conformance"
+"canon/core/Cargo.toml" = "consiliency_spec/_data/canon/core/Cargo.toml"
+"canon/core/Cargo.lock" = "consiliency_spec/_data/canon/core/Cargo.lock"
+"canon/core/cbindgen.toml" = "consiliency_spec/_data/canon/core/cbindgen.toml"
+"canon/core/include" = "consiliency_spec/_data/canon/core/include"
+"canon/core/scripts" = "consiliency_spec/_data/canon/core/scripts"
+"canon/core/src" = "consiliency_spec/_data/canon/core/src"
+"canon/core/tests" = "consiliency_spec/_data/canon/core/tests"
+"canon/py/canon.py" = "consiliency_spec/_data/canon/py/canon.py"
+"canon/py/canon_ingest.py" = "consiliency_spec/_data/canon/py/canon_ingest.py"
+"canon/py/test_canon.py" = "consiliency_spec/_data/canon/py/test_canon.py"
+"canon/py/requirements.txt" = "consiliency_spec/_data/canon/py/requirements.txt"
+"canon/ts/canon.ts" = "consiliency_spec/_data/canon/ts/canon.ts"
+"canon/ts/canon.test.ts" = "consiliency_spec/_data/canon/ts/canon.test.ts"
+"canon/vectors/canon-vectors.json" = "consiliency_spec/_data/canon/vectors/canon-vectors.json"
+"canon/vectors/gov-cross-repo-canon-vectors.json" = "consiliency_spec/_data/canon/vectors/gov-cross-repo-canon-vectors.json"
+"canon/vectors/gov-cross-repo-canon-vectors.PROVENANCE.md" = "consiliency_spec/_data/canon/vectors/gov-cross-repo-canon-vectors.PROVENANCE.md"
+"spec-parity/SEMANTICS.md" = "consiliency_spec/_data/spec-parity/SEMANTICS.md"
+"spec-parity/conformance" = "consiliency_spec/_data/spec-parity/conformance"
+"spec-parity/kind-alignment.json" = "consiliency_spec/_data/spec-parity/kind-alignment.json"
+"spec-parity/permitted-freedom-vocab.json" = "consiliency_spec/_data/spec-parity/permitted-freedom-vocab.json"
+"spec-parity/schemas/certificate.schema.json" = "consiliency_spec/_data/spec-parity/schemas/certificate.schema.json"
+"spec-parity/schemas/kind-alignment.schema.json" = "consiliency_spec/_data/spec-parity/schemas/kind-alignment.schema.json"
+"spec-parity/schemas/permitted-freedom-vocab.schema.json" = "consiliency_spec/_data/spec-parity/schemas/permitted-freedom-vocab.schema.json"
+"spec-parity/schemas/portal-payload.schema.json" = "consiliency_spec/_data/spec-parity/schemas/portal-payload.schema.json"
+"spec-parity/schemas/result-state.schema.json" = "consiliency_spec/_data/spec-parity/schemas/result-state.schema.json"
+"spec-parity/schemas/waiver.schema.json" = "consiliency_spec/_data/spec-parity/schemas/waiver.schema.json"
+"spec-graph/schema/spec-graph.schema.json" = "consiliency_spec/_data/spec-graph/schema/spec-graph.schema.json"
+"idmodel/correspondence/schema.json" = "consiliency_spec/_data/idmodel/correspondence/schema.json"
+"spec-engine/authority/authority-event.schema.json" = "consiliency_spec/_data/spec-engine/authority/authority-event.schema.json"
+"consiliency-spec.public-manifest.json" = "consiliency_spec/_data/consiliency-spec.public-manifest.json"
+
+[tool.hatch.build.targets.sdist]
+only-include = [
+  "CHANGELOG.md",
+  "LICENSE",
+  "README.md",
+  "consiliency_spec",
+  "package.json",
+  "pyproject.toml",
+]
+
+[tool.hatch.build.targets.sdist.force-include]
+"canon/SPEC.md" = "canon/SPEC.md"
+"canon/README.md" = "canon/README.md"
+"canon/bindings" = "canon/bindings"
+"canon/conformance" = "canon/conformance"
+"canon/core/Cargo.toml" = "canon/core/Cargo.toml"
+"canon/core/Cargo.lock" = "canon/core/Cargo.lock"
+"canon/core/cbindgen.toml" = "canon/core/cbindgen.toml"
+"canon/core/include" = "canon/core/include"
+"canon/core/scripts" = "canon/core/scripts"
+"canon/core/src" = "canon/core/src"
+"canon/core/tests" = "canon/core/tests"
+"canon/py/canon.py" = "canon/py/canon.py"
+"canon/py/canon_ingest.py" = "canon/py/canon_ingest.py"
+"canon/py/test_canon.py" = "canon/py/test_canon.py"
+"canon/py/requirements.txt" = "canon/py/requirements.txt"
+"canon/ts/canon.ts" = "canon/ts/canon.ts"
+"canon/ts/canon.test.ts" = "canon/ts/canon.test.ts"
+"canon/vectors/canon-vectors.json" = "canon/vectors/canon-vectors.json"
+"canon/vectors/gov-cross-repo-canon-vectors.json" = "canon/vectors/gov-cross-repo-canon-vectors.json"
+"canon/vectors/gov-cross-repo-canon-vectors.PROVENANCE.md" = "canon/vectors/gov-cross-repo-canon-vectors.PROVENANCE.md"
+"spec-parity/SEMANTICS.md" = "spec-parity/SEMANTICS.md"
+"spec-parity/conformance" = "spec-parity/conformance"
+"spec-parity/kind-alignment.json" = "spec-parity/kind-alignment.json"
+"spec-parity/permitted-freedom-vocab.json" = "spec-parity/permitted-freedom-vocab.json"
+"spec-parity/schemas/certificate.schema.json" = "spec-parity/schemas/certificate.schema.json"
+"spec-parity/schemas/kind-alignment.schema.json" = "spec-parity/schemas/kind-alignment.schema.json"
+"spec-parity/schemas/permitted-freedom-vocab.schema.json" = "spec-parity/schemas/permitted-freedom-vocab.schema.json"
+"spec-parity/schemas/portal-payload.schema.json" = "spec-parity/schemas/portal-payload.schema.json"
+"spec-parity/schemas/result-state.schema.json" = "spec-parity/schemas/result-state.schema.json"
+"spec-parity/schemas/waiver.schema.json" = "spec-parity/schemas/waiver.schema.json"
+"spec-graph/schema/spec-graph.schema.json" = "spec-graph/schema/spec-graph.schema.json"
+"idmodel/correspondence/schema.json" = "idmodel/correspondence/schema.json"
+"spec-engine/authority/authority-event.schema.json" = "spec-engine/authority/authority-event.schema.json"
+"consiliency-spec.public-manifest.json" = "consiliency-spec.public-manifest.json"

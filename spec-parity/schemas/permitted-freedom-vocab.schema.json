@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://consiliency.io/spec/spec-parity/v1/permitted-freedom-vocab.schema.json",
+  "title": "permitted_freedom token vocabulary (v1)",
+  "description": "Structural schema for spec-parity/permitted-freedom-vocab.json — the single source of truth for the closed/versioned/additive set of permitted_freedom tokens (SEMANTICS.md sec 3). Each token carries an id (the string a desired node declares), a rule_kind (the machine-dispatchable handler spec-engine implements), and human-facing description/operational_rule prose. spec-graph validates node `permitted_freedom` entries against tokens[].id; spec-engine dispatches the soundness matcher on tokens[].rule_kind.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "rule_kinds", "tokens"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "const": "1" },
+    "doc": { "type": "string", "description": "Non-normative narration." },
+    "rule_kinds": {
+      "type": "object",
+      "description": "The closed set of machine-dispatchable rule kinds. Object keys are the rule_kind ids a token may name. `doc` is a reserved non-rule key.",
+      "properties": {
+        "doc": { "type": "string" }
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["applies_to_dimension", "subject", "rule", "checker_treatment"],
+        "properties": {
+          "applies_to_dimension": {
+            "type": "string",
+            "enum": ["completeness", "soundness", "closure", "prohibition", "revision_alignment"],
+            "description": "Which parity dimension this rule kind governs."
+          },
+          "subject": { "type": "string", "description": "What the rule applies to." },
+          "rule": { "type": "string", "description": "The precise operational rule." },
+          "checker_treatment": { "type": "string", "description": "How the checker must treat a firing/non-firing rule." }
+        }
+      }
+    },
+    "tokens": {
+      "type": "array",
+      "minItems": 1,
+      "description": "The v1 token set. CLOSED for validation (an unknown declared token is rejected) but additive across versions.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "rule_kind", "description", "operational_rule"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "description": "The token string a desired-graph node declares in permitted_freedom."
+          },
+          "rule_kind": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Names exactly one key under rule_kinds. The engine has a handler per rule_kind."
+          },
+          "description": { "type": "string", "description": "Human-facing summary of what the token permits." },
+          "operational_rule": { "type": "string", "description": "The precise realized-side deviation permitted + how the checker treats it." },
+          "why_below_frontier": { "type": "string", "description": "Why this is permitted_freedom (SEMANTICS.md sec 3) rather than a violation or refinement." }
+        }
+      }
+    }
+  }
+}

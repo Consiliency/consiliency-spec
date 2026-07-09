@@ -1,0 +1,25 @@
+[package]
+name = "canon-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+name = "canon_core"
+crate-type = ["rlib", "cdylib"]
+
+[features]
+default = []
+pyo3-binding = ["dep:pyo3"]
+wasm-binding = ["dep:wasm-bindgen"]
+# C ABI surface for dart:ffi (mobile) and other C consumers. Additive; no algorithm change.
+c-binding = []
+
+[dependencies]
+base64 = "0.22"
+hex = "0.4"
+num-bigint = "0.4"
+serde_json = "1"
+sha2 = "0.10"
+pyo3 = { version = "0.23", features = ["extension-module"], optional = true }
+wasm-bindgen = { version = "0.2", optional = true }

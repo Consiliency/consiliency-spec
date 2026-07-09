@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.consiliency/spec-parity/portal-payload.schema.json",
+  "title": "Delivery / portal payload (Phase 0C) — metadata-only certificate projection",
+  "description": "v0 DRAFT — pending portal co-design sign-off (the portal repo is FENCED; freeze after Wave-B review). The render-ready, METADATA-ONLY projection of a parity certificate + finding SUMMARIES that a consumer (the portal) renders. It is NOT the certificate and NOT the finding_set: it is a redacted, content-addressed summary produced by spec-engine/deliver.py via project(certificate, finding_set) -> payload (SEMANTICS.md sec 12). Built by ALLOWLIST: only the fields named here are copied in. It carries NO raw evidence, NO source text, NO secrets, NO finding `message`, and NO fetchable internal URLs — every ref is a digest/id, never an http(s) URL the portal would fetch (SSRF-safe). It is a DIGEST-BEARING record: its top-level `digest` is the canon `semantic-content` digest with `digest` excluded from its own preimage (canon sec 8) — no new canon profile is introduced. NO JSON FLOATS. See SEMANTICS.md sec 12 + OPEN-5.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "payload_schema_version",
+    "schema_version",
+    "projection_algo_version",
+    "canon_version",
+    "idmodel_version",
+    "kind_alignment_version",
+    "permitted_freedom_vocab_version",
+    "certificate_digest",
+    "ec_revision_id",
+    "spec_revision_digest",
+    "desired_graph_digest",
+    "ec_digest",
+    "ec_reproducible",
+    "advisory",
+    "code_head_sha",
+    "overall_result_state",
+    "badge",
+    "dimension_results",
+    "finding_summaries",
+    "findings_ref",
+    "digest"
+  ],
+  "properties": {
+    "payload_schema_version": {
+      "const": "0",
+      "description": "Version of THIS payload schema. Starts at \"0\" to signal v0-draft status; bumps to \"1\" on portal co-design sign-off (post Wave-B). A hashed field — it travels inside the payload `digest`."
+    },
+    "schema_version": {
+      "type": "string",
+      "description": "The CERTIFICATE schema version copied verbatim from certificate.schema_version (currently \"1\"). Carried so a consumer knows which certificate contract this delivery summarizes."
+    },
+    "projection_algo_version": {
+      "type": "string",
+      "description": "P/N projection+parity algorithm version, copied from the certificate. Pins reproducibility of the underlying result."
+    },
+    "canon_version": { "type": "string", "description": "canon contract version, copied from the certificate." },
+    "idmodel_version": { "type": "string", "description": "idmodel contract version, copied from the certificate." },
+    "kind_alignment_version": { "type": "string", "description": "kind-alignment.json version, copied from the certificate." },
+    "permitted_freedom_vocab_version": { "type": "string", "description": "permitted-freedom-vocab.json version, copied from the certificate." },
+    "certificate_digest": {
+      "type": "string",
+      "description": "The certificate's authoritative identity (its top-level `digest`). The portal replay-verifies the rendered delivery against the stored certificate by THIS digest (canon sec 9 verbatim replay). A digest, NOT a fetchable URL (OPEN-5: exact byte-match domain co-designed with the portal)."
+    },
+    "ec_revision_id": { "type": "string", "description": "Realized-side revision id, copied from the certificate. A provenance id, not fetchable." },
+    "spec_revision_digest": { "type": "string", "description": "Spec/desired revision digest, copied from the certificate." },
+    "desired_graph_digest": { "type": "string", "description": "canon semantic-content digest of S, copied from the certificate." },
+    "ec_digest": { "type": "string", "description": "canon semantic-content digest of E(C), copied from the certificate." },
+    "ec_reproducible": { "type": "boolean", "description": "Whether E(C) is byte-reproducible, copied from the certificate (defaults true when the certificate omits it)." },
+    "advisory": {
+      "type": "boolean",
+      "description": "Derived render hint = NOT ec_reproducible. When true the delivery is ADVISORY and the portal MUST NOT gate on it (parity over a non-reproducible E(C) is meaningless)."
+    },
+    "code_head_sha": { "type": "string", "description": "Code repo HEAD sha the E(C) was extracted from, copied from the certificate. A provenance pin." },
+    "overall_result_state": {
+      "$ref": "result-state.schema.json#/$defs/result_state",
+      "description": "Aggregated state, copied VERBATIM from the certificate (never recomputed here). The load-bearing truth; `badge` is a convenience derived from it."
+    },
+    "badge": {
+      "type": "string",
+      "enum": ["green", "failing", "non_green", "neutral"],
+      "description": "Derived render hint. green IFF overall_result_state == pass. fail -> failing. unknown/unsupported -> non_green. not_applicable -> neutral (explicitly NON-GREEN; SEMANTICS.md 'never silently green'). The portal may restyle but MUST NOT render anything other than overall_result_state==pass as passing."
+    },
+    "dimension_results": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "description": "Per-dimension states (state-only), copied verbatim from the certificate for at-a-glance rendering. Exactly one entry per parity_dimension.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["dimension", "result_state"],
+        "properties": {
+          "dimension": { "$ref": "result-state.schema.json#/$defs/parity_dimension" },
+          "result_state": { "$ref": "result-state.schema.json#/$defs/result_state" },
+          "checks_evaluated": { "type": "integer", "minimum": 0, "description": "Optional count, copied from the certificate's dimension_result if present. A metadata count, not evidence." }
+        }
+      }
+    },
+    "finding_summaries": {
+      "type": "array",
+      "description": "One render-ready summary per finding in the referenced finding_set. METADATA-ONLY: NO message, NO evidence_refs, NO source, NO secrets. `title` is derived from the stable machine `code`, never from the finding `message`.",
+      "items": { "$ref": "#/$defs/finding_summary" }
+    },
+    "findings_ref": {
+      "type": "string",
+      "description": "Digest pointer to the full finding_set (pointer, not payload). Equals the certificate's findings_ref. A digest, not a fetchable URL."
+    },
+    "waivers_ref": {
+      "type": "string",
+      "description": "Optional digest pointer to the waivers in effect, copied from the certificate iff present. Pointer, not payload. Waived findings remain non-pass in finding_summaries (their waiver_ref is set)."
+    },
+    "digest": {
+      "type": "string",
+      "description": "The payload's content-address: canon `semantic-content` digest = lowercase hex SHA-256 over `spec-canon:v2:semantic-content\\n` || canonical_bytes(payload-without-this-top-level-`digest`-field). Excluded from its own preimage (canon sec 8). No separate hashed id field (would be circular). Named `digest` so canon's top-level digest-exclusion fires automatically, mirroring the certificate."
+    },
+    "locator": {
+      "type": "object",
+      "description": "Reserved NON-HASHED envelope (canon sec 10) for volatile/provenance render data (wall-clock rendered_at, portal display labels). v0 carries none; changing these MUST NOT change `digest`.",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "finding_summary": {
+      "title": "finding_summary",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["finding_id", "dimension", "result_state", "code", "title"],
+      "description": "A metadata-only projection of a finding. Carries the load-bearing identity (finding_id, dimension, result_state, code) + a code-derived title + an SSRF-safe location ref. EXCLUDES message, evidence_refs, confidence, and any source/secret field.",
+      "properties": {
+        "finding_id": { "type": "string", "description": "The finding's stable id (a digest), copied verbatim. A pointer into the finding_set, not fetchable." },
+        "dimension": { "$ref": "result-state.schema.json#/$defs/parity_dimension" },
+        "result_state": { "$ref": "result-state.schema.json#/$defs/result_state" },
+        "code": { "type": "string", "description": "The stable machine code of the finding (e.g. prohibition_violated), copied verbatim. Machine-stable, carries no incident detail." },
+        "title": {
+          "type": "string",
+          "description": "Human-readable label DERIVED FROM `code` (a fixed code->title map in deliver.py), NOT from the finding `message`. The message is explicitly non-meaning-bearing and is the field most likely to carry incident detail; it is never copied."
+        },
+        "location": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "An SSRF-safe location ref: idmodel digests/ids only (desired_logical_id Tier-1, realized_occurrence_id Tier-2), plus the kinds. NO file path, NO line, NO URL, NO source. Absent if the finding subject carries no location.",
+          "properties": {
+            "desired_logical_id": { "type": "string", "description": "idmodel Tier-1 logical id (a digest). Not fetchable." },
+            "realized_occurrence_id": { "type": "string", "description": "idmodel Tier-2 occurrence id (a digest). Not fetchable." },
+            "desired_kind": { "type": "string" },
+            "realized_kind": { "type": "string" },
+            "realized_source": { "type": "string", "description": "The extractor source label (e.g. greenfield/treesitter-chunker). A provenance label, not a path or URL." }
+          }
+        },
+        "waiver_ref": {
+          "type": "string",
+          "description": "If the finding is currently suppressed by a waiver, the waiver_id (a digest). The finding's result_state STAYS non-pass (a waiver never flips to pass; SEMANTICS.md sec 8). Pointer, not payload."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,71 @@
+[
+  {
+    "name": "razor-a1-tagged-int-5",
+    "input": {
+      "$int": "5"
+    },
+    "expect": "accept",
+    "bytes": "5",
+    "note": "the tagged $int (single-key, string payload) decodes to the INTEGER 5 -> canonical `5`."
+  },
+  {
+    "name": "razor-a2-literal-dollar-int-key-object",
+    "input": {
+      "$obj": {
+        "$int": {
+          "$str": "5"
+        }
+      }
+    },
+    "expect": "accept",
+    "bytes": "{\"$int\":\"5\"}",
+    "note": "an OBJECT whose sole literal key is `$int` (via $obj) with the SAME payload \"5\" -> canonical object `{\"$int\":\"5\"}`. Same input text-payload, divergent bytes: the engine must NOT confuse a literal `$int` key with the integer tag."
+  },
+  {
+    "name": "razor-a3-dollar-int-numeric-payload-rejects",
+    "input": {
+      "$int": 5
+    },
+    "expect": "reject",
+    "note": "the $int tag payload MUST be a decimal STRING; a bare JSON number payload is rejected (not silently coerced)."
+  },
+  {
+    "name": "bigint-b1-2pow53-minus-1",
+    "input": {
+      "$int": "9007199254740991"
+    },
+    "expect": "accept",
+    "bytes": "9007199254740991"
+  },
+  {
+    "name": "bigint-b2-2pow53",
+    "input": {
+      "$int": "9007199254740992"
+    },
+    "expect": "accept",
+    "bytes": "9007199254740992"
+  },
+  {
+    "name": "bigint-b3-2pow53-plus-1",
+    "input": {
+      "$int": "9007199254740993"
+    },
+    "expect": "accept",
+    "bytes": "9007199254740993",
+    "note": "2^53+1 is unrepresentable as an IEEE-754 double (would collide with 2^53); its distinct canonical bytes from b2 prove the engine keeps $int exact, not float."
+  },
+  {
+    "name": "bigint-b4-huge-200-digit",
+    "input": {
+      "$int": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"
+    },
+    "expect": "accept",
+    "bytes": "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001"
+  },
+  {
+    "name": "deep-nesting-c1-exceeds-serde-recursion-rejects",
+    "raw": "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]",
+    "expect": "reject",
+    "note": "300-deep JSON array; serde_json's parser recursion ceiling is 128, so the ENGINE rejects at parse. Must be a clean rejection, never a partial/mis-digested accept."
+  }
+]

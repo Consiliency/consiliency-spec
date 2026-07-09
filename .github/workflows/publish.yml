@@ -1,0 +1,64 @@
+# Publish workflow — INERT until the maintainer creates a GitHub Release AND
+# configures Trusted Publishing on npm + PyPI. It never runs on push/PR and it
+# never runs on a fork. Trusted Publishing means no long-lived tokens live here.
+name: publish
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: release gate before publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: dtolnay/rust-toolchain@stable
+      - run: python -m pip install --upgrade pip build
+      - run: bash scripts/consiliency-spec/check_release.sh
+
+  publish-pypi:
+    name: publish to PyPI (Trusted Publishing)
+    needs: guard
+    runs-on: ubuntu-latest
+    # Requires a PyPI Trusted Publisher for consiliency-spec to be configured
+    # by the maintainer first. Until then this job has no credentials and the
+    # upload step fails closed.
+    environment: pypi
+    permissions:
+      id-token: write  # OIDC token for Trusted Publishing
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip build
+      - run: python -m build
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-npm:
+    name: publish to npm (Trusted Publishing / provenance)
+    needs: guard
+    runs-on: ubuntu-latest
+    # Requires an npm Trusted Publisher for @consiliency/spec to be configured
+    # by the maintainer first. Fails closed without it.
+    environment: npm
+    permissions:
+      id-token: write  # OIDC provenance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      - run: npm publish --provenance --access public

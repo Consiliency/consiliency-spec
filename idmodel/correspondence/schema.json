@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://consiliency.io/spec/idmodel/v1/correspondence.schema.json",
+  "title": "idmodel v1 correspondence map",
+  "description": "Maps a logical continuity line (keyed by its first-seen Tier-1 logical_id) to its occurrences over revisions. Refactor tolerance lives HERE, not in the Tier-1 hash: a move/rename CHANGES the Tier-1 logical_id, and continuity is preserved by these authored/inferred entries with confidence, mapping-origin, manual overrides, and a lifecycle label (validation #3). The rename/move auto-detection heuristic is OUT OF SCOPE for v1 — this schema + the golden fixtures prove the CONTRACT.",
+  "type": "object",
+  "required": ["logical_id", "entries"],
+  "additionalProperties": false,
+  "properties": {
+    "scenario": {
+      "type": "string",
+      "description": "Optional human label for the continuity line (e.g. rename/move/split/merge)."
+    },
+    "logical_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "The continuity line's key: the FIRST-seen Tier-1 logical_id (lowercase hex SHA-256). Subsequent revisions may carry a DIFFERENT logical_id (see entries[].logical_id) — that is expected and is the whole reason this map exists."
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/entry" }
+    }
+  },
+  "definitions": {
+    "entry": {
+      "type": "object",
+      "required": [
+        "revision",
+        "occurrence_id",
+        "file",
+        "span",
+        "confidence",
+        "mapping_origin",
+        "lifecycle"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "revision": {
+          "type": "string",
+          "description": "Revision identifier (commit/digest/label) this occurrence belongs to."
+        },
+        "occurrence_id": {
+          "type": "string",
+          "description": "Tier-2 occurrence/evidence id for this revision (canon semantic-content digest of the occurrence record). PROVENANCE only — never cross-revision identity."
+        },
+        "logical_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "The Tier-1 logical_id of the entity AS COMPUTED FOR THIS REVISION. May differ from the map's top-level logical_id after a rename/move/split/merge/sig-change — that delta is the refactor event."
+        },
+        "file": {
+          "type": "string",
+          "description": "Provenance: the file the occurrence was found in (NOT part of the Tier-1 key)."
+        },
+        "span": {
+          "type": "object",
+          "description": "Provenance: the source span (line/byte offsets) of the occurrence.",
+          "properties": {
+            "start": { "type": "integer" },
+            "end": { "type": "integer" }
+          }
+        },
+        "confidence": {
+          "description": "Mapping confidence in [0,1]. Represented as a STRING decimal (e.g. \"0.92\") or a scaled integer (e.g. 92 for hundredths) — NEVER a JSON float, per canon (floats are forbidden in canonical content).",
+          "oneOf": [
+            { "type": "string", "pattern": "^(0(\\.[0-9]+)?|1(\\.0+)?)$" },
+            { "type": "integer", "minimum": 0 }
+          ]
+        },
+        "mapping_origin": {
+          "type": "string",
+          "enum": ["extracted", "inferred", "manual"],
+          "description": "How the mapping was produced: extracted = directly observed at the same key; inferred = heuristic rename/move detection; manual = human-asserted."
+        },
+        "lifecycle": {
+          "type": "string",
+          "enum": [
+            "active",
+            "moved",
+            "renamed",
+            "split",
+            "merged",
+            "superseded",
+            "ambiguous",
+            "deleted"
+          ],
+          "description": "The lifecycle event for this occurrence within the continuity line (verbatim v1 enum, Phase 0B)."
+        },
+        "manual_override": {
+          "type": "boolean",
+          "default": false,
+          "description": "True if a human overrode the auto-detected mapping. Manual overrides win over inferred mappings."
+        }
+      }
+    }
+  }
+}

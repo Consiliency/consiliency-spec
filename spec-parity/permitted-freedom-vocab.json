@@ -1,0 +1,36 @@
+{
+  "$schema": "./schemas/permitted-freedom-vocab.schema.json",
+  "version": "1",
+  "doc": "permitted_freedom token vocabulary — the SINGLE SOURCE OF TRUTH for the closed (but versioned/additive) set of tokens a desired-graph node may declare in its `permitted_freedom` field. SEMANTICS.md sec 3 narrates the CONCEPT (a realized fact below the frontier that the spec explicitly permits to vary is `permitted_freedom`, never a soundness violation); THIS FILE pins the exact token set + each token's PRECISE operational rule. All three layers read this file: spec-graph validates declared tokens against `tokens[].id` (unknown token = validation error in v1); spec-engine's projection/parity matcher dispatches on `tokens[].rule_kind` (no hard-coded token strings). v1 is CLOSED (an unknown token is rejected) but ADDITIVE BY DESIGN (adding a token + its rule_kind handler is a minor version bump; re-meaning/removing one is a major bump).",
+  "rule_kinds": {
+    "doc": "The closed set of machine-dispatchable rule kinds the spec-engine matcher implements. Each token names exactly one. A token whose rule_kind is not in this set is a vocabulary error (the engine has no handler) — this is the additive seam: a new token ships with its rule_kind handler.",
+    "allow_signature_superset": {
+      "applies_to_dimension": "soundness",
+      "subject": "a MATCHED (at/above-frontier) desired node of kind `interface` or `operation` that declares this token, compared against its realized correspondent's normalized signature (idmodel sec 4).",
+      "rule": "The realized normalized signature is accepted (NOT a `structural_mismatch`) when it is a SUPERSET-BY-EXTENSION of the desired signature: identical `return_type`, and the desired param `type` list is a PREFIX of the realized param `type` list (the realized side may APPEND additional params/members but may neither drop, reorder, retype, nor change the return type of the declared ones). Any deviation that is NOT a pure trailing extension is still a `structural_mismatch` (the token does not blanket-excuse signature drift).",
+      "checker_treatment": "When the rule holds AND the realized signature is a strict (non-equal) extension, the checker emits a `permitted_freedom` finding with result_state `pass` (the deviation is recorded as permitted, not silently dropped) and the soundness check for that subject is `pass`. When the realized signature EQUALS the desired one, no deviation occurred and the ordinary `pass` (no finding) applies. When the rule does NOT hold, the token does not fire and the ordinary `structural_mismatch` `fail` is emitted."
+    },
+    "order_insensitive_members": {
+      "applies_to_dimension": "soundness",
+      "subject": "a MATCHED desired node of kind `type` (an enum/record) that declares this token and carries a structured `members` list, compared against its realized correspondent's `members`.",
+      "rule": "The realized member set is accepted when it equals the desired member set AS A SET (order-insensitive): same membership ignoring declaration order. A member present in one side and absent in the other is still a `structural_mismatch` (the token relaxes ORDER, not membership).",
+      "checker_treatment": "When the member sets are equal but the ORDER differs, the checker emits a `permitted_freedom` finding with result_state `pass` and the soundness member-comparison is `pass`. When order also matches, ordinary `pass` (no finding). When membership differs, the token does not fire and `structural_mismatch` `fail` is emitted. NOTE: the realized-side `members` shape is the same `[{name,type?}]` list used by the desired side; an extractor that does not surface enum members leaves the comparison without realized evidence -> the soundness member-comparison is `unknown` (never a silent pass), independent of this token. OPEN: the desired-side `members` field IS now first-class in spec-graph v1 (type-node schema + hashed as an ordered list), but the realized-side `members` shape from greenfield's Interface Boundary IR is UNCONFIRMED (OPEN-1 in SEMANTICS.md sec 5.1) — until reconciled against interface_boundary.py, a live (non-fixture) E(C) that omits members resolves this comparison to `unknown`, not a false pass."
+    }
+  },
+  "tokens": [
+    {
+      "id": "open_interface",
+      "rule_kind": "allow_signature_superset",
+      "description": "The spec declares this interface/operation OPEN/extensible: realized code may expose additional parameters or members beyond the declared contract without that extension being a soundness violation. The declared surface is a floor, not a ceiling.",
+      "operational_rule": "Permits a realized normalized signature that is a SUPERSET-BY-EXTENSION of the desired one (identical return_type; desired param types are a prefix of realized param types). A realized side that appends params is `permitted_freedom` (pass); one that drops/reorders/retypes a declared param or changes the return type is still `structural_mismatch` (fail). See rule_kinds.allow_signature_superset.",
+      "why_below_frontier": "The extra realized params/members live BELOW the frontier (the spec deliberately does not constrain them); SEMANTICS.md sec 3 classifies such spec-permitted variation as `permitted_freedom` rather than refinement_below_frontier because the desired node EXPLICITLY declares the permission."
+    },
+    {
+      "id": "order_insensitive_enum",
+      "rule_kind": "order_insensitive_members",
+      "description": "The spec declares this enum/type's member ORDER non-significant: realized code may list the same members in a different order without that reordering being a soundness violation. Membership is still pinned; only order is freed.",
+      "operational_rule": "Permits a realized `type` whose member set equals the desired member set ignoring order. A reordering is `permitted_freedom` (pass); a member added or removed is still `structural_mismatch` (fail). See rule_kinds.order_insensitive_members.",
+      "why_below_frontier": "Declaration order of enum members is an implementation-choice point the spec explicitly permits to vary (SEMANTICS.md sec 3 `permitted_freedom`: 'an enum the schema declares order-insensitive')."
+    }
+  ]
+}

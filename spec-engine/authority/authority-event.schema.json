@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spec-engine/authority/authority-event.schema.json",
+  "title": "XG2 Authority Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "authority_event_version",
+    "event_type",
+    "audience",
+    "approver",
+    "validity",
+    "key_id",
+    "custody_binding",
+    "revocation",
+    "supersession",
+    "previous_entry_digest",
+    "entry_digest",
+    "signature",
+    "inclusion_proof"
+  ],
+  "properties": {
+    "authority_event_version": {
+      "const": "1"
+    },
+    "event_type": {
+      "const": "governance_bridge_decision"
+    },
+    "audience": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repo",
+        "env",
+        "lineage",
+        "policy_epoch",
+        "canon_version",
+        "decision_id"
+      ],
+      "properties": {
+        "repo": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$" },
+        "env": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$" },
+        "lineage": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$" },
+        "policy_epoch": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$" },
+        "canon_version": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$" },
+        "decision_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$" }
+      }
+    },
+    "approver": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_.:-]+$"
+    },
+    "validity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "not_before",
+        "not_after"
+      ],
+      "properties": {
+        "not_before": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "not_after": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        }
+      }
+    },
+    "key_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_.:-]+$"
+    },
+    "custody_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binding_version",
+        "origin",
+        "owner",
+        "phase_loop_driver_allowed"
+      ],
+      "properties": {
+        "binding_version": { "const": "1" },
+        "origin": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$" },
+        "owner": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$" },
+        "phase_loop_driver_allowed": { "type": "boolean" }
+      }
+    },
+    "revocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "reason"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["active", "revoked"]
+        },
+        "reason": {
+          "type": ["string", "null"],
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_.:-]+$"
+        }
+      }
+    },
+    "supersession": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "supersedes_entry_digest"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["current", "superseded"]
+        },
+        "supersedes_entry_digest": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "previous_entry_digest": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "entry_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "signature_version",
+        "signer",
+        "signature_digest"
+      ],
+      "properties": {
+        "signature_version": { "const": "1" },
+        "signer": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$" },
+        "signature_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "inclusion_proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "proof_version",
+        "entry_digest",
+        "previous_entry_digest",
+        "root_digest"
+      ],
+      "properties": {
+        "proof_version": { "const": "1" },
+        "entry_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "previous_entry_digest": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "root_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

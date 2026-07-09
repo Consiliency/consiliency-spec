@@ -1,0 +1,236 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://consiliency.io/spec/spec-graph/v1/spec-graph.schema.json",
+  "title": "spec-graph v1 desired-state semantic metamodel",
+  "description": "Typed node/edge desired-state graph (the S in N(S)=N(P(E(C),S))). Open versioned kind registry spanning architecture AND code-level semantics. Nodes carry two ids: logical_id (idmodel, cross-revision identity, narrow) and content_digest (canon semantic-content over all formal fields, wide). Edges reference nodes by name; endpoints are typed but node-only in v1. rationale/notes/source_position are a non-hashed envelope (canon content/envelope split).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spec_graph_version", "nodes", "edges"],
+  "properties": {
+    "spec_graph_version": { "const": "1" },
+    "registry_version": { "const": "1" },
+    "graph_id": {
+      "type": "string",
+      "description": "Author label for the graph. ENVELOPE-ONLY: never enters the graph digest."
+    },
+    "rationale": { "type": "string", "description": "Non-hashed prose envelope for the whole graph." },
+    "notes": { "type": "string", "description": "Non-hashed notes envelope for the whole graph." },
+    "nodes": { "type": "array", "items": { "$ref": "#/$defs/node" } },
+    "edges": { "type": "array", "items": { "$ref": "#/$defs/edge" } }
+  },
+  "$defs": {
+    "level": {
+      "type": "string",
+      "enum": ["contract", "architecture", "detailed"],
+      "description": "Decomposition level. Maps to idmodel file_role."
+    },
+    "node_kind": {
+      "type": "string",
+      "enum": [
+        "component", "capability", "interface", "operation", "type",
+        "state", "invariant", "error", "event", "security_rule",
+        "performance", "prohibition", "acceptance_criterion"
+      ],
+      "description": "Open versioned kind registry (v1 closed-world set). Adding a kind = minor registry bump."
+    },
+    "edge_kind": {
+      "type": "string",
+      "enum": [
+        "decomposes_to", "depends_on", "provides", "exposes", "raises",
+        "emits", "transitions_to", "governed_by", "verified_by"
+      ]
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_-]*)*$",
+      "description": "Author-supplied dotted stable identifier (maps to idmodel qualified_symbol). Required on every node."
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Schema-declared ORDER-INSENSITIVE string set (sorted during Normalize, per canon section 4)."
+    },
+    "permitted_freedom": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Phase-3a parity hook (SEMANTICS.md section 3): order-insensitive token set declaring what realized code may vary below the frontier without a soundness violation. FORMAL/hashed; sorted in Normalize like tags. Tokens MUST be drawn from the vocabulary spec-parity/permitted-freedom-vocab.json (the single source of truth; v1 = open_interface, order_insensitive_enum); an unknown token is a validation error in v1 (additive across versions). The same vocabulary drives the spec-engine soundness matcher (dispatch on rule_kind)."
+    },
+    "prohibition_domain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "description": "Closed-world domain descriptor for a prohibition (Phase-3a parity hook, SEMANTICS.md section 4). Bounds the fact set the prohibition is decided over; without it a prohibition is `unsupported`. The optional scan-predicate fields below pin the DECIDABLE assertion for a domain type (SEMANTICS section 4.1/4.4): a domain without its predicate has no scanner and stays `prohibition_domain_unscanned` -> `unsupported`. FORMAL/hashed — the set sub-fields (edge_types/forbidden_call_targets/kinds) are order-insensitive token sets sorted during Normalize; `type`/`allowed_rule` are hashed verbatim.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["edge_set", "node_kind_set", "signature_facts", "capability_registration", "external"],
+          "description": "v1 domain type. `external` always yields `unknown` (extractor does not model it)."
+        },
+        "kinds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "node_kind_set: the realized node kind(s) the domain ranges over (SEMANTICS section 4.1). ORDER-INSENSITIVE token set: sorted during Normalize (like tags), so author order never enters the graph digest."
+        },
+        "allowed_rule": {
+          "type": "string",
+          "description": "node_kind_set: the rule deciding which in-domain nodes are PERMITTED (vs a violation), e.g. `corresponds_to_declared_desired_interface`."
+        },
+        "edge_types": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "edge_set: the realized edge type(s) the domain ranges over, e.g. [\"calls\"] (SEMANTICS section 4.4). ORDER-INSENSITIVE token set: sorted during Normalize (like tags), so author order never enters the graph digest."
+        },
+        "forbidden_call_targets": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "edge_set: the forbidden target tokens (callee identifiers) — an edge in the domain whose target token equals one of these is a violation. Exact token equality, NOT substring (SEMANTICS section 4.4). ORDER-INSENSITIVE token set: sorted during Normalize (like tags), so author order never enters the graph digest. A bare edge_set with no forbidden_call_targets has no decidable assertion -> `prohibition_domain_unscanned` -> `unsupported`."
+        }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Structured signature (idmodel section 4). Param NAMES dropped during normalization; types canonicalized.",
+      "properties": {
+        "params": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "return_type": { "type": ["string", "null"] }
+      }
+    },
+    "node_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["origin"],
+      "description": "Draft-S provenance marker (IF-0-BOOT-1, brownfield freeze). ENVELOPE-ONLY: NON-HASHED — does NOT enter the graph digest OR the node logical_id (a node with vs without provenance is byte-identical in both ids), exactly like rationale/notes. Records how a bootstrapped node originated: code_derived (E(C) scaffold), doc_derived (docs intent), human_authored (ratified intent). A node WITHOUT a provenance block is treated as human_authored (the pre-brownfield default — a hand-authored S is an authority).",
+      "properties": {
+        "origin": {
+          "type": "string",
+          "enum": ["code_derived", "doc_derived", "human_authored"],
+          "description": "How this draft node originated. Only human_authored (and not unratified) is an authority (anti-vacuity rule)."
+        },
+        "boundary_id": { "type": "string", "description": "Optional: the realized E(C) boundary this code-derived node was scaffolded from." },
+        "clause_id": { "type": "string", "description": "Optional: the docs clause this doc-derived intent node was proposed from." }
+      }
+    },
+    "source_position": {
+      "type": "object",
+      "description": "DSL provenance. ENVELOPE-ONLY: excluded from the graph digest AND from round-trip equality (re-derived on parse).",
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "col": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": ["kind", "name", "level"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "$ref": "#/$defs/node_kind" },
+        "name": { "$ref": "#/$defs/name" },
+        "level": { "$ref": "#/$defs/level" },
+        "signature": { "$ref": "#/$defs/signature" },
+        "tags": { "$ref": "#/$defs/tags" },
+
+        "frontier": { "type": "boolean", "description": "Phase-3a parity hook (SEMANTICS.md section 1.2.2): node is in-scope for a parity run. Default false. FORMAL/hashed." },
+        "permitted_freedom": { "$ref": "#/$defs/permitted_freedom" },
+        "domain": { "$ref": "#/$defs/prohibition_domain", "description": "prohibition: required closed-world domain (Phase-3a hook)." },
+
+        "type_form": { "type": "string", "description": "type kind: record/enum/alias/..." },
+        "members": {
+          "type": "array",
+          "description": "type: ordered member list (enum variants / record fields). FORMAL/hashed as an ORDERED list (desired-side declaration order is content). The `order_insensitive_enum` permitted_freedom token frees only the REALIZED-side comparison order, not the desired-side hashed order.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "expression": { "type": "string", "description": "invariant: the property that must hold." },
+        "code": { "type": "string", "description": "error: a stable error code." },
+        "payload_ref": { "$ref": "#/$defs/name", "description": "event: name of the payload type node." },
+        "rule": { "type": "string", "description": "security_rule: the requirement." },
+        "budget": { "type": "string", "description": "performance: the budget, as a string (no floats per canon)." },
+        "statement": { "type": "string", "description": "prohibition: the MUST-NOT statement." },
+        "observable": { "type": "boolean", "description": "prohibition: can an extractor observe a violation? false => Phase-3 unknown, never silent pass." },
+        "given": { "type": "string", "description": "acceptance_criterion: precondition." },
+        "when": { "type": "string", "description": "acceptance_criterion: action." },
+        "then": { "type": "string", "description": "acceptance_criterion: expected outcome." },
+
+        "rationale": { "type": "string", "description": "ENVELOPE-ONLY non-hashed rationale." },
+        "notes": { "type": "string", "description": "ENVELOPE-ONLY non-hashed notes." },
+        "provenance": { "$ref": "#/$defs/node_provenance" },
+        "unratified": { "const": true, "description": "Draft-S marker (IF-0-BOOT-1): the node is still an UNRATIFIED bootstrap draft (a human has not asserted its intent). TRUE-OR-ABSENT: omit it for a ratified node — an explicit `false` is rejected (it would break the DSL round-trip, since the truthiness-based envelope render drops a falsy field while Normalize preserves it). ENVELOPE-ONLY: NON-HASHED — does not enter the graph digest OR logical_id. Absent = ratified/not-a-draft. A never-ratified, all-code-derived S is NOT an authority (anti-vacuity rule)." },
+        "source_position": { "$ref": "#/$defs/source_position" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "operation" } }, "required": ["kind"] },
+          "then": { "required": ["signature"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "invariant" } }, "required": ["kind"] },
+          "then": { "required": ["expression"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "security_rule" } }, "required": ["kind"] },
+          "then": { "required": ["rule"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "performance" } }, "required": ["kind"] },
+          "then": { "required": ["budget"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "prohibition" } }, "required": ["kind"] },
+          "then": { "required": ["statement", "observable", "domain"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "acceptance_criterion" } }, "required": ["kind"] },
+          "then": { "required": ["then"] }
+        }
+      ]
+    },
+    "endpoint": {
+      "type": "object",
+      "required": ["endpoint_kind", "id"],
+      "additionalProperties": false,
+      "properties": {
+        "endpoint_kind": {
+          "type": "string",
+          "const": "node",
+          "description": "v1: node-only. Typed so a future subgraph/code_symbol endpoint kind is additive. (Resolved open question: edges do NOT target subgraphs.)"
+        },
+        "id": { "$ref": "#/$defs/name", "description": "The target node's name." }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "required": ["kind", "source", "target"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "$ref": "#/$defs/edge_kind" },
+        "source": { "$ref": "#/$defs/endpoint" },
+        "target": { "$ref": "#/$defs/endpoint" },
+        "tags": { "$ref": "#/$defs/tags" },
+        "rationale": { "type": "string", "description": "ENVELOPE-ONLY." },
+        "notes": { "type": "string", "description": "ENVELOPE-ONLY." },
+        "source_position": { "$ref": "#/$defs/source_position" }
+      }
+    }
+  }
+}

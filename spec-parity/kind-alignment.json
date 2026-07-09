@@ -1,0 +1,316 @@
+{
+  "$schema": "./schemas/kind-alignment.schema.json",
+  "version": "1",
+  "doc": "Kind-alignment matrix: realized kinds (greenfield Interface Boundary IR + treesitter-chunker boundary/chunk kinds) -> spec desired metamodel kinds (Phase 2). Consumed by P(E(C),S) to decide which realized facts bear which desired-side checks. See SEMANTICS.md sec 5. THIS FILE IS THE SINGLE SOURCE OF TRUTH for the mapping; SEMANTICS.md sec 5 narrates it but does not redefine it.",
+  "spec_desired_kinds": [
+    "component",
+    "capability",
+    "interface",
+    "operation",
+    "type",
+    "state",
+    "invariant",
+    "error",
+    "event",
+    "security_rule",
+    "performance",
+    "prohibition",
+    "acceptance_criterion"
+  ],
+  "realized_sources": {
+    "greenfield": {
+      "source_ref": "internal design note (interface_boundary.py + interface-boundary-spec.md:70-139)",
+      "kind_values_status": "CONFIRMED",
+      "kind_values_note": "OPEN-1 RESOLVED (via IF-0-PUBKINDS-1). The greenfield node `kind` values are now reconciled against the published closed set in greenfield/interface_boundary.py:27-29: SYMBOL_NODE_KINDS = frozenset({module, class, interface, struct, trait, function, method}). The node-kind rows below cover EXACTLY that set. Versus the prior core-graph NodeKind proxy this added `struct` (greenfield emits it for Go/Rust record types) and dropped the dead `field`/`property` rows (greenfield never emits them; their tsc-source `field_declaration`/`property_declaration` and protobuf `field` spellings remain under their own realized_source keys). The IR SHAPE is unchanged (nodes[]{boundary_id,kind,name,qualified_name,file,line-span,signature,parent_boundary_id,provenance} + edges[]{from/to boundary_id, type imports|calls|dependencies, resolution resolved|ambiguous|unresolved, is_internal}). A greenfield kind outside this closed set still uses the unmapped_realized_kind fallback rule below.",
+      "edge_types": ["imports", "calls", "dependencies"],
+      "edge_resolution_states": ["resolved", "ambiguous", "unresolved"]
+    },
+    "treesitter-chunker": {
+      "source_ref": "internal schema inventory sec 1.1 + internal design note",
+      "kind_values_status": "OPEN_SET",
+      "kind_values_note": "OPEN-2. Chunker boundary/chunk kinds are PER-GRAMMAR across 47 languages and are therefore NOT a closed enumerable set. The table below lists only the cross-language anchor kinds that recur in the documented grammars; every other per-grammar kind is handled by the fallback rule (unmapped_realized_kind). Resolution states resolved|unresolved|ambiguous mirror greenfield.",
+      "resolution_states": ["resolved", "unresolved", "ambiguous"]
+    },
+    "protobuf": {
+      "source_ref": "spec-engine/realized/protobuf-proto/protobuf_adapter.py (protoc FileDescriptorSet -> E(C))",
+      "kind_values_status": "CONFIRMED",
+      "kind_values_note": "protobuf is a CLOSED, CANONICAL schema. The realized kinds are emitted directly from the protoc FileDescriptorSet (descriptor.proto): message_type -> `message`, message_type.field -> `field`, enum_type -> `enum`, service -> `service`, service.method -> `rpc`. Unlike the per-grammar tsc OPEN_SET, this is a fully enumerated set (descriptor.proto is the spec), so kind_values_status is CONFIRMED. The .proto is the realized IMPLEMENTATION E(C) (gRPC/message code is generated FROM it), NOT a desired-state graph. Edge types emitted: field_type (field -> resolved type token, the forbidden-field-type prohibition's scan domain), rpc_input/rpc_output (rpc -> message wiring). All edges are `resolved` (the descriptor fully resolves cross-file references).",
+      "edge_types": ["field_type", "rpc_input", "rpc_output"],
+      "resolution_states": ["resolved"]
+    }
+  },
+  "mappings": [
+    {
+      "realized_source": "greenfield",
+      "realized_kind": "module",
+      "desired_kind": "component",
+      "alignment": "exact",
+      "note": "A module-level boundary maps to a desired component (the coarsest structural unit). When a desired `capability` is declared as decomposing into modules, projection may also surface this under capability via decomposition edges (idmodel correspondence, not kind)."
+    },
+    {
+      "realized_source": "greenfield",
+      "realized_kind": "class",
+      "desired_kind": "component",
+      "alignment": "exact",
+      "note": "A class boundary maps to a component. Methods on the class map to operations (below)."
+    },
+    {
+      "realized_source": "greenfield",
+      "realized_kind": "interface",
+      "desired_kind": "interface",
+      "alignment": "exact"
+    },
+    {
+      "realized_source": "greenfield",
+      "realized_kind": "trait",
+      "desired_kind": "interface",
+      "alignment": "approximate",
+      "note": "Traits/protocols are interface-shaped contracts; mapped to `interface`. A default-method-bearing trait MAY also carry operations; projection emits the interface mapping and treats default-method bodies as refinement-below-frontier (SEMANTICS.md sec 3)."
+    },
+    {
+      "realized_source": "greenfield",
+      "realized_kind": "function",
+      "desired_kind": "operation",
+      "alignment": "exact"
+    },
+    {
+      "realized_source": "greenfield",
+      "realized_kind": "method",
+      "desired_kind": "operation",
+      "alignment": "exact"
+    },
+    {
+      "realized_source": "greenfield",
+      "realized_kind": "struct",
+      "desired_kind": "type",
+      "alignment": "exact",
+      "note": "greenfield emits `struct` for Go/Rust record types (published closed set, interface_boundary.py:27-29 via IF-0-PUBKINDS-1). A struct/record carries a type definition; mapped to `type`. MIRRORS the tsc-source `struct -> type (exact)` and protobuf `message -> type (exact)` rows, so the matrix stays internally consistent across realized sources. Before this row a greenfield struct node fell to unmapped_realized_kind -> unsupported."
+    },
+    {
+      "realized_source": "greenfield",
+      "realized_kind": "EDGE:imports",
+      "desired_kind": "interface",
+      "alignment": "edge_evidence",
+      "note": "Edges are not nodes. An `imports`/`calls`/`dependencies` edge is consumed as EVIDENCE for interface-usage and closure checks (which realized dependencies cross the frontier), never as a standalone desired node. `resolution=unresolved|ambiguous` on a parity-bearing edge degrades the dependent check to `unknown` (the fact is not fully observable), never `pass`."
+    },
+    {
+      "realized_source": "greenfield",
+      "realized_kind": "EDGE:calls",
+      "desired_kind": "operation",
+      "alignment": "edge_evidence",
+      "note": "Call edges are evidence for operation-usage / capability-wiring checks. See EDGE:imports note for resolution handling."
+    },
+    {
+      "realized_source": "greenfield",
+      "realized_kind": "EDGE:dependencies",
+      "desired_kind": "component",
+      "alignment": "edge_evidence",
+      "note": "Dependency edges are evidence for component-wiring / closure. See EDGE:imports note for resolution handling."
+    },
+    {
+      "realized_source": "treesitter-chunker",
+      "realized_kind": "function",
+      "desired_kind": "operation",
+      "alignment": "exact",
+      "note": "Anchor kind present in most grammars."
+    },
+    {
+      "realized_source": "treesitter-chunker",
+      "realized_kind": "method",
+      "desired_kind": "operation",
+      "alignment": "exact"
+    },
+    {
+      "realized_source": "treesitter-chunker",
+      "realized_kind": "class",
+      "desired_kind": "component",
+      "alignment": "exact",
+      "note": "Cross-language anchor. Confirmed against tsc 3.0.0 for Java: `class Gateway { ... }` emits a boundary node kind=`class` (symbol=Gateway, semantic path `Gateway.java::Gateway`) in the C++/JAVA realized sample. NOTE the C++ asymmetry: tsc 3.0.0's C++ grammar does NOT emit a `class` boundary for a class in a .hpp — it surfaces only free `function` boundaries — so C++ never reaches this row (see the cppjava sample/README)."
+    },
+    {
+      "realized_source": "treesitter-chunker",
+      "realized_kind": "interface",
+      "desired_kind": "interface",
+      "alignment": "exact",
+      "note": "Cross-language anchor. Confirmed against tsc 3.0.0 for Java: `interface ToolPort { ... }` emits a boundary node kind=`interface` (symbol=ToolPort, semantic path `Gateway.java::ToolPort`) in the C++/JAVA realized sample; a desired `interface` matched to it reaches a real soundness check that passes."
+    },
+    {
+      "realized_source": "treesitter-chunker",
+      "realized_kind": "struct",
+      "desired_kind": "type",
+      "alignment": "exact",
+      "note": "struct/record/dataclass-shaped chunks carry a type definition."
+    },
+    {
+      "realized_source": "treesitter-chunker",
+      "realized_kind": "enum",
+      "desired_kind": "type",
+      "alignment": "exact",
+      "note": "Cross-language anchor confirmed against tsc 3.0.0 for Java: `enum Status { READY, BUSY }` emits a boundary node kind=`enum` (symbol=Status, semantic path `Gateway.java::Status`) in the C++/JAVA realized sample (spec-engine/realized/sample_multilang_cppjava/Gateway.java). An enum carries a type definition; mapped to `type`. A desired `type` matched to it reaches a real soundness check (no signature -> structural comparison passes)."
+    },
+    {
+      "realized_source": "treesitter-chunker",
+      "realized_kind": "field_declaration",
+      "desired_kind": "type",
+      "alignment": "approximate",
+      "note": "Java field. Empirically confirmed against tsc 3.0.0: a Java `private String name;` member emits a boundary node kind=`field_declaration` (symbol=name, qualified name `Gateway.name`, semantic path `Gateway.java::Gateway.name`) in the C++/JAVA realized sample (spec-engine/realized/sample_multilang_cppjava/Gateway.java). This is tsc's Java spelling of the greenfield `field` kind, so it MIRRORS the greenfield `field -> type (approximate)` row: a field/member carries a type reference; mapped to `type` for type-shape parity. Fields are commonly refinement-below-frontier unless the desired graph names them explicitly (here `tool.gateway.java.name` names it explicitly, so it reaches an in-scope soundness check that passes — a `type` carries no signature, so the structural comparison passes). Before this row a Java field_declaration fell to unmapped_realized_kind -> unsupported."
+    },
+    {
+      "realized_source": "treesitter-chunker",
+      "realized_kind": "property_declaration",
+      "desired_kind": "type",
+      "alignment": "approximate",
+      "note": "Kotlin/Swift/PHP property/stored-property/typed-property. Empirically confirmed against tsc 3.0.0 over spec-engine/realized/sample_multilang_rich: a Swift `var name: String` emits a boundary kind=`property_declaration` (symbol=name, semantic path `Gateway.swift::Gateway.name`), a Kotlin `val name: String` emits kind=`property_declaration` (Kotlin resolves the symbol poorly so it surfaces at `Gateway.kt::class_declaration`, but it is the SINGLE unambiguous property boundary), and a PHP `private string $name` emits kind=`property_declaration` (the property's OWN name is not surfaced, so it carries the class symbol at `Gateway.php::Gateway` — still unambiguous). This is tsc's Kotlin/Swift/PHP spelling of the greenfield `property` kind, so it MIRRORS both the greenfield `property -> type (approximate)` row and the tsc-source `field_declaration -> type (approximate)` row (Java): a property/member carries a type reference; mapped to `type` for type-shape parity. Properties are commonly refinement-below-frontier unless the desired graph names them explicitly (here each language's property is named explicitly, so it reaches an in-scope soundness check that passes — a `type` carries no signature, so the structural comparison passes). A property with observable get/set behavior MAY additionally align to `operation` if the desired graph models it as one (per the greenfield property note); default is `type`. Before this row, a Kotlin/Swift/PHP property_declaration fell to unmapped_realized_kind -> unsupported."
+    },
+    {
+      "realized_source": "treesitter-chunker",
+      "realized_kind": "protocol_declaration",
+      "desired_kind": "interface",
+      "alignment": "approximate",
+      "note": "Swift protocol. Empirically confirmed against tsc 3.0.0 over spec-engine/realized/sample_multilang_rich: a Swift `protocol ToolPort { ... }` emits a boundary kind=`protocol_declaration` (symbol=ToolPort, semantic path `Gateway.swift::ToolPort`). A Swift protocol is an interface-shaped contract (a structural interface), so it MIRRORS the greenfield/tsc `trait -> interface (approximate)` rows: protocols/traits are interface-shaped contracts; mapped to `interface`. A default-method-bearing protocol MAY also carry operations; projection emits the interface mapping and treats default-method bodies as refinement-below-frontier (SEMANTICS.md sec 3). Note: in tsc 3.0.0 the protocol's own method requirements are NOT emitted as separate boundary nodes (the protocol is a bare interface boundary). Before this row, a Swift protocol fell to unmapped_realized_kind -> unsupported; with it, a desired `interface` matched to the protocol via correspondence reaches a real soundness check (a `component`/`interface` carries no signature, so the structural comparison passes)."
+    },
+    {
+      "realized_source": "treesitter-chunker",
+      "realized_kind": "type_alias",
+      "desired_kind": "type",
+      "alignment": "exact"
+    },
+    {
+      "realized_source": "treesitter-chunker",
+      "realized_kind": "module",
+      "desired_kind": "component",
+      "alignment": "exact"
+    },
+    {
+      "realized_source": "treesitter-chunker",
+      "realized_kind": "trait",
+      "desired_kind": "interface",
+      "alignment": "approximate",
+      "note": "OPEN-2 cross-language anchor, mirrors the greenfield `trait -> interface (approximate)` row. Empirically confirmed against tsc 3.0.0: a Rust `pub trait ToolPort { ... }` emits a boundary node with kind=`trait` (symbol=ToolPort, semantic path `engine.rs::ToolPort`) in the MULTI-LANGUAGE realized sample (spec-engine/realized/sample_multilang/engine.rs). Traits/protocols are interface-shaped contracts; mapped to `interface`. Note: in tsc 3.0.0 the trait's own method declarations are NOT emitted as separate nodes (the trait is a bare interface boundary), so any trait-default-method body is refinement-below-frontier when present (SEMANTICS.md sec 3). Before this row, a Rust trait fell to unmapped_realized_kind -> unsupported; with it, a desired `interface` matched to the trait via correspondence reaches a real soundness check (a `component`/`interface` carries no signature, so the structural comparison passes)."
+    },
+    {
+      "realized_source": "treesitter-chunker",
+      "realized_kind": "decorated_definition",
+      "alignment": "wrapper",
+      "coalesce": "inner_by_semantic_path",
+      "note": "OPEN-2 wrapper. Python tsc emits a `decorated_definition` boundary for every decorated def/class ALONGSIDE the underlying `method`/`class` node, at the SAME semantic path (empirically confirmed against tsc 3.0.0: e.g. `decorated_definition` symbol=trace and `method` symbol=trace both report semantic path `broker.py::Broker.trace`). The wrapper is redundant syntactic noise — the inner node already carries identity, kind, and signature. It therefore COALESCES to that inner node (coalesce=inner_by_semantic_path) and is NOT counted as an unmapped_realized_kind -> unsupported. If a decorated_definition ever appeared with NO coincident mapped inner (it never has in practice), it falls back to unmapped_realized_kind -> unsupported, so a lone wrapper still never silently passes. See SEMANTICS.md sec 5 wrapper-kind handling."
+    },
+    {
+      "realized_source": "treesitter-chunker",
+      "realized_kind": "export_statement",
+      "alignment": "wrapper",
+      "coalesce": "inner_by_semantic_path",
+      "note": "OPEN-2 wrapper. JavaScript tsc emits an `export_statement` boundary wrapping an exported declaration (e.g. `export function formatResult`). Same wrapper category and same coalesce rule (inner_by_semantic_path). NOTE the asymmetry with decorated_definition: in tsc 3.0.0 the export_statement node carries NO own symbol/qualified_name and sits at the FILE-level semantic path (`util.js`), NOT the exported function's path (`util.js::formatResult`), so the coincident-inner test does NOT fire and the wrapper FALLS BACK to unmapped_realized_kind -> unsupported. That is the safe direction (it is never silently dropped), and in the realized sample export_statement is out-of-frontier so it never enters an in-scope check. It is recorded here as a wrapper so the matrix documents the category; the single coalesce rule plus its fallback covers both cases without a special export-only rule."
+    },
+    {
+      "realized_source": "treesitter-chunker",
+      "realized_kind": "variable_declarator",
+      "alignment": "structural",
+      "structural_condition": "body_local",
+      "note": "OPEN-2 structural-below-frontier kind. JavaScript/TypeScript tsc emits a `variable_declarator` boundary for EVERY `const`/`let`/`var` binding AND for destructuring patterns (e.g. `const { schemaRegistry, metadata } = ...`). A binding declared INSIDE a function/method BODY (parent boundary kind is `function` or `method`) is genuine implementation detail BELOW the frontier: it is a local variable, never a desired-graph entity (the Phase-2 metamodel has NO local-variable kind). idmodel sec 2 makes this concrete — a body-only change keeps the Tier-1 id stable, so body bindings are below-frontier BY CONSTRUCTION. Such a body-local variable_declarator is therefore classified `structural` (refinement-below-frontier, PERMITTED) and produces NO soundness `unsupported`; it is recorded in the projection's `structural_below_frontier_kinds` audit list so the classification is VISIBLE, never silent. HONESTY GUARD (structural_condition=body_local): the classification applies ONLY when the parent is a function/method body. A MODULE-LEVEL variable_declarator (no parent — e.g. an exported `const BUNDLE_VERSION = '1.0'`) or a CLASS-LEVEL field could legitimately BE a desired entity (an exported constant / a class field); it does NOT meet `body_local` and FALLS BACK to unmapped_realized_kind -> soundness `unsupported`. This mirrors the wrapper safety guard: a structural kind outside its declared condition is never silently reclassified away, so a real capability gap stays `unsupported`. Empirically confirmed against the real graphbase tsc 3.0.0 E(C): the 15 in-frontier variable_declarators are all body-locals (`canonicalize.keys/result/source/v`, `exportBundle.bundle/edges/nodes/schemas`, `Graph.export.bundleOptions`, ...) parented to a `function`/`method`; the 2 module-level ones (`BUNDLE_VERSION`, `StorageBackend`) correctly fall back."
+    },
+    {
+      "realized_source": "protobuf",
+      "realized_kind": "message",
+      "desired_kind": "type",
+      "alignment": "exact",
+      "note": "A protobuf `message` is a structural type definition (a named record of typed fields) — the closest desired metamodel kind is `type`. CONFIRMED against the protoc FileDescriptorSet (descriptor.proto FileDescriptorProto.message_type[]): a `message Candidate { ... }` emits an E(C) node kind=`message` (name=Candidate, qualified_name/semantic_path `resume.v1.Candidate`, boundary_id `resume.v1.Candidate#message`) in the protobuf realized sample (spec-engine/realized/protobuf-proto/proto/resume.proto). MIRRORS the tsc-source `struct -> type (exact)` row (a struct/record/dataclass-shaped chunk carries a type definition). A desired `type` matched to it reaches a real soundness check (a `type` carries no signature, so the structural comparison passes)."
+    },
+    {
+      "realized_source": "protobuf",
+      "realized_kind": "field",
+      "desired_kind": "type",
+      "alignment": "approximate",
+      "note": "A protobuf message `field` carries a type reference (its declared scalar/enum/message type); mapped to `type` for type-shape parity. CONFIRMED against the descriptor (DescriptorProto.field[]): a `string name = 1;` emits an E(C) node kind=`field` (name=name, qualified_name `resume.v1.Candidate.name`, parent_boundary_id the message) PLUS a `field_type` edge whose target token is the resolved type (`string`, `int32`, an enum/message FQN). This MIRRORS the greenfield `field -> type (approximate)` row and the tsc-source `field_declaration -> type (approximate)` (Java) row: a field/member carries a type reference; mapped to `type`, lossy because the type/number/cardinality detail is in the edge, not the node. Fields are refinement-below-frontier unless the desired graph names them; here they are descendants of a governed message, so the field_type edge tokens are scanned by the forbidden-field-type prohibition (the decisive correctness proof)."
+    },
+    {
+      "realized_source": "protobuf",
+      "realized_kind": "enum",
+      "desired_kind": "type",
+      "alignment": "exact",
+      "note": "A protobuf `enum` is a closed type of named integer values; mapped to `type`. CONFIRMED against the descriptor (FileDescriptorProto.enum_type[] / EnumDescriptorProto.value[]): an `enum Seniority { ... }` emits an E(C) node kind=`enum` (name=Seniority, qualified_name `resume.v1.Seniority`); its values are recorded in the node signature so they are observable without a new kind. MIRRORS the tsc-source `enum -> type (exact)` row (an enum carries a type definition). A desired `type` matched to it reaches a real soundness check that passes."
+    },
+    {
+      "realized_source": "protobuf",
+      "realized_kind": "service",
+      "desired_kind": "interface",
+      "alignment": "approximate",
+      "note": "A protobuf `service` is a named contract of rpc methods — an interface-shaped declaration; mapped to `interface` (more honest than `component`: a service IS a method contract, not a structural module). CONFIRMED against the descriptor (FileDescriptorProto.service[]): a `service ResumeService { ... }` emits an E(C) node kind=`service` (name=ResumeService, qualified_name `resume.v1.ResumeService`). MIRRORS the tsc/greenfield `trait -> interface (approximate)` and `protocol_declaration -> interface (approximate)` rows: a method-contract declaration maps to `interface`, lossy because rpc streaming/options detail is not in the node. Its rpc methods are separate `rpc` nodes (below). A desired `interface` matched to the service reaches a real soundness check (an interface carries no signature, so the structural comparison passes)."
+    },
+    {
+      "realized_source": "protobuf",
+      "realized_kind": "rpc",
+      "desired_kind": "operation",
+      "alignment": "exact",
+      "note": "A protobuf `rpc` is a named operation with a request/response contract; mapped to `operation`. CONFIRMED against the descriptor (ServiceDescriptorProto.method[]): a `rpc Extract(ExtractRequest) returns (Candidate);` emits an E(C) node kind=`rpc` (name=Extract, qualified_name `resume.v1.ResumeService.Extract`, parent the service) with a signature `{params:[{name:request,type:resume.v1.ExtractRequest}], return_type:resume.v1.Candidate}` recovered from the resolved input_type/output_type. MIRRORS the tsc/greenfield `method -> operation (exact)` and `function -> operation (exact)` rows: a named callable with a signature maps to `operation`. A desired `operation` matched to it reaches a real soundness check comparing the request/response signature."
+    }
+  ],
+  "no_realized_mapping": {
+    "doc": "Desired kinds with NO direct realized-kind correspondent. These are checked via dimension-specific machinery (prohibition closed-world domains, acceptance evidence refs, etc.), NOT by kind-matching a realized node. A completeness check keyed on these kinds alone yields `unsupported` unless its dimension defines another observation path.",
+    "desired_kinds": [
+      "capability",
+      "state",
+      "invariant",
+      "error",
+      "event",
+      "security_rule",
+      "performance",
+      "prohibition",
+      "acceptance_criterion"
+    ],
+    "per_kind_path": {
+      "capability": "Observed via decomposition edges (idmodel correspondence) to its constituent components/operations, not a realized `capability` kind. Completeness is checked over the decomposition closure.",
+      "prohibition": "Observed via its closed-world fact domain (SEMANTICS.md sec 4), never by kind-matching.",
+      "acceptance_criterion": "Observed via evidence refs to test/conformance artifacts; if E(C) carries no such evidence -> `unknown`.",
+      "state": "unsupported in v1 unless the realized side exposes a state machine the extractor models; default `unsupported`.",
+      "invariant": "unsupported in v1 (no realized observation path for arbitrary invariants); default `unsupported`.",
+      "error": "May be observed via operation signature error/throw facts when the extractor supplies them; else `unsupported`.",
+      "event": "May be observed via call/emit edges when modeled; else `unsupported`.",
+      "security_rule": "unsupported in v1 unless mapped to a concrete prohibition with a closed-world domain.",
+      "performance": "unsupported in v1 (no deterministic realized observation path); default `unsupported`."
+    }
+  },
+  "fallback_rules": {
+    "unmapped_realized_kind": {
+      "doc": "A realized node/chunk whose `kind` value appears in NO mapping entry above (expected often, since chunker kinds are per-grammar/open-set). EMPIRICAL EXAMPLE (tsc 3.0.0, C++/JAVA sample): a Java `@interface Audited { ... }` annotation type is emitted by tsc as kind=`type` (a BARE `type`, distinct from `type_alias`/`struct`/`enum`), at `Gateway.java::Audited`. There is NO honest desired-kind for a Java annotation type (it is a declaration-of-an-annotation, not a struct/enum/type-alias), and the realized kind being literally named `type` is NOT a license to map it to the desired `type` kind. It is therefore DELIBERATELY left unmapped: in-frontier it routes soundness to `unsupported` (proven by the cppjava test, mirroring the rust impl_item case), never a forced/silent pass. This keeps the honesty fallback firing for the C++/JAVA track.",
+      "rule": [
+        "It does NOT bear completeness against any desired kind (it cannot be the missing/present witness for a desired element).",
+        "Any kind-dependent soundness check that would target it returns `unsupported` (the checker has no aligned desired kind to compare against), NEVER `pass` and NEVER `fail`.",
+        "It MUST be recorded in findings as `unmapped_realized_kind` with its source, kind value, and occurrence_id, so the gap is visible and an adopter can extend the matrix.",
+        "It is still eligible to be classified as refinement-below-frontier or permitted-freedom by the closure dimension (SEMANTICS.md sec 3) if it lies below a frontier node."
+      ]
+    },
+    "unmapped_desired_kind": {
+      "doc": "A desired-graph node whose `kind` is not in spec_desired_kinds (e.g. a future metamodel kind).",
+      "rule": "Projection MUST NOT silently drop it. Its completeness/soundness checks return `unsupported`; it is recorded in findings as `unmapped_desired_kind`. This prevents a metamodel evolution from silently passing."
+    },
+    "ambiguous_mapping": {
+      "doc": "A realized kind that has more than one candidate desired kind (e.g. greenfield `property` -> type or operation).",
+      "rule": "The desired graph's own declared kind for the corresponding entity (resolved via idmodel correspondence) wins. If correspondence cannot disambiguate, the check returns `unknown` and records `ambiguous_kind_alignment` in findings."
+    }
+  },
+  "alignment_categories": {
+    "doc": "Narrates the `alignment` values used in `mappings[]`. The mapping rows are the source of truth; this block documents what each category MEANS for the engine. SEMANTICS.md sec 5 narrates the same.",
+    "exact": "1:1 kind correspondence; the realized kind IS the desired kind.",
+    "approximate": "Mapped but lossy (a note explains the loss); still bears completeness + soundness against the desired kind.",
+    "edge_evidence": "Written as EDGE:<type>. The realized EDGE is consumed as evidence for a desired-side check (interface/operation/component usage), never as a desired node. resolution=unresolved|ambiguous degrades the dependent check to `unknown`.",
+    "wrapper": {
+      "doc": "A SYNTACTIC wrapper kind that the extractor emits ALONGSIDE the wrapped inner node (the real def/class/function). The wrapper carries no identity of its own and is redundant structural noise; the inner node already carries identity + kind + signature. Empirically confirmed for treesitter-chunker 3.0.0: a decorated_definition is emitted at the SAME semantic path as its wrapped method/class. A wrapper has NO desired_kind (it is not itself a desired entity).",
+      "rule": [
+        "COALESCE-to-inner: a wrapper-kind node is subsumed by its wrapped inner node and is NOT recorded as an `unmapped_realized_kind`, so it does NOT produce a spurious soundness `unsupported`. The inner node carries the soundness/identity for that symbol.",
+        "The linkage is `coalesce: inner_by_semantic_path` — the wrapper coalesces iff an IN-SCOPE realized node shares its `provenance.semantic_path` AND has a MAPPED non-wrapper kind. Projection records the (wrapper, inner) pair in `coalesced_wrapper_kinds` so the coalescing is VISIBLE, never silent.",
+        "FALLBACK (the safety guard): if a wrapper kind appears with NO coincident mapped inner node, it is NOT coalesced — it falls through to the `unmapped_realized_kind` rule (-> soundness `unsupported`). A lone wrapper therefore never silently vanishes and never silently passes.",
+        "Like any in-scope realized fact, a coalesced wrapper remains eligible for closure classification (SEMANTICS.md sec 3); coalescing only removes its spurious unmapped/unsupported soundness finding."
+      ]
+    },
+    "structural": {
+      "doc": "A STRUCTURAL implementation-detail kind that is genuinely NEVER a desired-graph entity when it occurs in a specific syntactic position — a local variable binding inside a function/method body (variable_declarator). The Phase-2 metamodel has no kind for it (no `local_variable`), and idmodel sec 2 makes body detail below-frontier by construction (a body-only change keeps the Tier-1 id stable). A `structural` kind has NO desired_kind (it is not a desired entity), exactly like a wrapper.",
+      "structural_condition_doc": "The matrix row carries a `structural_condition` naming the SYNTACTIC POSITION in which the kind is genuinely below-frontier. v1 supports `body_local` = the realized node's PARENT boundary has kind `function` or `method` (i.e. the binding is inside a callable body). Outside that position the kind is NOT treated as structural — it falls back (see the safety guard).",
+      "rule": [
+        "BELOW-FRONTIER classification: a structural-kind node THAT MEETS its `structural_condition` is classified as refinement-below-frontier (PERMITTED, never a soundness violation) and is NOT recorded as an `unmapped_realized_kind`, so it produces NO spurious soundness `unsupported`. Projection records it in `structural_below_frontier_kinds` so the classification is VISIBLE, never silent.",
+        "FALLBACK (the HONESTY guard): a structural-kind node that does NOT meet its `structural_condition` (e.g. a MODULE-LEVEL `const`, which could be an exported desired constant, or a CLASS-LEVEL field, which could be a desired field) is NOT reclassified — it falls through to the `unmapped_realized_kind` rule (-> soundness `unsupported`). A structural kind out of position therefore never silently vanishes and never manufactures a green; a real capability gap stays `unsupported`.",
+        "Like any in-scope realized fact, a structural-below-frontier node remains eligible for closure classification (SEMANTICS.md sec 3) — it is a refinement_below_frontier fact; the structural classification only removes its spurious unmapped/unsupported soundness finding, it does NOT change closure."
+      ]
+    }
+  }
+}

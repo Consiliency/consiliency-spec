@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.consiliency/spec-parity/kind-alignment.schema.json",
+  "title": "Kind-alignment matrix (Phase 3a)",
+  "description": "Schema for kind-alignment.json. Realized kinds -> spec desired kinds. See SEMANTICS.md sec 5.",
+  "type": "object",
+  "required": ["version", "spec_desired_kinds", "realized_sources", "mappings", "fallback_rules"],
+  "additionalProperties": true,
+  "properties": {
+    "version": { "type": "string" },
+    "doc": { "type": "string" },
+    "spec_desired_kinds": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "realized_sources": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["source_ref", "kind_values_status"],
+        "properties": {
+          "source_ref": { "type": "string" },
+          "kind_values_status": { "enum": ["CONFIRMED", "PROVISIONAL", "OPEN_SET"] },
+          "kind_values_note": { "type": "string" },
+          "edge_types": { "type": "array", "items": { "type": "string" } },
+          "edge_resolution_states": { "type": "array", "items": { "type": "string" } },
+          "resolution_states": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "mappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["realized_source", "realized_kind", "alignment"],
+        "additionalProperties": false,
+        "properties": {
+          "realized_source": { "type": "string" },
+          "realized_kind": {
+            "type": "string",
+            "description": "A realized node kind. An edge is written as EDGE:<type> (e.g. EDGE:calls) and is consumed as evidence, not as a desired node."
+          },
+          "desired_kind": {
+            "type": "string",
+            "description": "The spec desired kind this realized kind aligns to. Required for exact/approximate/edge_evidence; FORBIDDEN for `wrapper` (a wrapper has no desired kind of its own — it coalesces to its wrapped inner node, which carries the identity+kind)."
+          },
+          "alignment": {
+            "enum": ["exact", "approximate", "edge_evidence", "wrapper", "structural"],
+            "description": "exact = 1:1 kind correspondence; approximate = mapped but lossy (note required by convention); edge_evidence = realized edge used as evidence for a desired-side check, never a node; wrapper = a syntactic wrapper kind that the extractor emits ALONGSIDE the wrapped inner node — it coalesces to that inner node (SEMANTICS sec 5) and is NOT itself a desired entity, so it carries no desired_kind; structural = an implementation-detail kind (e.g. a body-local variable binding) that is genuinely NEVER a desired entity in a declared syntactic position — it is classified refinement-below-frontier (permitted) when its `structural_condition` holds and FALLS BACK to unmapped-realized-kind -> unsupported otherwise, so it carries no desired_kind."
+          },
+          "coalesce": {
+            "enum": ["inner_by_semantic_path"],
+            "description": "Only for alignment=`wrapper`. The coalescing rule: the wrapper coalesces to (is subsumed by) an in-scope realized node that shares its provenance.semantic_path and has a MAPPED non-wrapper kind. If no such inner node exists, the wrapper FALLS BACK to the unmapped-realized-kind rule (-> unsupported); a lone wrapper never silently vanishes."
+          },
+          "structural_condition": {
+            "enum": ["body_local"],
+            "description": "Only for alignment=`structural`. The SYNTACTIC POSITION in which the kind is genuinely below-frontier. body_local = the realized node's PARENT boundary has kind `function` or `method` (the binding is inside a callable body). When the condition does NOT hold (module/class-level), the kind FALLS BACK to the unmapped-realized-kind rule (-> unsupported); the HONESTY guard so a structural kind out of position never manufactures a green."
+          },
+          "note": { "type": "string" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "alignment": { "const": "wrapper" } } },
+            "then": {
+              "required": ["coalesce"],
+              "not": { "required": ["desired_kind"] }
+            }
+          },
+          {
+            "if": { "properties": { "alignment": { "const": "structural" } } },
+            "then": {
+              "required": ["structural_condition"],
+              "not": { "required": ["desired_kind"] }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "alignment": { "enum": ["exact", "approximate", "edge_evidence"] }
+              }
+            },
+            "then": { "required": ["desired_kind"] }
+          }
+        ]
+      }
+    },
+    "no_realized_mapping": {
+      "type": "object",
+      "properties": {
+        "doc": { "type": "string" },
+        "desired_kinds": { "type": "array", "items": { "type": "string" } },
+        "per_kind_path": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "fallback_rules": {
+      "type": "object",
+      "required": ["unmapped_realized_kind", "unmapped_desired_kind", "ambiguous_mapping"],
+      "properties": {
+        "unmapped_realized_kind": { "type": "object" },
+        "unmapped_desired_kind": { "type": "object" },
+        "ambiguous_mapping": { "type": "object" }
+      }
+    }
+  }
+}

@@ -1,0 +1,36 @@
+name: consiliency-spec CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  release-gate:
+    name: release gate (canon v2 conformance + XG4 core/binding parity)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Python build tooling
+        run: python -m pip install --upgrade pip build
+
+      - name: Run release gate
+        run: bash scripts/consiliency-spec/check_release.sh

@@ -1,0 +1,78 @@
+{
+  "name": "@consiliency/spec",
+  "version": "0.1.0",
+  "description": "Public Consiliency canon-core v2 package: Rust core, dep-free TypeScript/Python canon ports, vectors, and public schemas.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "files": [
+    "canon/SPEC.md",
+    "canon/README.md",
+    "canon/bindings",
+    "canon/conformance",
+    "canon/core/Cargo.toml",
+    "canon/core/Cargo.lock",
+    "canon/core/cbindgen.toml",
+    "canon/core/include",
+    "canon/core/scripts",
+    "canon/core/src",
+    "canon/core/tests",
+    "canon/py/canon.py",
+    "canon/py/canon_ingest.py",
+    "canon/py/test_canon.py",
+    "canon/py/requirements.txt",
+    "canon/ts/canon.ts",
+    "canon/ts/canon.test.ts",
+    "canon/vectors/*.json",
+    "canon/vectors/*.md",
+    "idmodel/correspondence/schema.json",
+    "!idmodel/README.md",
+    "spec-engine/authority/authority-event.schema.json",
+    "!spec-engine/README.md",
+    "spec-graph/schema/*.json",
+    "!spec-graph/README.md",
+    "spec-parity/SEMANTICS.md",
+    "spec-parity/conformance",
+    "spec-parity/kind-alignment.json",
+    "spec-parity/permitted-freedom-vocab.json",
+    "spec-parity/schemas/*.json",
+    "consiliency-spec.public-manifest.json",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "bash scripts/consiliency-spec/check_release.sh",
+    "pack:check": "bash scripts/consiliency-spec/check_publish_dry_run.sh"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Consiliency/consiliency-spec.git"
+  },
+  "homepage": "https://github.com/Consiliency/consiliency-spec#readme",
+  "bugs": {
+    "url": "https://github.com/Consiliency/consiliency-spec/issues"
+  },
+  "keywords": [
+    "consiliency",
+    "spec",
+    "canon",
+    "canonicalization",
+    "schema"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "exports": {
+    "./manifest.json": "./consiliency-spec.public-manifest.json",
+    "./canon/ts/canon.ts": "./canon/ts/canon.ts",
+    "./canon/py/canon.py": "./canon/py/canon.py",
+    "./canon/core/Cargo.toml": "./canon/core/Cargo.toml",
+    "./canon/vectors/canon-vectors.json": "./canon/vectors/canon-vectors.json",
+    "./schemas/*": "./spec-parity/schemas/*",
+    "./package.json": "./package.json"
+  },
+  "author": "Consilience Labs LLC"
+}

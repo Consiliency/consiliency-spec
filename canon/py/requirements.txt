@@ -1,0 +1,9 @@
+# canon v1 Python runtime requirements (SPEC.md section 5 — Unicode DB pin).
+#
+# unicodedata2 is a maintained PyPI backport that ships a self-contained, pinnable Unicode DB,
+# decoupling canon's NFC from the host CPython build (stdlib `unicodedata` is bound to whatever
+# Unicode version CPython was compiled with). We pin it EXACTLY to Node's Unicode version (16.0)
+# so Python NFC == TypeScript (Node ICU) NFC byte-for-byte. canon.py asserts this at import time
+# (fail-closed). Do NOT bump without re-running canon/conformance/check.sh and re-confirming the
+# pinned version still matches Node's process.versions.unicode.
+unicodedata2==16.0.0
