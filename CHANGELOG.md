@@ -3,6 +3,14 @@
 All notable changes to `@consiliency/spec` / `consiliency-spec` are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## 0.1.1 — first CI release (Trusted Publishing)
+
+No source changes from `0.1.0`. First release published through GitHub Actions
+Trusted Publishing (OIDC, tokenless) to both npm (`@consiliency/spec`, with
+provenance) and PyPI (`consiliency-spec`). The `0.1.0` npm publish was a manual
+bootstrap to create the package so the trusted publisher could attach; this is
+the first fully-governed release across both registries.
+
 ## 0.1.0 — initial public release
 
 First public open-core release of the deterministic spec-vs-code parity engine

@@ -1,6 +1,6 @@
 {
   "name": "@consiliency/spec",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Public Consiliency canon-core v2 package: Rust core, dep-free TypeScript/Python canon ports, vectors, and public schemas.",
   "license": "Apache-2.0",
   "type": "module",
