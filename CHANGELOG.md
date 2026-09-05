@@ -3,6 +3,35 @@
 All notable changes to `@consiliency/spec` / `consiliency-spec` are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## 0.3.0 — one `$int` grammar for every canon port
+
+Tracks canon-core `0.2.0` (`@consiliency/canon-core@0.2.0`,
+`consiliency-canon-core==0.2.0`). The bundled Python and TypeScript canon ports
+and the conformance corpus carry the same change.
+
+- **`$int` payload grammar is `^-?[0-9]+$` in every port**, checked before the
+  native integer parser. Previously each port's parser decided (`int("1_000")`
+  in Python, `BigInt(" 12 ")` in TypeScript, `"+5"` in Rust), so a tagged
+  integer could digest in one port and be rejected in another. Leading zeros
+  and `-0` are accepted and normalise; empty, whitespace, `+`, `_`, hex,
+  non-ASCII digits and interior NUL are rejected with one fixed message that
+  never echoes the payload.
+- **TypeScript `CanonValue` takes `bigint` only.** A plain JS `number` is
+  rejected instead of `100.0 === 100` silently canonicalising a float. Callers
+  convert with `BigInt(...)`. This type-surface change is why the bump is a
+  minor, not a patch.
+- **C-ABI error pointer is never null**: an interior NUL in the fixed message is
+  escaped rather than turning `*err_out` into a null pointer.
+- **Corpus**: 11 new vectors (36 → 47). The 36 pre-existing vectors are
+  byte-identical — the digest domain is unchanged, so no existing digest moves.
+  The committed corpus is checked against its generator in the canon gate, and
+  the generator (`canon/vectors/gen_vectors.py`) now ships in this package so
+  that check runs here too.
+- Test harnesses decode inside the `expect_error` guard, so an over-permissive
+  decoder can no longer be recorded as a rejection.
+
+Nothing in the outside-agent contract changes.
+
 ## 0.2.4 — outside-agent contract
 
 Adds the **outside-agent contract**: a claims-only intake surface for work

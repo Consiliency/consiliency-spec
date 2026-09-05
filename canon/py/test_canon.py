@@ -32,13 +32,15 @@ def load(path=VECTORS):
 
 def run_vector(vec):
     """Return (bytes_b64, digest_hex) or raise; for reject vectors return the sentinel ('ERROR', 'ERROR')."""
-    value = canon.decode_input(vec["input"])
     if vec.get("expect_error"):
+        # decode_input is INSIDE the guard: a $int payload-grammar rejection is raised at decode.
+        # Only CanonError counts; any other exception type is a real failure and propagates.
         try:
-            canon.canonical_bytes(value)
+            canon.canonical_bytes(canon.decode_input(vec["input"]))
         except canon.CanonError:
             return ("ERROR", "ERROR")
         raise AssertionError("expected CanonError but encoding succeeded")
+    value = canon.decode_input(vec["input"])
     cbytes = canon.canonical_bytes(value)
     return (base64.b64encode(cbytes).decode("ascii"), canon.digest(value, vec["profile"]))
 

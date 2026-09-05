@@ -2,16 +2,16 @@
   "package": {
     "npm": "@consiliency/spec",
     "pypi": "consiliency-spec",
-    "version": "0.2.4"
+    "version": "0.3.0"
   },
   "public_files": [
     {
       "path": "canon/README.md",
-      "sha256": "9ee6ecd4d6d76f83b59ce95cf643937603166fc80092e43d7d054169929df31d"
+      "sha256": "f50825ed411f315d4769ffa874d3947c1501856beb5fbf38869d5cf5da6fd3bf"
     },
     {
       "path": "canon/SPEC.md",
-      "sha256": "11bb8f315cd1829ec9f41744d5e22ae07630e91fcb650f5ea24b36e5c0f91991"
+      "sha256": "019de1cbc64f24232388baee182ebab8823767a8c96e08728b762e7bd80d9ed3"
     },
     {
       "path": "canon/bindings/pyo3/README.md",
@@ -23,7 +23,7 @@
     },
     {
       "path": "canon/conformance/check.sh",
-      "sha256": "ec9fc515a88081256823cf4e00d0925651e3b17282374e459caa67be4f279192"
+      "sha256": "84382c2c26f8637bff5d6a835641d5b36a859a48463096e613cc7640902933e3"
     },
     {
       "path": "canon/conformance/check_dabi_cabi.sh",
@@ -31,7 +31,7 @@
     },
     {
       "path": "canon/conformance/check_published_canon_core.sh",
-      "sha256": "3e5a4056b80cab8715b612254b59bef567095feb6aaf7f4d7252d6c8f3e7941d"
+      "sha256": "f7bc73eada23db877a846a728b6cc792bf66042b9452b0b8cf41acf7274d212b"
     },
     {
       "path": "canon/conformance/check_xg4_canon_core.sh",
@@ -71,11 +71,11 @@
     },
     {
       "path": "canon/core/Cargo.lock",
-      "sha256": "60daa0405ec8c6bd65497e46242ea815fe09723ad9f3453dfd67978ed5455711"
+      "sha256": "429b127a5ce88f7833ea2764003c9f4257119e9e768f098a10f367a39bfc7e9e"
     },
     {
       "path": "canon/core/Cargo.toml",
-      "sha256": "f113e9603d79a36bedf706409eb5edb511f6dc007cfa6a15ce7e87ecb36384b8"
+      "sha256": "3c9f161343b81b8e7537fd064d8d561e7c58084718bb4ad626d2580fe0406882"
     },
     {
       "path": "canon/core/cbindgen.toml",
@@ -87,31 +87,31 @@
     },
     {
       "path": "canon/core/scripts/check_cabi_smoke.sh",
-      "sha256": "b324b9eeb2491b29d3ed63f4dd5e43803158be029b86d93c8d35e35d42e515aa"
+      "sha256": "40070270d42c2876bd9cbb19f3f2552f7afe13dac6f5daa26cb0ca0b995b254b"
     },
     {
       "path": "canon/core/src/bin/canon_core_emit.rs",
-      "sha256": "c8ca50db4aaced7ed77725616853d885b7dad49162804577beb5184b74278122"
+      "sha256": "d345436f4503d769e8965babcaf717dc4adf53bdb24be555576fedaa573e228b"
     },
     {
       "path": "canon/core/src/c_abi.rs",
-      "sha256": "5b27d20f53cf524d487a398c4d0cae1080adbbf5830d92f42cb1999b10f60bdf"
+      "sha256": "2566a9bf7be55fcbead6ee36ad69709dccce37da110fd77a8cfd4605ef8eaa14"
     },
     {
       "path": "canon/core/src/lib.rs",
-      "sha256": "acebb51c2b83ee8297a9eccd8ba7070898584afebc963a94284d64fdc0ad4efc"
+      "sha256": "700aba0425c52819adbea4e97888a388a7600ff789356c0ed923a0f430050f3d"
     },
     {
       "path": "canon/core/tests/c_abi_smoke.c",
-      "sha256": "6c03ea21e2590664e8dbb9b1f2da6b7f88a3e75551b2c3ed9016fa0d787cde78"
+      "sha256": "edc8bcad1a5dd83e735d74bef47ec5bb1a7f67049539d17ecc119aab6b5246b8"
     },
     {
       "path": "canon/core/tests/parity.rs",
-      "sha256": "e61f63db73edbd6d61f58d81a485a63204372b0c140e679b68c5732310a7cbe1"
+      "sha256": "5fe4f0e20c16b41c6494976d83a614bb4a663fd6917043bd7eb5fe27510240c7"
     },
     {
       "path": "canon/py/canon.py",
-      "sha256": "c07bbe85508f36ce53d0d859dce42f607382b3ccacca138d07389dc8fe1765c1"
+      "sha256": "9a1cddae1b120db7dc61815b359ab8c9c1f9465d715b0c0e18e91dd07b050315"
     },
     {
       "path": "canon/py/canon_ingest.py",
@@ -123,19 +123,23 @@
     },
     {
       "path": "canon/py/test_canon.py",
-      "sha256": "0bb68f522f109388163d84838a4de1d32ac0799f058b92d32f6bb3efebb69ac9"
+      "sha256": "175998b09d96269e2baa4139c699c63f1b26c13646fe36e149b57633baa3b7e7"
     },
     {
       "path": "canon/ts/canon.test.ts",
-      "sha256": "c70e9a24f9d5f29ca1c89b955896b37f8b9e4a9613281fd1b7bad873cc062e2f"
+      "sha256": "5fabccd745431fec0d7a9cc5c570735ed73aab1245e6c305ddbc3326ccaf6382"
     },
     {
       "path": "canon/ts/canon.ts",
-      "sha256": "0ccfb5b3fda31afd8bf887648bd0181916d138c1acec6bc5e912b3cfb155fa21"
+      "sha256": "9d8443ef5d1aa3b9242bf75b99e5d504b5c912e7e28057ca83ab6c1bed99420e"
     },
     {
       "path": "canon/vectors/canon-vectors.json",
-      "sha256": "a77451d947cd5bb19239bd16706bc3b9b4688287053891ed5388f04bd2b97229"
+      "sha256": "8ee488d2586ee78f06418d503aad86d9c14d9366597e59736a977f965a352a1f"
+    },
+    {
+      "path": "canon/vectors/gen_vectors.py",
+      "sha256": "4ea91163d5eee13a77fe195339ea6967a2d257a8ab486cf378c32db712eb9343"
     },
     {
       "path": "canon/vectors/gov-cross-repo-canon-vectors.PROVENANCE.md",
@@ -147,7 +151,7 @@
     },
     {
       "path": "consiliency_spec/__init__.py",
-      "sha256": "0ba2be106e0a9ba41c9438f1186d030e553a2299bc1ec9fab399a6ac97b93106"
+      "sha256": "e53ca315de168613535a04480d6a0f9711cf7ec6ab158e617dfa99a502bf4eb9"
     },
     {
       "path": "consiliency_spec/outside_agent_router.py",

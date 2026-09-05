@@ -460,5 +460,99 @@
     },
     "profile": "semantic-content",
     "expect_error": true
+  },
+  {
+    "name": "reject-int-payload-empty",
+    "input": {
+      "$int": ""
+    },
+    "profile": "semantic-content",
+    "expect_error": true
+  },
+  {
+    "name": "reject-int-payload-whitespace",
+    "input": {
+      "$int": " 42 "
+    },
+    "profile": "semantic-content",
+    "expect_error": true
+  },
+  {
+    "name": "reject-int-payload-plus",
+    "input": {
+      "$int": "+5"
+    },
+    "profile": "semantic-content",
+    "expect_error": true
+  },
+  {
+    "name": "reject-int-payload-underscore",
+    "input": {
+      "$int": "1_000"
+    },
+    "profile": "semantic-content",
+    "expect_error": true
+  },
+  {
+    "name": "reject-int-payload-hex",
+    "input": {
+      "$int": "0x1A"
+    },
+    "profile": "semantic-content",
+    "expect_error": true
+  },
+  {
+    "name": "reject-int-payload-nonascii-digits",
+    "input": {
+      "$int": "\u09e6\u09e7"
+    },
+    "profile": "semantic-content",
+    "note": "Bengali digits U+09E6 U+09E7: Python int() and \\d accept them; the grammar is ASCII-only",
+    "expect_error": true
+  },
+  {
+    "name": "reject-int-payload-interior-nul",
+    "input": {
+      "$int": "12\u000034"
+    },
+    "profile": "semantic-content",
+    "expect_error": true
+  },
+  {
+    "name": "reject-int-payload-bare-minus",
+    "input": {
+      "$int": "-"
+    },
+    "profile": "semantic-content",
+    "expect_error": true
+  },
+  {
+    "name": "int-payload-leading-zeros",
+    "input": {
+      "$int": "007"
+    },
+    "profile": "semantic-content",
+    "note": "leading zeros are accepted and normalise to 7",
+    "expected_canonical_bytes_b64": "Nw==",
+    "expected_digest_hex": "03e0cd70579f417e0e034b42b9261334263e02614c6f083f102f6aeb43d79eb0"
+  },
+  {
+    "name": "int-payload-negative-zero",
+    "input": {
+      "$int": "-0"
+    },
+    "profile": "semantic-content",
+    "note": "-0 is accepted and normalises to 0",
+    "expected_canonical_bytes_b64": "MA==",
+    "expected_digest_hex": "0c765b77f51d4f44a735ec7274b1eb0eec8338e615caa097580cdbdc7b14c42b"
+  },
+  {
+    "name": "int-payload-big-negative",
+    "input": {
+      "$int": "-123456789012345678901234567890"
+    },
+    "profile": "semantic-content",
+    "expected_canonical_bytes_b64": "LTEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MA==",
+    "expected_digest_hex": "49b387089b89c27d60d99f75f085f83e7c38e4595e55972976ab6d36e67dd848"
   }
 ]

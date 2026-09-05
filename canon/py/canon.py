@@ -23,6 +23,7 @@ Helpers:
 from __future__ import annotations
 
 import hashlib
+import re
 from typing import Any, Iterable, Tuple
 
 # canon v2 performs NO Unicode NFC and depends on NO Unicode DB version (SPEC.md section 5). NFC is
@@ -183,12 +184,26 @@ class InfMarker:
         self.sign = sign
 
 
+# The one payload grammar every port shares (SPEC.md section 2): optional '-' then ASCII digits.
+# `[0-9]`, NOT `\d` — Python's `\d` (and `int()`) accept non-ASCII digits such as Bengali "০১",
+# and `int()` also accepts surrounding whitespace, '+' and '_' separators that the other ports do
+# not. Leading zeros and "-0" match and normalise ("007" -> 7, "-0" -> 0).
+_INT_PAYLOAD = re.compile(r"-?[0-9]+")  # used with fullmatch: `$` would admit a trailing "\n"
+
+
+def _parse_int_payload(payload: Any) -> int:
+    # Fixed message: never interpolate the payload (a rejected value must not leak via the error).
+    if not isinstance(payload, str) or not _INT_PAYLOAD.fullmatch(payload):
+        raise CanonError("invalid $int payload: expected optional '-' then ASCII digits")
+    return int(payload)
+
+
 def decode_input(node: Any) -> Any:
     """Decode a type-tagged vector input tree into native values (or reject markers)."""
     if isinstance(node, dict) and len(node) == 1:
         (tag, payload), = node.items()
         if tag == "$int":
-            return int(payload)  # decimal string -> arbitrary-precision int
+            return _parse_int_payload(payload)  # grammar-checked decimal string -> exact int
         if tag == "$float":
             return FloatMarker()
         if tag == "$nan":

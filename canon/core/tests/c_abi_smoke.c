@@ -23,6 +23,12 @@ static const char *PROFILE = "semantic-content";
 /* reject-lone-surrogate: a lone high surrogate must be rejected end-to-end (CANON_ERR). */
 static const char *REJECT_INPUT = "{\"$str\":\"\\ud800\"}";
 
+/* reject-int-payload-interior-nul: a $int payload with an embedded NUL ("12\u000034"). Rejected by
+ * the payload grammar; the point here is the ERROR CHANNEL — `*err_out` must be non-null and the
+ * message must not echo the payload (an echoed interior NUL used to make CString::new fail, which
+ * returned a NULL error pointer on CANON_ERR — a caller dereferencing it would crash). */
+static const char *NUL_PAYLOAD_INPUT = "{\"$int\":\"12\\u000034\"}";
+
 static int failures = 0;
 
 static void check(int cond, const char *label) {
@@ -69,7 +75,21 @@ int main(void) {
     }
     canon_string_free(err);
 
-    /* 4. null-input safety: never crash, always CANON_ERR */
+    /* 4. interior-NUL payload: CANON_ERR with a NON-NULL, payload-free message (CAN-10) */
+    bytes = NULL;
+    err = NULL;
+    rc = canon_canonical_bytes_from_json(NUL_PAYLOAD_INPUT, &bytes, &len, &err);
+    check(rc == CANON_ERR, "interior-NUL $int payload returns CANON_ERR");
+    check(bytes == NULL, "interior-NUL reject writes no bytes");
+    check(err != NULL, "interior-NUL reject still populates a (non-null) error message");
+    if (err != NULL) {
+        check(strstr(err, "12") == NULL && strstr(err, "34") == NULL,
+              "error message does not echo the rejected payload");
+        printf("     (reject message: %s)\n", err);
+    }
+    canon_string_free(err);
+
+    /* 5. null-input safety: never crash, always CANON_ERR */
     bytes = NULL;
     err = NULL;
     rc = canon_canonical_bytes_from_json(NULL, &bytes, &len, &err);

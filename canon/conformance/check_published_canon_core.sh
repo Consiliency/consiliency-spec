@@ -9,10 +9,10 @@
 # holds them to the same byte/digest oracle.
 #
 # What it verifies, pinned to the EXACT published version (so a yank/re-publish is caught):
-#   1. `@consiliency/canon-core@0.1.0` from npm, in a temp install, run through the corpus SHIPPED
+#   1. `@consiliency/canon-core@0.2.0` from npm, in a temp install, run through the corpus SHIPPED
 #      INSIDE the tarball (the authoritative oracle) via canonicalBytesFromJson/digestFromJson in Node
 #      — byte(b64)+digest(hex) identity for every valid vector, rejection for every expect_error one.
-#   2. `consiliency-canon-core==0.1.0` from PyPI (WHEEL only — never a source build), in a venv, same
+#   2. `consiliency-canon-core==0.2.0` from PyPI (WHEEL only — never a source build), in a venv, same
 #      corpus, same assertions, via canon_core.canonical_bytes_from_json/digest_from_json in Python.
 #   3. The npm-shipped corpus, the wheel-shipped corpus, and spec's canonical corpus are all
 #      byte-identical (a publish shipping a stale/wrong corpus fails here).
@@ -26,7 +26,7 @@
 # (an offline Dagger container, a firewalled dev box) it prints a clear SKIP and exits 0 — a REGISTRY
 # being unreachable is a skip; a reachable registry MISSING the pinned version (yank) is a hard FAIL.
 #
-# Local run: set CANON_PY to an interpreter that has a published wheel (0.1.0 ships cp312 wheels), e.g.
+# Local run: set CANON_PY to an interpreter that has a published wheel (0.2.0 ships cp312 wheels), e.g.
 #   CANON_PY=python3.12 bash canon/conformance/check_published_canon_core.sh
 set -euo pipefail
 
@@ -37,8 +37,12 @@ BOUNDARY="$CONF/engine_boundary_vectors.json"
 
 NPM_PKG="@consiliency/canon-core"
 PYPI_PKG="consiliency-canon-core"
-VERSION="0.1.0"
+VERSION="0.2.0"
 PYBIN="${CANON_PY:-python3}"
+# The crate version in the tree. Equal to VERSION except during a PRE-RELEASE WINDOW: the tree
+# already carries the next canon-core (Cargo.toml bumped, corpus extended) but the tag has not been
+# pushed yet. Step [3] switches from corpus byte-equality to a superset check for exactly that window.
+LOCAL_VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$ROOT/canon/core/Cargo.toml" | head -1)"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -46,6 +50,7 @@ trap 'rm -rf "$TMP"' EXIT
 echo "== canon-core PUBLISHED-PACKAGE parity gate =="
 echo "root:    $ROOT"
 echo "pinned:  npm $NPM_PKG@$VERSION | PyPI $PYPI_PKG==$VERSION"
+echo "local:   canon/core/Cargo.toml $LOCAL_VERSION"
 echo "python:  $PYBIN ($($PYBIN --version 2>&1))"
 echo "node:    $(node --version 2>/dev/null || echo 'MISSING')"
 echo
@@ -92,7 +97,7 @@ if not non_yanked:
     print(f"FAIL: PyPI consiliency-canon-core=={version} has no live files (yanked/unpublished?)"); sys.exit(11)
 wheels = [f for f in non_yanked if f["filename"].endswith(".whl")]
 if not any(py_tag in f["filename"] for f in wheels):
-    # Distinct from an unreachable registry (10): the registries ARE reachable and 0.1.0 IS
+    # Distinct from an unreachable registry (10): the registries ARE reachable and the pinned version IS
     # published, but this interpreter has no matching wheel. Exit 12 so the caller can make it a
     # HARD FAIL under CANON_STRICT (a runner we control must not vacuously green on a wheel skip),
     # while a genuinely-unreachable registry (10) always stays a graceful skip.
@@ -168,11 +173,37 @@ h_wheel="$(sha256sum "$WHEEL_CORPUS" | awk '{print $1}')"
 echo "    spec  $h_spec"
 echo "    npm   $h_npm"
 echo "    wheel $h_wheel"
-if [ "$h_spec" != "$h_npm" ] || [ "$h_spec" != "$h_wheel" ]; then
+if [ "$h_npm" != "$h_wheel" ]; then
+  echo "FAIL: the npm-shipped and wheel-shipped corpora differ from EACH OTHER — one publish shipped a stale/wrong corpus."
+  exit 1
+fi
+if [ "$h_spec" = "$h_npm" ]; then
+  echo "    all three corpora are byte-identical."
+elif [ "$LOCAL_VERSION" != "$VERSION" ]; then
+  # PRE-RELEASE WINDOW: the tree is already at the next canon-core, so the repo corpus may have GROWN.
+  # It must still be a strict superset of what was published: every published vector present, byte-
+  # identical after JSON normalisation. A missing or changed published vector is a real divergence
+  # (a released oracle was rewritten), never a window artefact. Once VERSION is repinned to the new
+  # release, byte-equality resumes automatically.
+  echo "    PRE-RELEASE WINDOW: local canon-core $LOCAL_VERSION != published $VERSION; corpus superset check"
+  "$PYBIN" - "$SPEC_CORPUS" "$NPM_CORPUS" <<'PY'
+import json, sys
+spec = {v["name"]: json.dumps(v, sort_keys=True) for v in json.load(open(sys.argv[1], encoding="utf-8"))}
+pub = {v["name"]: json.dumps(v, sort_keys=True) for v in json.load(open(sys.argv[2], encoding="utf-8"))}
+missing = sorted(n for n in pub if n not in spec)
+changed = sorted(n for n in pub if n in spec and spec[n] != pub[n])
+if missing or changed:
+    print("FAIL: repo corpus is NOT a superset of the published %d-vector corpus" % len(pub))
+    for n in missing: print("      missing: %s" % n)
+    for n in changed: print("      changed: %s" % n)
+    sys.exit(1)
+print("    every one of the %d published vectors is present and byte-identical in the %d-vector repo corpus (%d new)"
+      % (len(pub), len(spec), len(spec) - len(pub)))
+PY
+else
   echo "FAIL: published corpus diverged from spec's canonical corpus — a publish shipped a stale/wrong corpus."
   exit 1
 fi
-echo "    all three corpora are byte-identical."
 echo
 
 # --- [4] Run the PUBLISHED npm engine over the SHIPPED corpus + boundary vectors -------------------

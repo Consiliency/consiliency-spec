@@ -11,7 +11,10 @@
 #      fail-closed version assertion fires (test_unicode_skew.py). This is what the byte-identity
 #      check below STRUCTURALLY CANNOT prove — canon v2 passes bytes through verbatim, so both ports
 #      stay byte-identical even if ingest NFC were missing entirely.
-#   4. Python and TypeScript canon produce BYTE-IDENTICAL output + IDENTICAL digests on every vector
+#   4. The committed vector corpus IS the generator's output (gen_vectors.py --check): a hand-edited
+#      vector, or a generator change without regeneration, is a silent corpus/reference drift that
+#      steps 1-2 cannot see (they test against whatever is committed).
+#   5. Python and TypeScript canon produce BYTE-IDENTICAL output + IDENTICAL digests on every vector
 #      (the cross-language byte-identity gate).
 #
 # Exit 0 = gate green. Any divergence -> non-zero with a diff. No fudging.
@@ -32,18 +35,18 @@ echo
 # canon v2 no longer needs a Unicode DB, but the INGEST boundary (canon/py/ingest.py) does — that is
 # where NFC now lives, pinned to Node's Unicode version. Install the exact pin so the ingest tests in
 # step 3 are reproducible in a clean CI (not just where it happens to be present).
-echo "[0/4] Pinned Unicode DB for the ingest boundary (unicodedata2)"
+echo "[0/5] Pinned Unicode DB for the ingest boundary (unicodedata2)"
 python3 -m pip install --quiet --disable-pip-version-check -r "$PY/requirements.txt"
 python3 -c "import unicodedata2; print('    unicodedata2', unicodedata2.unidata_version)"
 echo
 
 # --- 1. Python canon self-conformance ---
-echo "[1/4] Python canon conformance (vs pinned vectors)"
+echo "[1/5] Python canon conformance (vs pinned vectors)"
 python3 "$PY/test_canon.py"
 echo
 
 # --- 2. TypeScript canon self-conformance ---
-echo "[2/4] TypeScript canon conformance (vs pinned vectors)"
+echo "[2/5] TypeScript canon conformance (vs pinned vectors)"
 npx --yes tsx "$TS/canon.test.ts"
 echo
 
@@ -53,13 +56,18 @@ echo
 # pinned Unicode DB is load-bearing: test_ingest_nfc feeds NON-NFC input through ingest->canon and
 # asserts the normalized form; test_unicode_skew proves the fail-closed pin assertion fires on a
 # stale DB and that the post-13 inputs are live U13-vs-U16 discriminators.
-echo "[3/4] Ingest-boundary NFC enforcement + pinned-DB skew proof"
+echo "[3/5] Ingest-boundary NFC enforcement + pinned-DB skew proof"
 python3 "$CANON_DIR/conformance/test_ingest_nfc.py"
 python3 "$CANON_DIR/conformance/test_unicode_skew.py"
 echo
 
-# --- 4. Cross-language byte-identity ---
-echo "[4/4] Cross-language byte-identity (Python emit vs TypeScript emit)"
+# --- 4. Vector corpus is the generator's output ---
+echo "[4/5] Vector corpus is the generator's output (gen_vectors.py --check)"
+python3 "$CANON_DIR/vectors/gen_vectors.py" --check
+echo
+
+# --- 5. Cross-language byte-identity ---
+echo "[5/5] Cross-language byte-identity (Python emit vs TypeScript emit)"
 python3 "$PY/test_canon.py" --emit > "$TMP/py.json"
 npx --yes tsx "$TS/canon.test.ts" --emit > "$TMP/ts.json"
 

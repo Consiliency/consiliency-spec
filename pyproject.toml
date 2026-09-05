@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "consiliency-spec"
-version = "0.2.4"
+version = "0.3.0"
 description = "Public Consiliency canon-core v2 package: Rust core, dep-free TypeScript/Python canon ports, vectors, and public schemas."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -52,6 +52,7 @@ packages = ["consiliency_spec"]
 "canon/ts/canon.ts" = "consiliency_spec/_data/canon/ts/canon.ts"
 "canon/ts/canon.test.ts" = "consiliency_spec/_data/canon/ts/canon.test.ts"
 "canon/vectors/canon-vectors.json" = "consiliency_spec/_data/canon/vectors/canon-vectors.json"
+"canon/vectors/gen_vectors.py" = "consiliency_spec/_data/canon/vectors/gen_vectors.py"
 "canon/vectors/gov-cross-repo-canon-vectors.json" = "consiliency_spec/_data/canon/vectors/gov-cross-repo-canon-vectors.json"
 "canon/vectors/gov-cross-repo-canon-vectors.PROVENANCE.md" = "consiliency_spec/_data/canon/vectors/gov-cross-repo-canon-vectors.PROVENANCE.md"
 "docs/outside-agent-contract.md" = "consiliency_spec/_data/docs/outside-agent-contract.md"
@@ -117,6 +118,7 @@ only-include = [
 "canon/ts/canon.ts" = "canon/ts/canon.ts"
 "canon/ts/canon.test.ts" = "canon/ts/canon.test.ts"
 "canon/vectors/canon-vectors.json" = "canon/vectors/canon-vectors.json"
+"canon/vectors/gen_vectors.py" = "canon/vectors/gen_vectors.py"
 "canon/vectors/gov-cross-repo-canon-vectors.json" = "canon/vectors/gov-cross-repo-canon-vectors.json"
 "canon/vectors/gov-cross-repo-canon-vectors.PROVENANCE.md" = "canon/vectors/gov-cross-repo-canon-vectors.PROVENANCE.md"
 "docs/outside-agent-contract.md" = "docs/outside-agent-contract.md"

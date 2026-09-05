@@ -10,8 +10,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CORE="$(cd "$HERE/.." && pwd)"          # canon/core
 cd "$CORE"
 
-echo "[1/4] cargo build --features c-binding"
+echo "[1/4] cargo build + unit tests --features c-binding"
 cargo build -p canon-core --features c-binding
+# The c_abi unit tests (error pointer non-null on CANON_ERR, CAN-10) only compile with the feature on.
+cargo test -p canon-core --features c-binding --lib --quiet
 
 echo "[2/4] regenerate the C header and assert it matches the checked-in copy"
 if command -v cbindgen >/dev/null 2>&1; then
@@ -25,7 +27,8 @@ if command -v cbindgen >/dev/null 2>&1; then
   rm -f "$TMP_HEADER"
   echo "      header is deterministic (matches checked-in copy)"
 else
-  echo "      cbindgen not installed; skipping header-determinism check (compile still validates it)"
+  GATE_SKIPPED=1
+  echo "      SKIP: cbindgen not installed; header-determinism check not run (compile still validates it)"
 fi
 
 # Locate the built cdylib (workspace cargo target may be redirected via CARGO_TARGET_DIR).
@@ -47,3 +50,10 @@ OUT="$(mktemp -d)/c_abi_smoke"
 
 echo "[4/4] run the C-ABI smoke test"
 LD_LIBRARY_PATH="$LIBDIR:${LD_LIBRARY_PATH:-}" DYLD_LIBRARY_PATH="$LIBDIR:${DYLD_LIBRARY_PATH:-}" "$OUT"
+
+# Skip protocol (ci/gate.sh): exit 3 when the header-determinism leg could not run, so the
+# gate is reported as SKIPPED rather than silently green.
+if [ -n "${GATE_SKIPPED:-}" ]; then
+  echo "C-ABI smoke: runnable legs green, but the cbindgen header leg was SKIPPED (exit 3)"
+  exit 3
+fi

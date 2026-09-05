@@ -143,12 +143,19 @@ fn json_truthy(value: &Value) -> bool {
     }
 }
 
+/// The one payload grammar every port shares (SPEC.md section 2): an optional '-' then one or
+/// more ASCII digits. `str::parse::<BigInt>` alone also accepts a leading '+', which the TS and
+/// Python ports do not, so the grammar is checked first. Leading zeros and "-0" match and
+/// normalise ("007" -> 7, "-0" -> 0). The message is FIXED — it never interpolates the payload,
+/// because the C-ABI forwards error messages to callers verbatim.
 fn parse_int_payload(payload: &Value) -> CanonResult<BigInt> {
-    let raw = payload
-        .as_str()
-        .ok_or_else(|| CanonError::new("$int payload must be a decimal string"))?;
-    raw.parse::<BigInt>()
-        .map_err(|_| CanonError::new(format!("invalid integer payload: {raw}")))
+    const MSG: &str = "invalid $int payload: expected optional '-' then ASCII digits";
+    let raw = payload.as_str().ok_or_else(|| CanonError::new(MSG))?;
+    let digits = raw.strip_prefix('-').unwrap_or(raw);
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(CanonError::new(MSG));
+    }
+    raw.parse::<BigInt>().map_err(|_| CanonError::new(MSG))
 }
 
 pub fn decode_input(node: &Value) -> CanonResult<CanonValue> {
