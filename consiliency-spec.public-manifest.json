@@ -2,7 +2,7 @@
   "package": {
     "npm": "@consiliency/spec",
     "pypi": "consiliency-spec",
-    "version": "0.1.0"
+    "version": "0.2.4"
   },
   "public_files": [
     {
@@ -35,7 +35,7 @@
     },
     {
       "path": "canon/conformance/check_xg4_canon_core.sh",
-      "sha256": "3333a2f883ab5ea942e0ab48e03847f2b1b4258c03f7f05953ac088547ef2651"
+      "sha256": "c5aaf02a27795abca12683363dd515baf7e69fc1d70dc9783621e77268adf419"
     },
     {
       "path": "canon/conformance/emit_published_npm.mjs",
@@ -146,8 +146,36 @@
       "sha256": "a644c6e1c99c202fa5c5bbb0db3278ccd139414de84755c7bd8a21eb88c96e6e"
     },
     {
+      "path": "consiliency_spec/__init__.py",
+      "sha256": "0ba2be106e0a9ba41c9438f1186d030e553a2299bc1ec9fab399a6ac97b93106"
+    },
+    {
+      "path": "consiliency_spec/outside_agent_router.py",
+      "sha256": "62f68a799ab67c009af5085dd7ebb45802953b39e0b6bf370bd0436df8ac5f34"
+    },
+    {
+      "path": "consiliency_spec/py.typed",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "path": "docs/outside-agent-contract.md",
+      "sha256": "38ea65a6dbb8759b86cb8d8a1dd9f7e2c152ee9fd12851f4b713dfbb948c3ed3"
+    },
+    {
       "path": "idmodel/correspondence/schema.json",
       "sha256": "ac9f7c9523e387248441a7d3492b90b08272357ea2c0f96c7c3115f5d88b08f4"
+    },
+    {
+      "path": "schemas/outside-agent-route-verdict.schema.json",
+      "sha256": "86169277d3a0823db1a6c9fa4d20a838b0bc2820818ad00ebd53dcdd03c2b1c2"
+    },
+    {
+      "path": "schemas/outside-agent-submission.schema.json",
+      "sha256": "db4d81e758b134312fd6ea39d6627c9dd70cc1d0406fea0cb6717a2ad44ed227"
+    },
+    {
+      "path": "scripts/check_outside_agent_vectors.sh",
+      "sha256": "5996fa684055fb6f2e8e95038a74b2f3c458dff155a930f83f740d9ffdb270fb"
     },
     {
       "path": "spec-engine/authority/authority-event.schema.json",
@@ -200,6 +228,66 @@
     {
       "path": "spec-parity/schemas/waiver.schema.json",
       "sha256": "19930117fe2db8dade4b25fc41a9725d81c572d052bb27c9e7f53ab43bf93338"
+    },
+    {
+      "path": "test-vectors/outside-agent/invalid-empty-evidence-refs.json",
+      "sha256": "0dbdf1593bc5909900adb64967bd22a88d230265a251fde991e11317118a48f9"
+    },
+    {
+      "path": "test-vectors/outside-agent/invalid-git-object-id-length.json",
+      "sha256": "2f1013e724338b13f56c6136ce999924dbeb9be13f062ec1410b720a1ea8f7da"
+    },
+    {
+      "path": "test-vectors/outside-agent/invalid-missing-digest.json",
+      "sha256": "335320352509d84a0785f37b6120d7e3ee0305167efad5ec502e9cbb168f72ee"
+    },
+    {
+      "path": "test-vectors/outside-agent/invalid-path-traversal.json",
+      "sha256": "2a25669e4b2325f001ef45b61647132ec38d5352920936c63164021dec06f48d"
+    },
+    {
+      "path": "test-vectors/outside-agent/invalid-raw-payload.json",
+      "sha256": "67c6d26205f0c5aa7200412cf39e65b7db22ce47848f72df4f36ce0acb5cc5fd"
+    },
+    {
+      "path": "test-vectors/outside-agent/invalid-source-bundle-mismatch.json",
+      "sha256": "5dde952f113fe262d6b73f362dd27843d432796493ede826939a79df017c696b"
+    },
+    {
+      "path": "test-vectors/outside-agent/invalid-unknown-producer-identity-posture.json",
+      "sha256": "7c96378cb8491fbc8556be109a1282d0ffd938ec50f262b3bf8aaf77fda567a1"
+    },
+    {
+      "path": "test-vectors/outside-agent/invalid-unsupported-verdict.json",
+      "sha256": "47d9a748b2eab7d6c6bbdf7a9cfeaff5e9bdb4895b8dcd9b092538c68b240148"
+    },
+    {
+      "path": "test-vectors/outside-agent/manifest.json",
+      "sha256": "78858828e9eace93eaf31d90717666ddce54ccb3666113df9d033d67c20cfca0"
+    },
+    {
+      "path": "test-vectors/outside-agent/valid-ambiguity-report.json",
+      "sha256": "d71d97278acf136ed016994eec9ca82a6cad20285d3fa91416a0f17d1eed978f"
+    },
+    {
+      "path": "test-vectors/outside-agent/valid-implementation-submission.json",
+      "sha256": "705b4ddf0f5f8be6bee061e9014c5bbde130aa3c0fa3affd04b815612f5658d8"
+    },
+    {
+      "path": "test-vectors/outside-agent/valid-work-request.json",
+      "sha256": "d332483663431017ac5ecb825c9c8d6767f752927af9ceb637619b30f9687327"
+    },
+    {
+      "path": "tests/test_outside_agent_route_verdict_schema.py",
+      "sha256": "6ce9d79e0b75e1782c1c946075d9e3b7b63a51851bb0c11d532281ece08f64e3"
+    },
+    {
+      "path": "tests/test_outside_agent_submission_schema.py",
+      "sha256": "dc8ab1eda6c04fa8b92ea481993fac1d3aed5aa8b8337b3bbd19cd1fc97a1766"
+    },
+    {
+      "path": "tests/test_outside_agent_vectors.py",
+      "sha256": "eb1772b727712c15de7233c76b2b0d1b701873d230e28c7300a565ac2cf6d3cf"
     }
   ],
   "schema_version": "consiliency.spec.public_canon_manifest.v1",

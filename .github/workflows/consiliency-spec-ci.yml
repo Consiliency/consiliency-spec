@@ -21,16 +21,22 @@ jobs:
         with:
           python-version: "3.12"
 
+      # The canon gate asserts, fail-closed, that Node's Unicode DB == 16.0. A bare
+      # "24" floats to 24.16+, whose bundled ICU is Unicode 17.0 and trips that
+      # assertion. Pin to 24.13.0 (Unicode 16.0) and check it explicitly.
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: "24.13.0"
+
+      - name: Confirm Node Unicode DB == 16.0
+        run: node -e "console.log('Node Unicode DB:', process.versions.unicode); if (process.versions.unicode !== '16.0') process.exit(1)"
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install Python build tooling
-        run: python -m pip install --upgrade pip build
+        run: python -m pip install --upgrade pip build "jsonschema>=4.18"
 
       - name: Run release gate
         run: bash scripts/consiliency-spec/check_release.sh
