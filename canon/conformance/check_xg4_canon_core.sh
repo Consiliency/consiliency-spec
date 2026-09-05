@@ -16,6 +16,63 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CORE="$ROOT/canon/core/Cargo.toml"
 CONF="$ROOT/canon/conformance"
+
+if [[ "${1:-}" == "--target" ]]; then
+  TARGET="${2:-}"
+  [[ -n "$TARGET" && -d "$TARGET" ]] || { echo "usage: $0 --target <installed-wheel-or-unpacked-root>" >&2; exit 2; }
+  [[ $# -eq 2 ]] || { echo "usage: $0 --target <installed-wheel-or-unpacked-root>" >&2; exit 2; }
+
+  CANON_TARGET=""
+  for candidate in \
+    "$TARGET/consiliency_spec_ingest/_bundle/canon/py/canon.py" \
+    "$TARGET/src/consiliency_spec_ingest/_bundle/canon/py/canon.py"; do
+    if [[ -f "$candidate" ]]; then
+      CANON_TARGET="$candidate"
+      break
+    fi
+  done
+  if [[ -z "$CANON_TARGET" ]]; then
+    CANON_TARGET="$(find "$TARGET" -path '*/consiliency_spec_ingest/_bundle/canon/py/canon.py' -type f -print -quit)"
+  fi
+  [[ -n "$CANON_TARGET" && -f "$CANON_TARGET" ]] || {
+    echo "FAIL: target does not contain consiliency_spec_ingest/_bundle/canon/py/canon.py" >&2
+    exit 1
+  }
+
+  python3 - "$CANON_TARGET" "$ROOT/canon/vectors/canon-vectors.json" <<'PY'
+import base64
+import importlib.util
+import json
+import sys
+
+canon_path, vectors_path = sys.argv[1:]
+spec = importlib.util.spec_from_file_location("specpkgmin_vendored_canon", canon_path)
+canon = importlib.util.module_from_spec(spec)
+assert spec.loader is not None
+spec.loader.exec_module(canon)
+
+failures = []
+for vector in json.loads(open(vectors_path, encoding="utf-8").read()):
+    value = canon.decode_input(vector["input"])
+    if vector.get("expect_error"):
+        try:
+            canon.canonical_bytes(value)
+        except canon.CanonError:
+            continue
+        failures.append(f"{vector['name']}: expected CanonError")
+        continue
+    bytes_b64 = base64.b64encode(canon.canonical_bytes(value)).decode("ascii")
+    digest = canon.digest(value, vector["profile"])
+    if bytes_b64 != vector["expected_canonical_bytes_b64"] or digest != vector["expected_digest_hex"]:
+        failures.append(vector["name"])
+if failures:
+    raise SystemExit("FAIL: wheel-vendored canon diverged on " + ", ".join(failures))
+print("SPECPKGMIN VENDORED CANON GATE GREEN")
+PY
+  exit 0
+fi
+
+[[ $# -eq 0 ]] || { echo "usage: $0 [--target <installed-wheel-or-unpacked-root>]" >&2; exit 2; }
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
