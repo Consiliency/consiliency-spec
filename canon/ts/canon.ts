@@ -46,13 +46,14 @@ export class InfMarker {
   constructor(public readonly sign: number) {}
 }
 
-// Supported canonical value domain (SPEC.md section 1). Integers use bigint for arbitrary
-// precision; a plain `number` is accepted ONLY if it is a safe integer (non-integers are floats
-// and rejected).
+// Supported canonical value domain (SPEC.md section 1). Integers are `bigint`. A plain JS `number`
+// is NOT a canonical value and is rejected by the encoder: JS cannot distinguish `100` from `100.0`,
+// so a whole-valued float would silently encode as the integer `100` while every other port rejects
+// it — a cross-port digest divergence. Callers convert with `BigInt(...)` at their own boundary,
+// where they know whether the value was an integer.
 export type CanonValue =
   | null
   | boolean
-  | number
   | bigint
   | string
   | CanonValue[]
@@ -99,22 +100,23 @@ function encodeString(s: string): string {
 // Number encoding (SPEC.md section 6) — integers only.
 // --------------------------------------------------------------------------- //
 
-function encodeNumber(value: number | bigint): string {
-  if (typeof value === "bigint") {
-    return value.toString(10);
-  }
-  // A JS number: accept only safe integers; anything fractional / non-finite is a float -> reject.
-  if (!Number.isFinite(value)) {
-    throw new CanonError("NaN/Infinity are forbidden in canonical content");
-  }
-  if (!Number.isInteger(value)) {
-    throw new CanonError("floats are forbidden in canonical content; pre-represent as int or string");
-  }
-  if (!Number.isSafeInteger(value)) {
-    // Outside +/-(2^53-1) a JS number can't be trusted as an exact integer; require bigint.
-    throw new CanonError("integer outside safe range; use bigint to avoid precision loss");
-  }
+function encodeNumber(value: bigint): string {
   return value.toString(10);
+}
+
+// The one payload grammar every port shares (SPEC.md section 2): an optional '-' then one or more
+// ASCII digits. Nothing else — not whitespace, '+', '_', '0x', or non-ASCII digits, all of which
+// `BigInt(string)` / Python `int()` / Rust `str::parse` accept DIFFERENTLY from one another.
+// Leading zeros and "-0" match the grammar and normalise through bigint ("007" -> 7, "-0" -> 0).
+const INT_PAYLOAD = /^-?[0-9]+$/;
+
+// The message is FIXED: it never interpolates the payload, so a rejected value cannot leak through
+// the error channel (the C-ABI forwards messages to callers verbatim).
+export function parseIntPayload(payload: unknown): bigint {
+  if (typeof payload !== "string" || !INT_PAYLOAD.test(payload)) {
+    throw new CanonError("invalid $int payload: expected optional '-' then ASCII digits");
+  }
+  return BigInt(payload);
 }
 
 // --------------------------------------------------------------------------- //
@@ -172,7 +174,14 @@ function encodeValue(value: CanonValue): string {
   }
   if (value === null) return "null";
   if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "number" || typeof value === "bigint") return encodeNumber(value);
+  if (typeof value === "bigint") return encodeNumber(value);
+  if (typeof value === "number") {
+    // Rejected outright (not routed by integrality): see the CanonValue comment. A float marker is
+    // the vector-harness representation; a raw number reaching the encoder is a caller bug.
+    throw new CanonError(
+      "plain JS number is not a canonical value: use bigint for integers (floats are forbidden)"
+    );
+  }
   if (typeof value === "string") return encodeString(value);
   if (Array.isArray(value)) return encodeArray(value);
   if (typeof value === "object") return encodeObject(value as { [k: string]: CanonValue });
@@ -254,7 +263,7 @@ export function decodeInput(node: TaggedNode): CanonValue {
       const payload = (node as { [k: string]: TaggedNode })[tag];
       switch (tag) {
         case "$int":
-          return BigInt(payload as string); // decimal string -> exact bigint
+          return parseIntPayload(payload); // grammar-checked decimal string -> exact bigint
         case "$float":
           return new FloatMarker();
         case "$nan":
@@ -287,7 +296,9 @@ export function decodeInput(node: TaggedNode): CanonValue {
   if (Array.isArray(node)) return node.map(decodeInput);
   if (typeof node === "boolean") return node;
   if (typeof node === "number") {
-    // A bare JSON number in a vector input: integral -> bigint; fractional -> float marker.
+    // A bare JSON number in a vector input: integral -> bigint; fractional -> float marker. This is
+    // a VECTOR-HARNESS convenience for untagged fixtures only, not the public API — the encoder
+    // itself rejects plain numbers (see encodeValue).
     return Number.isInteger(node) ? BigInt(node) : new FloatMarker();
   }
   return node; // string | null

@@ -22,7 +22,8 @@
 //! - On SUCCESS a function returns `CANON_OK` (0) and writes its output param(s).
 //! - On FAILURE a function returns `CANON_ERR` (1), writes null/zero to the output param(s), and
 //!   writes a NUL-terminated UTF-8 error message to `*err_out` (the caller frees it with
-//!   `canon_string_free`). No Rust panic is ever allowed to unwind across the FFI boundary: every
+//!   `canon_string_free`). `*err_out` is NON-NULL on every `CANON_ERR`, and messages never echo
+//!   caller payloads. No Rust panic is ever allowed to unwind across the FFI boundary: every
 //!   entry point is wrapped in `catch_unwind` and a caught panic is reported as `CANON_ERR`.
 //! - OWNERSHIP OF RETURNED BUFFERS: every buffer the engine hands back (`*bytes_out`, the digest
 //!   string, `*err_out`) is heap-allocated by THIS crate and MUST be freed by the matching free
@@ -43,13 +44,20 @@ pub const CANON_OK: c_int = 0;
 /// Status: the call failed; `*err_out` holds a NUL-terminated UTF-8 message the caller must free.
 pub const CANON_ERR: c_int = 1;
 
-/// Copy a Rust `String` into a freshly heap-allocated NUL-terminated C string.
-/// Returns null if the string contains an interior NUL (never happens for our hex digests /
-/// error messages, but we stay total rather than panic).
+/// Copy a Rust `String` into a freshly heap-allocated NUL-terminated C string. Never returns
+/// null: an interior NUL (impossible for hex digests, and error messages no longer echo caller
+/// payloads — but stay total) is escaped as the six characters `\u0000` and the copy retried,
+/// which cannot fail.
 fn into_c_string(value: String) -> *mut c_char {
     match CString::new(value) {
         Ok(cstr) => cstr.into_raw(),
-        Err(_) => ptr::null_mut(),
+        Err(err) => {
+            let escaped = err.into_vec();
+            let escaped = String::from_utf8_lossy(&escaped).replace('\0', "\\u0000");
+            CString::new(escaped)
+                .expect("interior NULs were just escaped")
+                .into_raw()
+        }
     }
 }
 
@@ -224,3 +232,36 @@ pub unsafe extern "C" fn canon_string_free(ptr: *mut c_char) {
 // config; also documents that no opaque handle type crosses this ABI (the surface is stateless).
 #[allow(dead_code)]
 type CanonNoOpaqueHandle = *mut c_void;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// CAN-10: an interior NUL in an error message must never turn into a null `*err_out`.
+    #[test]
+    fn into_c_string_never_returns_null_on_interior_nul() {
+        let ptr = into_c_string("bad\0payload".to_string());
+        assert!(!ptr.is_null(), "interior NUL must be escaped, not dropped to a null pointer");
+        // SAFETY: `ptr` was just produced by `CString::into_raw`; we take ownership back here.
+        let owned = unsafe { CString::from_raw(ptr) };
+        assert_eq!(owned.to_str().unwrap(), "bad\\u0000payload");
+    }
+
+    #[test]
+    fn digest_error_pointer_is_non_null_for_interior_nul_payload() {
+        let json = CString::new(r#"{"$int":"12\u000034"}"#).unwrap();
+        let profile = CString::new("semantic-content").unwrap();
+        let mut digest: *mut c_char = ptr::null_mut();
+        let mut err: *mut c_char = ptr::null_mut();
+        // SAFETY: all four pointers are valid for the duration of the call.
+        let rc = unsafe { canon_digest_from_json(json.as_ptr(), profile.as_ptr(), &mut digest, &mut err) };
+        assert_eq!(rc, CANON_ERR);
+        assert!(digest.is_null());
+        assert!(!err.is_null(), "*err_out must be non-null on CANON_ERR");
+        // SAFETY: `err` was produced by `into_c_string`; reclaiming it frees it on our allocator.
+        let msg = unsafe { CString::from_raw(err) };
+        let msg = msg.to_str().unwrap();
+        assert!(msg.contains("invalid $int payload"), "{msg}");
+        assert!(!msg.contains("12"), "message must not echo the payload: {msg}");
+    }
+}

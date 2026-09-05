@@ -14,9 +14,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut lines = Vec::with_capacity(vectors.len());
     for vector in vectors {
         let name = vector["name"].as_str().ok_or("vector missing name")?;
-        let value = decode_input(&vector["input"])?;
         if vector.get("expect_error").and_then(Value::as_bool).unwrap_or(false) {
-            match canonical_bytes(&value) {
+            // decode_input is INSIDE the guard: a $int payload-grammar rejection is an Err at decode.
+            match decode_input(&vector["input"]).and_then(|value| canonical_bytes(&value)) {
                 Ok(bytes) => {
                     return Err(format!("expected CanonError but encoding succeeded for {name}: {bytes:?}").into());
                 }
@@ -24,6 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             continue;
         }
+        let value = decode_input(&vector["input"])?;
         let profile = vector["profile"].as_str().ok_or("vector missing profile")?;
         let bytes = canonical_bytes(&value)?;
         let bytes_b64 = STANDARD.encode(bytes);

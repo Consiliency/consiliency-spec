@@ -74,7 +74,7 @@ decoder that is identical in both languages. Tags:
 
 | Tag form                | Decodes to |
 |-------------------------|-----------|
-| `{"$int": "123"}`       | integer (decimal string, arbitrary precision, optional leading `-`) |
+| `{"$int": "123"}`       | integer: a decimal string matching `^-?[0-9]+$` — ASCII digits only, optional leading `-`, arbitrary precision; leading zeros and `-0` are accepted and normalised (`"007"` → `7`, `"-0"` → `0`). Any other payload (empty, whitespace, `+`, `_`, `0x`, non-ASCII digits, a JSON number instead of a string) MUST be rejected with a `CanonError` by every port, at decode. The native parsers (`int()`, `BigInt()`, `str::parse`) each accept a different superset of this grammar, so a port that leans on them digests inputs the others reject. |
 | `{"$float": "1.0"}`     | a float marker — the encoder MUST reject it |
 | `{"$nan": true}`        | NaN marker — encoder MUST reject |
 | `{"$inf": 1}` / `{"$inf": -1}` | +/-Infinity marker — encoder MUST reject |
@@ -179,8 +179,11 @@ String output is `"` + escaped-contents + `"`.
   integers.
 - Arbitrary precision: integers beyond 2^53 are supported. Python uses native `int`. TypeScript
   uses `bigint` for emission so large integers do not lose precision; the `$int` decoder produces
-  a `bigint`, and the encoder accepts both `bigint` and a safe-range `number` that is an integer.
-  A non-integer `number` in TS (e.g. `1.5`) is treated as a float and REJECTED.
+  a `bigint`, and the encoder accepts **`bigint` only**. A plain JS `number` — integral or not —
+  is REJECTED: JS cannot distinguish `100` from `100.0`, so accepting whole-valued numbers would
+  encode a float as the integer `100` in TS while every other port rejects it (a cross-port digest
+  divergence). Callers convert with `BigInt(...)` at their own boundary, where they still know
+  whether the value was an integer.
 
 `true` / `false` / `null` are lowercase literals.
 
@@ -338,6 +341,11 @@ The binding surfaces are thin wrappers over that core:
 
 - WASM exports `canonicalBytesFromJson` and `digestFromJson`.
 - PyO3 exports `canonical_bytes_from_json` and `digest_from_json` from module `canon_core`.
+- The C ABI (`c-binding` feature; `canon_canonical_bytes_from_json`, `canon_digest_from_json`)
+  returns `CANON_OK`/`CANON_ERR`. `*err_out` is **non-null on every `CANON_ERR`**, and error
+  messages never echo caller payloads (a fixed message per rejection class), so a rejected value
+  cannot leak through the error channel and an interior NUL cannot turn the message into a null
+  pointer.
 
 `conformance/check_xg4_canon_core.sh` is the XG4 exit gate. It runs the existing Python/TypeScript
 canon gate, runs Rust vector tests, diffs Python/TypeScript/Rust emitted bytes and digests over the

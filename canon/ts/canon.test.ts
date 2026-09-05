@@ -42,16 +42,18 @@ function load(path: string = VECTORS): Vector[] {
 }
 
 function runVector(vec: Vector): [string, string] {
-  const value = decodeInput(vec.input as never);
   if (vec.expect_error) {
+    // decodeInput is INSIDE the guard: a $int payload-grammar rejection is thrown at decode.
+    // Only CanonError counts; any other error type is a real failure and propagates.
     try {
-      canonicalBytes(value);
+      canonicalBytes(decodeInput(vec.input as never));
     } catch (e) {
       if (e instanceof CanonError) return ["ERROR", "ERROR"];
       throw e;
     }
     throw new Error(`expected CanonError but encoding succeeded for ${vec.name}`);
   }
+  const value = decodeInput(vec.input as never);
   const cbytes = canonicalBytes(value);
   const b64 = Buffer.from(cbytes).toString("base64");
   return [b64, digest(value, vec.profile)];

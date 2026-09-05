@@ -16,11 +16,13 @@ fn rust_core_matches_pinned_vectors() {
     assert!(!vectors.is_empty(), "canon vector corpus must be non-empty");
     for vector in vectors {
         let name = vector["name"].as_str().expect("name");
-        let value = decode_input(&vector["input"]).unwrap_or_else(|error| panic!("{name}: decode failed: {error}"));
         if vector.get("expect_error").and_then(Value::as_bool).unwrap_or(false) {
-            assert!(canonical_bytes(&value).is_err(), "{name}: expected canonical_bytes to reject");
+            // decode_input is INSIDE the guard: a $int payload-grammar rejection is an Err at decode.
+            let rejected = decode_input(&vector["input"]).and_then(|value| canonical_bytes(&value)).is_err();
+            assert!(rejected, "{name}: expected decode_input/canonical_bytes to reject");
             continue;
         }
+        let value = decode_input(&vector["input"]).unwrap_or_else(|error| panic!("{name}: decode failed: {error}"));
         let profile = vector["profile"].as_str().expect("profile");
         let bytes = canonical_bytes(&value).unwrap_or_else(|error| panic!("{name}: encode failed: {error}"));
         let bytes_b64 = STANDARD.encode(bytes);
