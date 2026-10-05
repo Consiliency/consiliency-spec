@@ -30,7 +30,7 @@
         "result_state": { "$ref": "#/$defs/result_state" },
         "code": {
           "type": "string",
-          "description": "A stable machine code for the finding class, e.g. missing_desired_element, structural_mismatch, prohibition_violated, prohibition_unobservable, unmapped_realized_kind, unmapped_desired_kind, ambiguous_kind_alignment, refinement_below_frontier, permitted_freedom, correspondence_ambiguous, capability_missing."
+          "description": "A stable machine code for the finding class, e.g. missing_desired_element, structural_mismatch, kind_mismatch, signature_unobservable, signature_undeclared, prohibition_violated, prohibition_unobservable, unmapped_realized_kind, unmapped_desired_kind, ambiguous_kind_alignment, refinement_below_frontier, permitted_freedom, correspondence_ambiguous, capability_missing."
         },
         "subject": {
           "type": "object",
@@ -65,6 +65,20 @@
         "checks_evaluated": { "type": "integer", "minimum": 0, "description": "Count of in-scope checks evaluated for this dimension. A real JSON integer (canon sec 6 supports arbitrary-precision integers as JSON integers; the `$int`-tag is the test-vector encoding only, never the data model). Only FLOATS are forbidden, not integers." },
         "finding_ids": { "type": "array", "items": { "type": "string" }, "description": "finding_ids contributing to this dimension's state." }
       }
+    },
+    "extraction_coverage_summary": {
+      "title": "extraction_coverage_summary",
+      "description": "ENG-6: the summary of an E(C) extraction that was NOT fully observed, pinned on a finding_set / certificate / vacuity record so the result can never present as full coverage (SEMANTICS sec 4.2). `partial`: the realized adapter MEASURED holes (E(C) extraction_coverage: tsc files it could not parse, source files on disk it never listed, files whose tree-sitter tree has ERROR/MISSING nodes, uncompiled .proto files) — the counts are copied from that record. `unmeasured`: the E(C) carries an extraction_coverage that is not a measurement. Absent when the extraction was measured full, or when the E(C) declares no extraction_coverage at all (a hand-authored fixture whose modeled_domains declaration stands).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["partial", "unmeasured"] },
+        "files_total": { "type": "integer", "minimum": 0, "description": "Source files the extractor saw or should have seen." },
+        "files_extracted": { "type": "integer", "minimum": 0, "description": "Files parsed with no syntax error and no attributed diagnostic." },
+        "unextracted_count": { "type": "integer", "minimum": 0, "description": "Length of E(C) extraction_coverage.unextracted." },
+        "unattributed_diagnostic_count": { "type": "integer", "minimum": 0, "description": "Run-level extractor diagnostics not attributable to a listed file." }
+      }
     }
   },
   "type": "object",
@@ -98,8 +112,13 @@
         "is_vacuous": { "const": true },
         "reason": { "type": "string", "description": "Machine code for why the certify was vacuous, e.g. no_kind_aligned_realized_boundary." },
         "realized_boundary_count": { "type": "integer", "minimum": 0, "description": "Total E(C) boundary count (may be >0 even when vacuous — e.g. config-file noise boundaries)." },
-        "kind_aligned_realized_count": { "type": "integer", "minimum": 0, "const": 0, "description": "Count of E(C) boundaries that map to a desired kind via kind-alignment; 0 is exactly the vacuity condition." }
+        "kind_aligned_realized_count": { "type": "integer", "minimum": 0, "const": 0, "description": "Count of E(C) boundaries that map to a desired kind via kind-alignment; 0 is exactly the vacuity condition." },
+        "extraction_coverage": { "$ref": "#/$defs/extraction_coverage_summary", "description": "Present when the vacuous E(C)'s extraction was partial or unmeasured — it says WHY there is no code (e.g. every source file an unsupported extension, or unparseable). ENG-6." }
       }
+    },
+    "extraction_coverage": {
+      "$ref": "#/$defs/extraction_coverage_summary",
+      "description": "OPTIONAL. Present ONLY when E(C)'s extraction was partial or unmeasured (ENG-6, SEMANTICS sec 4.2); then no prohibition passes, a completeness absence is unknown, and closure carries an unknown closure_extraction_partial check. NOT part of the finding_set_id preimage; pinned by the certificate digest (certificate.extraction_coverage mirrors it)."
     }
   }
 }

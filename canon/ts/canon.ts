@@ -32,6 +32,19 @@ export const PROFILES = ["semantic-content", "run", "artifact-byte", "certificat
 export type Profile = (typeof PROFILES)[number];
 const DOMAIN_PREFIX = "spec-canon:v2:";
 
+// SPEC.md section 1 — maximum nesting depth (CAN-12). A container's depth is
+// 1 + the number of containers enclosing it (`[]` is depth 1). Any container deeper than MAX_DEPTH
+// is a CanonError, at decode and at encode, identically in every port. Without it this port threw a
+// RangeError at a non-deterministic depth (2,000-5,000) while Python and Rust failed elsewhere.
+export const MAX_DEPTH = 128;
+const DEPTH_MESSAGE = `nesting depth exceeds the maximum of ${MAX_DEPTH}`;
+
+function containerDepth(depth: number): number {
+  // `depth` counts the containers enclosing the one being built; returns the new container's depth.
+  if (depth >= MAX_DEPTH) throw new CanonError(DEPTH_MESSAGE);
+  return depth + 1;
+}
+
 export class CanonError extends Error {
   constructor(message: string) {
     super(message);
@@ -142,27 +155,73 @@ function compareCodePoints(a: string, b: string): number {
   }
 }
 
-function encodeObject(obj: { [k: string]: CanonValue }): string {
+function encodeObject(obj: { [k: string]: CanonValue }, depth: number): string {
   // canon v2 does NOT NFC-normalize keys (the ingest boundary did that, and detected post-NFC
   // collisions). canon sorts the already-NFC keys by Unicode code point as-is.
   const keys = Object.keys(obj).sort(compareCodePoints);
   const parts: string[] = [];
   for (const k of keys) {
-    parts.push(encodeString(k) + ":" + encodeValue(obj[k]));
+    parts.push(encodeString(k) + ":" + encodeValue(obj[k], depth));
   }
   return "{" + parts.join(",") + "}";
 }
 
-function encodeArray(arr: CanonValue[]): string {
-  // Insertion order preserved ALWAYS (SPEC.md section 4). Never sort.
-  return "[" + arr.map(encodeValue).join(",") + "]";
+function encodeArray(arr: CanonValue[], depth: number): string {
+  // Insertion order preserved ALWAYS (SPEC.md section 4). Never sort. An index loop, not .map():
+  // .map() skips the holes of a sparse array and join() renders them as empty, which emitted
+  // invalid output like `[1,,2]`; here a hole reads as `undefined` and is rejected.
+  const parts: string[] = [];
+  for (let i = 0; i < arr.length; i++) parts.push(encodeValue(arr[i], depth));
+  return "[" + parts.join(",") + "]";
+}
+
+/**
+ * A plain data object: its prototype is Object.prototype or null. Everything else that is
+ * `typeof "object"` (Date, Map, Set, RegExp, typed arrays, class instances, boxed primitives) is a
+ * language-native type SPEC.md section 1 requires to be REJECTED, never coerced. Before this check a
+ * Date encoded as `{}` and a class instance as its own enumerable fields (CAN-1),
+ * while Python rejects every non-dict.
+ */
+function isPlainObject(value: object): boolean {
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Throw unless `value` is plain data: a plain object (see isPlainObject) whose own properties are all
+ * enumerable, string-keyed DATA properties. An accessor would be re-evaluated on every encode (the
+ * same object could encode differently twice), and a symbol-keyed or non-enumerable property would be
+ * silently dropped by Object.keys — both are coercions SPEC.md section 1 forbids. Called BEFORE any
+ * copy of the object is made (digest's top-level `digest` strip, splitRecord), so a copy can never
+ * launder a non-plain value into a plain one.
+ */
+function assertPlainObject(value: object): void {
+  if (!isPlainObject(value)) {
+    const ctor = (value as { constructor?: { name?: unknown } }).constructor;
+    const name = typeof ctor?.name === "string" && ctor.name ? ctor.name : "object";
+    throw new CanonError("unsupported type for canonical content: " + name + " (only plain objects)");
+  }
+  if (Object.getOwnPropertySymbols(value).length > 0) {
+    throw new CanonError("unsupported object for canonical content: symbol-keyed property");
+  }
+  const names = Object.getOwnPropertyNames(value);
+  if (names.length !== Object.keys(value).length) {
+    throw new CanonError("unsupported object for canonical content: non-enumerable property");
+  }
+  for (const k of names) {
+    const desc = Object.getOwnPropertyDescriptor(value, k);
+    if (desc === undefined || !("value" in desc)) {
+      throw new CanonError("unsupported object for canonical content: accessor property");
+    }
+  }
 }
 
 // --------------------------------------------------------------------------- //
 // Value dispatch (SPEC.md section 6 — booleans are distinct from numbers in JS).
 // --------------------------------------------------------------------------- //
 
-function encodeValue(value: CanonValue): string {
+function encodeValue(value: CanonValue, depth: number): string {
+  // `depth` is the number of containers enclosing `value` (0 at the top level).
   if (value instanceof FloatMarker) {
     throw new CanonError("floats are forbidden in canonical content; pre-represent as int or string");
   }
@@ -183,8 +242,11 @@ function encodeValue(value: CanonValue): string {
     );
   }
   if (typeof value === "string") return encodeString(value);
-  if (Array.isArray(value)) return encodeArray(value);
-  if (typeof value === "object") return encodeObject(value as { [k: string]: CanonValue });
+  if (Array.isArray(value)) return encodeArray(value, containerDepth(depth));
+  if (typeof value === "object") {
+    assertPlainObject(value);
+    return encodeObject(value as { [k: string]: CanonValue }, containerDepth(depth));
+  }
   throw new CanonError("unsupported type for canonical content: " + typeof value);
 }
 
@@ -193,27 +255,31 @@ function encodeValue(value: CanonValue): string {
 // --------------------------------------------------------------------------- //
 
 export function canonicalBytes(value: CanonValue): Uint8Array {
-  return new TextEncoder().encode(encodeValue(value));
+  return new TextEncoder().encode(encodeValue(value, 0));
 }
 
 function stripTopLevelDigest(value: CanonValue): CanonValue {
   // SPEC.md section 8: exclude a top-level "digest" key only.
   if (
-    value !== null &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    !(value instanceof FloatMarker) &&
-    !(value instanceof NanMarker) &&
-    !(value instanceof InfMarker) &&
-    Object.prototype.hasOwnProperty.call(value, "digest")
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    value instanceof FloatMarker ||
+    value instanceof NanMarker ||
+    value instanceof InfMarker
   ) {
-    const out: { [k: string]: CanonValue } = {};
-    for (const k of Object.keys(value as { [k: string]: CanonValue })) {
-      if (k !== "digest") out[k] = (value as { [k: string]: CanonValue })[k];
-    }
-    return out;
+    return value; // canonicalBytes accepts or rejects it as-is
   }
-  return value;
+  // Check the ORIGINAL object before copying it: the copy below is a fresh plain `{}`, so a Date,
+  // Map or class instance carrying an own `digest` key used to be laundered into a plain object and
+  // digested as `{}` or as its own fields, while canonicalBytes and Python reject it (CAN-1).
+  assertPlainObject(value);
+  if (!Object.prototype.hasOwnProperty.call(value, "digest")) return value;
+  const out: { [k: string]: CanonValue } = {};
+  for (const k of Object.keys(value as { [k: string]: CanonValue })) {
+    if (k !== "digest") out[k] = (value as { [k: string]: CanonValue })[k];
+  }
+  return out;
 }
 
 export function digest(value: CanonValue, profile: Profile): string {
@@ -233,6 +299,12 @@ export function splitRecord(
   record: { [k: string]: CanonValue },
   contentKeys: string[],
 ): { content: { [k: string]: CanonValue }; envelope: { [k: string]: CanonValue } } {
+  // Same copy-before-check hazard as the digest strip: content/envelope are fresh plain objects, so
+  // the record itself must be plain data before its fields are copied out.
+  if (record === null || typeof record !== "object" || Array.isArray(record)) {
+    throw new CanonError("splitRecord: record must be a plain object");
+  }
+  assertPlainObject(record);
   const keyset = new Set(contentKeys);
   const content: { [k: string]: CanonValue } = {};
   const envelope: { [k: string]: CanonValue } = {};
@@ -255,12 +327,39 @@ type TaggedNode =
   | TaggedNode[]
   | { [k: string]: TaggedNode };
 
+/**
+ * Every tag's payload has exactly one accepted JSON type (SPEC.md section 2); anything else is a
+ * fixed-message CanonError, never a truthiness or iteration coercion. Containers deeper than
+ * MAX_DEPTH are rejected here as well as in the encoder (SPEC.md section 1).
+ */
 export function decodeInput(node: TaggedNode): CanonValue {
-  if (node !== null && typeof node === "object" && !Array.isArray(node)) {
+  return decode(node, 0);
+}
+
+function isJsonObject(node: TaggedNode): node is { [k: string]: TaggedNode } {
+  return node !== null && typeof node === "object" && !Array.isArray(node);
+}
+
+function decodeEntries(p: { [k: string]: TaggedNode }, depth: number): { [k: string]: CanonValue } {
+  const inner = containerDepth(depth);
+  const out: { [k: string]: CanonValue } = {};
+  for (const k of Object.keys(p)) out[k] = decode(p[k], inner);
+  return out;
+}
+
+function decodeItems(p: TaggedNode[], depth: number): CanonValue[] {
+  const inner = containerDepth(depth);
+  const out: CanonValue[] = [];
+  for (let i = 0; i < p.length; i++) out.push(decode(p[i], inner));
+  return out;
+}
+
+function decode(node: TaggedNode, depth: number): CanonValue {
+  if (isJsonObject(node)) {
     const keys = Object.keys(node);
     if (keys.length === 1) {
       const tag = keys[0];
-      const payload = (node as { [k: string]: TaggedNode })[tag];
+      const payload = node[tag];
       switch (tag) {
         case "$int":
           return parseIntPayload(payload); // grammar-checked decimal string -> exact bigint
@@ -269,36 +368,45 @@ export function decodeInput(node: TaggedNode): CanonValue {
         case "$nan":
           return new NanMarker();
         case "$inf":
-          return new InfMarker((payload as number) >= 0 ? 1 : -1);
+          return new InfMarker(typeof payload === "number" && payload < 0 ? -1 : 1);
         case "$str":
-          return payload as string;
+          if (typeof payload !== "string") {
+            throw new CanonError("invalid $str payload: expected a JSON string");
+          }
+          return payload;
         case "$bool":
-          return Boolean(payload);
+          // Boolean(payload) made [] and {} true here while Python made them false and Rust made
+          // 0.0 true (CAN-9). The payload must BE a boolean.
+          if (typeof payload !== "boolean") {
+            throw new CanonError("invalid $bool payload: expected a JSON boolean");
+          }
+          return payload;
         case "$null":
+          if (payload !== true) throw new CanonError("invalid $null payload: expected true");
           return null;
-        case "$obj": {
-          const out: { [k: string]: CanonValue } = {};
-          const p = payload as { [k: string]: TaggedNode };
-          for (const k of Object.keys(p)) out[k] = decodeInput(p[k]);
-          return out;
-        }
+        case "$obj":
+          if (!isJsonObject(payload)) {
+            throw new CanonError("invalid $obj payload: expected a JSON object");
+          }
+          return decodeEntries(payload, depth);
         case "$arr":
-          return (payload as TaggedNode[]).map(decodeInput);
+          if (!Array.isArray(payload)) {
+            throw new CanonError("invalid $arr payload: expected a JSON array");
+          }
+          return decodeItems(payload, depth);
         default:
           break; // one-key object that is not a tag: fall through
       }
     }
-    const out: { [k: string]: CanonValue } = {};
-    const p = node as { [k: string]: TaggedNode };
-    for (const k of Object.keys(p)) out[k] = decodeInput(p[k]);
-    return out;
+    return decodeEntries(node, depth);
   }
-  if (Array.isArray(node)) return node.map(decodeInput);
+  if (Array.isArray(node)) return decodeItems(node, depth);
   if (typeof node === "boolean") return node;
   if (typeof node === "number") {
     // A bare JSON number in a vector input: integral -> bigint; fractional -> float marker. This is
     // a VECTOR-HARNESS convenience for untagged fixtures only, not the public API — the encoder
-    // itself rejects plain numbers (see encodeValue).
+    // itself rejects plain numbers (see encodeValue). JSON.parse has already turned `1.0` into `1`,
+    // which is why type intent is carried by tags (SPEC.md section 2).
     return Number.isInteger(node) ? BigInt(node) : new FloatMarker();
   }
   return node; // string | null

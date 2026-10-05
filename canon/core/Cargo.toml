@@ -1,6 +1,6 @@
 [package]
 name = "canon-core"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 
@@ -19,7 +19,11 @@ c-binding = []
 base64 = "0.22"
 hex = "0.4"
 num-bigint = "0.4"
-serde_json = "1"
+serde = "1"
+# unbounded_depth: canon enforces its own MAX_DEPTH (SPEC.md section 1) on the CANONICAL value, so
+# serde_json's 128-level TEXT limit is lifted (Deserializer::disable_recursion_limit) behind an
+# iterative pre-scan that bounds the text depth first (lib.rs parse_json_bounded).
+serde_json = { version = "1", features = ["unbounded_depth"] }
 sha2 = "0.10"
 pyo3 = { version = "0.23", features = ["extension-module"], optional = true }
 wasm-bindgen = { version = "0.2", optional = true }

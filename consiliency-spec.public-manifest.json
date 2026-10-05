@@ -2,16 +2,16 @@
   "package": {
     "npm": "@consiliency/spec",
     "pypi": "consiliency-spec",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "public_files": [
     {
       "path": "canon/README.md",
-      "sha256": "f50825ed411f315d4769ffa874d3947c1501856beb5fbf38869d5cf5da6fd3bf"
+      "sha256": "29d76f231f8f2c8719f4773be7bac9ec8ac3497977f60fcf478418b1430fbd1d"
     },
     {
       "path": "canon/SPEC.md",
-      "sha256": "019de1cbc64f24232388baee182ebab8823767a8c96e08728b762e7bd80d9ed3"
+      "sha256": "bbc46300d937befc08320c3d0003d132afd447fcb7082bd711752295598d4597"
     },
     {
       "path": "canon/bindings/pyo3/README.md",
@@ -23,7 +23,7 @@
     },
     {
       "path": "canon/conformance/check.sh",
-      "sha256": "84382c2c26f8637bff5d6a835641d5b36a859a48463096e613cc7640902933e3"
+      "sha256": "06c6c0a6d926c3f326871af11c636f29fc329230003543bf78dbf7bd0136d799"
     },
     {
       "path": "canon/conformance/check_dabi_cabi.sh",
@@ -31,11 +31,11 @@
     },
     {
       "path": "canon/conformance/check_published_canon_core.sh",
-      "sha256": "f7bc73eada23db877a846a728b6cc792bf66042b9452b0b8cf41acf7274d212b"
+      "sha256": "12d65f2cea041c999f50664549df0d540daaefd85e11f6883103abfefbf817bf"
     },
     {
       "path": "canon/conformance/check_xg4_canon_core.sh",
-      "sha256": "c5aaf02a27795abca12683363dd515baf7e69fc1d70dc9783621e77268adf419"
+      "sha256": "11ed0601282eadd6e3c7184e2c0eea800fa593a0cf360fa581a429aabf6997a1"
     },
     {
       "path": "canon/conformance/emit_published_npm.mjs",
@@ -55,11 +55,11 @@
     },
     {
       "path": "canon/conformance/engine_boundary_vectors.json",
-      "sha256": "5abddf032b71301c90d950d8c46b4652e21ae33d94103e1ed094e486b1000b78"
+      "sha256": "388b2cb3647dc6fb26d630837c5e838268cb0c6dc7045b20d6205a99a01b0b37"
     },
     {
       "path": "canon/conformance/test_ingest_nfc.py",
-      "sha256": "c3e8e9d01c74874363cdb79d6e18f53797cb94861414680504a174036fe0076e"
+      "sha256": "c763561b935c4974e4e637f448523555e342eef18d6271054f785a3d8ffbb7ff"
     },
     {
       "path": "canon/conformance/test_unicode_skew.py",
@@ -71,15 +71,15 @@
     },
     {
       "path": "canon/core/Cargo.lock",
-      "sha256": "429b127a5ce88f7833ea2764003c9f4257119e9e768f098a10f367a39bfc7e9e"
+      "sha256": "326e1d5992c64fbeb24d57da1a493ef96bddcab22fd6caa57c1873cfe8af3d82"
     },
     {
       "path": "canon/core/Cargo.toml",
-      "sha256": "3c9f161343b81b8e7537fd064d8d561e7c58084718bb4ad626d2580fe0406882"
+      "sha256": "a663370357bbb84de4c8ddff7ca4d5931f64a02e129ecbf725bc4436b5710965"
     },
     {
       "path": "canon/core/cbindgen.toml",
-      "sha256": "211c3e6225807e59d7fef049ba9b9cff7fa01018829e5f6edeea01b59d513914"
+      "sha256": "f71d1288c8b10ebf21d574c4e4261f181c844a44c564c142570eb70070258681"
     },
     {
       "path": "canon/core/include/canon_core.h",
@@ -95,11 +95,11 @@
     },
     {
       "path": "canon/core/src/c_abi.rs",
-      "sha256": "2566a9bf7be55fcbead6ee36ad69709dccce37da110fd77a8cfd4605ef8eaa14"
+      "sha256": "14bafae0fc725b457c6e43289c686b2dfcf44615a140caf9057f7b56e4393f27"
     },
     {
       "path": "canon/core/src/lib.rs",
-      "sha256": "700aba0425c52819adbea4e97888a388a7600ff789356c0ed923a0f430050f3d"
+      "sha256": "80cf3a7b320729d8e36a23353b2489a5dc7f8a8ec27579d4e3719dd6401547fc"
     },
     {
       "path": "canon/core/tests/c_abi_smoke.c",
@@ -107,15 +107,15 @@
     },
     {
       "path": "canon/core/tests/parity.rs",
-      "sha256": "5fe4f0e20c16b41c6494976d83a614bb4a663fd6917043bd7eb5fe27510240c7"
+      "sha256": "6ab1ebdced73f41d053f63400d9f4ed2e891cd0e74bea3caf774a1241497b81f"
     },
     {
       "path": "canon/py/canon.py",
-      "sha256": "9a1cddae1b120db7dc61815b359ab8c9c1f9465d715b0c0e18e91dd07b050315"
+      "sha256": "af2d2cfb1d5f5bdf42966dc11768f03d53cbb84ccdfb5675aceeebfa0bca9977"
     },
     {
       "path": "canon/py/canon_ingest.py",
-      "sha256": "630e80cdb706fffd6b0b4b670a4e90d000272da11fabaac6605ac8877973e304"
+      "sha256": "bd4cf1cc93cf2fe26af87e005f507661ba7f376f1e0bf1c65c2d3725589def74"
     },
     {
       "path": "canon/py/requirements.txt",
@@ -123,23 +123,23 @@
     },
     {
       "path": "canon/py/test_canon.py",
-      "sha256": "175998b09d96269e2baa4139c699c63f1b26c13646fe36e149b57633baa3b7e7"
+      "sha256": "1bb07b0f9a06448642e90c0e88c3d971a2bbd77bf0b0c9968d9230a8bf356156"
     },
     {
       "path": "canon/ts/canon.test.ts",
-      "sha256": "5fabccd745431fec0d7a9cc5c570735ed73aab1245e6c305ddbc3326ccaf6382"
+      "sha256": "6835a9349e89f26a9faf93cda95ec6c61cef6970d1841cee519825332c115174"
     },
     {
       "path": "canon/ts/canon.ts",
-      "sha256": "9d8443ef5d1aa3b9242bf75b99e5d504b5c912e7e28057ca83ab6c1bed99420e"
+      "sha256": "b41a95a24ec2469b752b2f1165d0737714395f11015e7c0b0847f9fbfdd5cf15"
     },
     {
       "path": "canon/vectors/canon-vectors.json",
-      "sha256": "8ee488d2586ee78f06418d503aad86d9c14d9366597e59736a977f965a352a1f"
+      "sha256": "331d6264ffc1c14bc4f1d53c1e57d11014aa521d794f5d4b9c69a99fcf77f0f3"
     },
     {
       "path": "canon/vectors/gen_vectors.py",
-      "sha256": "4ea91163d5eee13a77fe195339ea6967a2d257a8ab486cf378c32db712eb9343"
+      "sha256": "22817e4790439a568c3d7320b2c2e3d3a87819c62430a8bb6694cde3cc6ab250"
     },
     {
       "path": "canon/vectors/gov-cross-repo-canon-vectors.PROVENANCE.md",
@@ -151,7 +151,7 @@
     },
     {
       "path": "consiliency_spec/__init__.py",
-      "sha256": "e53ca315de168613535a04480d6a0f9711cf7ec6ab158e617dfa99a502bf4eb9"
+      "sha256": "1a3fbac5965fb58685bf95ec8bdc2bc014e2feae315c14de5ba732f6275e0187"
     },
     {
       "path": "consiliency_spec/outside_agent_router.py",
@@ -187,15 +187,15 @@
     },
     {
       "path": "spec-graph/schema/spec-graph.schema.json",
-      "sha256": "1ed43ed9cacd1f62b313228635a02764922a6ef4669eb25015cdf21cfc98316d"
+      "sha256": "56522e115206009219c43e96c56f99ebef6cee0c5e690649a3c23deeadd4cdde"
     },
     {
       "path": "spec-parity/SEMANTICS.md",
-      "sha256": "55f0ce94cdbfce78b7306790b2a4d8e6e2f49f35372e060efc528951dd617cec"
+      "sha256": "b3574b96e5de0145aeaba041122816197202fca1e73707bc9a778649a300a1a5"
     },
     {
       "path": "spec-parity/conformance/check.sh",
-      "sha256": "a08fabe9dd1c05e32ea9cab951a15745ec29b7a3b92fb8b535aadc3290e6edb5"
+      "sha256": "4b7ac71d49734197be9fdf8f2c1a396893509ec6ea262f3546bb95e99c988477"
     },
     {
       "path": "spec-parity/conformance/check_xg0_envelope.sh",
@@ -211,7 +211,15 @@
     },
     {
       "path": "spec-parity/schemas/certificate.schema.json",
-      "sha256": "15713fb48b5939b28c5bf4fb29ef805d5e8544d889b5a433aef648955dd4b2f1"
+      "sha256": "50359943f48f8b56f503e4fa915df58a31c791bd6593f7715da3f1a789f336e8"
+    },
+    {
+      "path": "spec-parity/schemas/ec-reproducibility-attestation.schema.json",
+      "sha256": "23e435c1770b81179b87b02437185fec9b7d463f13c17c13f0fff0a17e2ea52b"
+    },
+    {
+      "path": "spec-parity/schemas/ec.schema.json",
+      "sha256": "769e22ceac130a10dc0e39099ef7a7aa07b6e354afe1f9e0771cfa2117501a4b"
     },
     {
       "path": "spec-parity/schemas/kind-alignment.schema.json",
@@ -223,15 +231,19 @@
     },
     {
       "path": "spec-parity/schemas/portal-payload.schema.json",
-      "sha256": "bd38cc7cc91a3f5e9fc1800619652dea4618d40b011ce10009fe61af3344d72c"
+      "sha256": "43120385221dbb8e2c26efd33d0ef5ea7463590bf24c559558703389eedf2fa2"
     },
     {
       "path": "spec-parity/schemas/result-state.schema.json",
-      "sha256": "6eed968da557bb4dd583209c4211db000580f4a2a4662bb2e758a8a3248e5151"
+      "sha256": "97aec6a058abcb01f7a5fd73a46e0982f62a1b18efa67e148404fb13054b5517"
+    },
+    {
+      "path": "spec-parity/schemas/run-descriptor.schema.json",
+      "sha256": "e6710b2dfaf6e139c8aa5173583202edf0f60edea399a17c34d75cea2dbb6f19"
     },
     {
       "path": "spec-parity/schemas/waiver.schema.json",
-      "sha256": "19930117fe2db8dade4b25fc41a9725d81c572d052bb27c9e7f53ab43bf93338"
+      "sha256": "179a0ecf81b20d8a31f44dd1b21c8778fa2cd32bb2c3aa04949ee03cc7631ac4"
     },
     {
       "path": "test-vectors/outside-agent/invalid-empty-evidence-refs.json",

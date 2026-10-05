@@ -16,6 +16,25 @@ sys.path.insert(0, os.path.join(HERE, "..", "py"))
 
 import canon  # noqa: E402
 
+
+def _nested(depth, kinds=("arr",), leaf=None):
+    """A type-tagged container chain exactly ``depth`` containers deep (SPEC.md section 1 depth).
+
+    ``kinds`` cycles from the outermost container inwards: ``"arr"``/``"obj"`` are ``$arr``/``$obj``
+    tags (two JSON levels each), ``"bare"`` is an untagged JSON array (one level). The innermost
+    container holds ``leaf`` (or is empty when ``leaf`` is None).
+    """
+    node = None
+    for i in reversed(range(depth)):
+        kind = kinds[i % len(kinds)]
+        if kind == "bare":
+            node = [] if node is None and leaf is None else [leaf if node is None else node]
+        elif kind == "arr":
+            node = {"$arr": [] if node is None and leaf is None else [leaf if node is None else node]}
+        else:
+            node = {"$obj": {} if node is None and leaf is None else {"k": leaf if node is None else node}}
+    return node
+
 # Each spec: name, input (type-tagged tree), profile, and optionally expect_error.
 # Inputs use the §2 tag encoding so type intent survives JSON parsing identically in both langs.
 SPECS = [
@@ -287,6 +306,61 @@ SPECS = [
      "profile": "semantic-content", "_note": "-0 is accepted and normalises to 0"},
     {"name": "int-payload-big-negative", "input": {"$int": "-123456789012345678901234567890"},
      "profile": "semantic-content"},
+    # --- tag payloads have exactly one JSON type (SPEC.md section 2; CAN-9) ---
+    # `$bool` used to be each port's own truthiness: [] and {} were false in Python and true in Rust and
+    # TypeScript, and 0.0 was true in Rust only — three answers from the production
+    # canonical_bytes_from_json API. `$str`/`$obj`/`$arr`/`$null` payloads were type-checked in Rust only
+    # (Python passed `$str: 5` through as an integer and iterated a `$arr` string into characters; TS
+    # turned a `$obj` array into an index-keyed object). Every one is now a decode-stage CanonError.
+    {"name": "reject-bool-payload-empty-array", "input": {"$bool": []},
+     "profile": "semantic-content", "expect_error": True},
+    {"name": "reject-bool-payload-empty-object", "input": {"$bool": {}},
+     "profile": "semantic-content", "expect_error": True},
+    {"name": "reject-bool-payload-float-zero", "input": {"$bool": 0.0},
+     "profile": "semantic-content", "expect_error": True},
+    {"name": "reject-bool-payload-string-false", "input": {"$bool": "false"},
+     "profile": "semantic-content", "expect_error": True},
+    {"name": "reject-bool-payload-int-one", "input": {"$bool": 1},
+     "profile": "semantic-content", "expect_error": True},
+    {"name": "reject-bool-payload-null", "input": {"$bool": None},
+     "profile": "semantic-content", "expect_error": True},
+    {"name": "reject-str-payload-number", "input": {"$str": 5},
+     "profile": "semantic-content", "expect_error": True},
+    {"name": "reject-str-payload-array", "input": {"$str": ["a"]},
+     "profile": "semantic-content", "expect_error": True},
+    {"name": "reject-null-payload-null", "input": {"$null": None},
+     "profile": "semantic-content", "expect_error": True},
+    {"name": "reject-null-payload-array", "input": {"$null": [1]},
+     "profile": "semantic-content", "expect_error": True},
+    {"name": "reject-null-payload-false", "input": {"$null": False},
+     "profile": "semantic-content", "expect_error": True},
+    {"name": "reject-obj-payload-string", "input": {"$obj": "ab"},
+     "profile": "semantic-content", "expect_error": True},
+    {"name": "reject-obj-payload-array", "input": {"$obj": [{"$int": "1"}]},
+     "profile": "semantic-content", "expect_error": True},
+    {"name": "reject-arr-payload-string", "input": {"$arr": "ab"},
+     "profile": "semantic-content", "expect_error": True},
+    {"name": "reject-arr-payload-object", "input": {"$arr": {"a": {"$int": "1"}}},
+     "profile": "semantic-content", "expect_error": True},
+    # --- nesting depth cap: MAX_DEPTH = 128 containers (SPEC.md section 1; CAN-12) ---
+    # Accepted at exactly 128, rejected at 129, both as untagged arrays (one JSON level per container)
+    # and as alternating $arr/$obj tags (two JSON levels per container: 257 levels of text at depth 128,
+    # past serde_json's own 127-level text limit, which the Rust JSON entry points no longer apply).
+    {"name": "depth-128-bare-arrays", "input": _nested(128, ("bare",)),
+     "profile": "semantic-content"},
+    {"name": "reject-depth-129-bare-arrays", "input": _nested(129, ("bare",)),
+     "profile": "semantic-content", "expect_error": True},
+    {"name": "depth-128-tagged-arr-obj", "input": _nested(128, ("arr", "obj"), {"$int": "1"}),
+     "profile": "semantic-content"},
+    {"name": "reject-depth-129-tagged-arr-obj", "input": _nested(129, ("arr", "obj"), {"$int": "1"}),
+     "profile": "semantic-content", "expect_error": True},
+    {"name": "depth-128-objects-digest", "input": _nested(128, ("obj",), {"$str": "leaf"}),
+     "profile": "certificate"},
+    # Untagged arrays interleaved with $obj/$arr tags: a tag wrapper adds no depth, a bare array does.
+    {"name": "depth-128-mixed-bare-tagged", "input": _nested(128, ("bare", "obj", "arr"), {"$null": True}),
+     "profile": "semantic-content"},
+    {"name": "reject-depth-129-mixed-bare-tagged", "input": _nested(129, ("bare", "obj", "arr"), {"$null": True}),
+     "profile": "semantic-content", "expect_error": True},
 ]
 
 
@@ -313,12 +387,42 @@ def build():
     return out
 
 
+# Inputs nested deeper than this are written on one line (the depth-cap vectors): indent=2 would
+# spend tens of KB of whitespace on a 257-level input. Shallower inputs keep the indent=2 layout, so
+# every pre-existing vector's text is unchanged (and Rust's parse_vector_corpus surrogate rewrite,
+# keyed on the indented `"$str": "\ud800"` spelling, still matches).
+_COMPACT_INPUT_DEPTH = 16
+
+
+def _json_depth(node):
+    depth, stack = 0, [(node, 0)]
+    while stack:
+        cur, d = stack.pop()
+        if isinstance(cur, (dict, list)):
+            d += 1
+            depth = max(depth, d)
+            stack.extend((v, d) for v in (cur.values() if isinstance(cur, dict) else cur))
+    return depth
+
+
 def render(vectors):
     # ensure_ascii=True so the file is pure ASCII: non-ASCII inputs (and the lone-surrogate
     # reject vector, which cannot be written as raw UTF-8) are stored as \uXXXX escapes that
     # BOTH json.load (Python) and JSON.parse (JS) read back to the identical string. This is
     # the file transport only; it does not affect canon output (which is ensure_ascii=False).
-    return json.dumps(vectors, ensure_ascii=True, indent=2) + "\n"
+    compact = {}
+    shallow = []
+    for i, vec in enumerate(vectors):
+        if _json_depth(vec["input"]) > _COMPACT_INPUT_DEPTH:
+            token = "@@compact-input-%d@@" % i
+            compact['"%s"' % token] = json.dumps(vec["input"], ensure_ascii=True, separators=(", ", ": "))
+            vec = dict(vec, input=token)  # same key order: "input" keeps its position
+        shallow.append(vec)
+    text = json.dumps(shallow, ensure_ascii=True, indent=2) + "\n"
+    for token, value in compact.items():
+        assert text.count(token) == 1, token
+        text = text.replace(token, value)
+    return text
 
 
 def main(argv=None):

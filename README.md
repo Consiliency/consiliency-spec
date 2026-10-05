@@ -27,10 +27,20 @@ Every software project has two things: a **blueprint** (what it's *supposed* to 
 | [`canon/`](canon/) | Canonical serialization + content-addressing (SHA-256; **canon v2** — NFC at the ingestion boundary, not in the hash). Includes the Rust core (`canon/core/`) and the dependency-free TypeScript and Python ports. | Python and TypeScript produce **byte-identical** bytes + digests. |
 | [`idmodel/`](idmodel/correspondence/schema.json) | Two-tier identity (logical key + occurrence) + the correspondence map schema. | Logical identity tracked across rename/move/split/merge. |
 | [`spec-graph/`](spec-graph/schema/) | The desired-state semantic metamodel schema (the blueprint format). | Open versioned `kind` system; per-node content-addressed. |
-| [`spec-parity/`](spec-parity/) | The formal parity contract: `SEMANTICS.md` + schemas (kind-alignment, result-state, waiver, certificate, portal-payload, permitted-freedom). | A reviewer can implement `P`/`N` from it directly; result states + closed-world prohibitions + waiver lifecycle are pinned. |
+| [`spec-parity/`](spec-parity/) | The formal parity contract: `SEMANTICS.md` + schemas (kind-alignment, result-state, waiver, run-descriptor, `E(C)`, reproducibility attestation, **certificate** (schema `"2"`), **portal-payload**, permitted-freedom). | A reviewer can implement `P`/`N` from it directly; result states + closed-world prohibitions + waiver lifecycle are pinned; projection algorithm `spec-engine-projection:v3`. |
 | [`spec-engine/authority/`](spec-engine/authority/authority-event.schema.json) | The authority-event schema for the deterministic projection/checker boundary. | Certificate byte-reproducible. |
 
 The five parity dimensions: **completeness**, **soundness**, **closure**, **prohibition**, **revision-alignment**.
+
+### Certificate contract 2 (0.4.0) — breaking
+
+Since `0.4.0` every certificate is `schema_version` `"2"` with projection algorithm `v3`, so every
+certificate digest differs from `0.3.0`. A certificate now pins `spec_authority` (`grounded` or
+`draft`) and optionally `authority_ref`; `desired_graph_digest` is the normalized spec-graph digest;
+`ec_reproducible` is required and measured. A verifier binds a candidate graph `S` with the four steps
+in `SEMANTICS.md` §9 (structural check, graph digest, revision digest, authority), and a delivery
+refuses a `draft` certificate unless the consumer opts in explicitly (§12.6). See
+[`CHANGELOG.md`](CHANGELOG.md) for the full BREAKING CHANGES list and the migration steps.
 
 ---
 
@@ -45,7 +55,7 @@ The packages are an **extraction of the existing canon bytes, not a reimplementa
 
 The enforcing JavaScript surface is the pure TypeScript v2 port in [`canon/ts/canon.ts`](canon/ts/canon.ts). The WASM binding is a cross-language parity artifact only; see [`canon/conformance/wasm_surrogate_finding.mjs`](canon/conformance/wasm_surrogate_finding.mjs) for the documented lone-surrogate boundary finding.
 
-> Package publication to npm and PyPI is performed by the maintainer via Trusted Publishing after the first release is cut. If a registry lookup shows no published version yet, the package has not been released.
+> Packages are published to npm and PyPI by the maintainer via Trusted Publishing when a GitHub Release is created in this repository. A version is available only once its release has been published; check the registry for the versions that exist.
 
 ### canon-core relationship
 

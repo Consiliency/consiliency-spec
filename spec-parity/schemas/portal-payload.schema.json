@@ -20,6 +20,7 @@
     "ec_digest",
     "ec_reproducible",
     "advisory",
+    "spec_authority",
     "code_head_sha",
     "overall_result_state",
     "badge",
@@ -35,11 +36,11 @@
     },
     "schema_version": {
       "type": "string",
-      "description": "The CERTIFICATE schema version copied verbatim from certificate.schema_version (currently \"1\"). Carried so a consumer knows which certificate contract this delivery summarizes."
+      "description": "The CERTIFICATE schema version copied verbatim from certificate.schema_version (currently \"2\"). Carried so a consumer knows which certificate contract this delivery summarizes."
     },
     "projection_algo_version": {
       "type": "string",
-      "description": "P/N projection+parity algorithm version, copied from the certificate. Pins reproducibility of the underlying result."
+      "description": "P/N projection+parity algorithm version, copied from the certificate (currently `spec-engine-projection:v3`). Pins reproducibility of the underlying result."
     },
     "canon_version": { "type": "string", "description": "canon contract version, copied from the certificate." },
     "idmodel_version": { "type": "string", "description": "idmodel contract version, copied from the certificate." },
@@ -51,9 +52,19 @@
     },
     "ec_revision_id": { "type": "string", "description": "Realized-side revision id, copied from the certificate. A provenance id, not fetchable." },
     "spec_revision_digest": { "type": "string", "description": "Spec/desired revision digest, copied from the certificate." },
-    "desired_graph_digest": { "type": "string", "description": "canon semantic-content digest of S, copied from the certificate." },
+    "desired_graph_digest": { "type": "string", "description": "The normalized desired-graph digest of S (spec_graph.graph_digest under certificate schema 2), copied from the certificate." },
     "ec_digest": { "type": "string", "description": "canon semantic-content digest of E(C), copied from the certificate." },
-    "ec_reproducible": { "type": "boolean", "description": "Whether E(C) is byte-reproducible, copied from the certificate (defaults true when the certificate omits it)." },
+    "ec_reproducible": { "type": "boolean", "description": "Whether E(C) is byte-reproducible, copied from the certificate. Only an explicit `true` on the certificate is reproducible; an absent or non-boolean value delivers as false (fail-closed)." },
+    "spec_authority": {
+      "type": "string",
+      "enum": ["grounded", "draft"],
+      "description": "Whether the certified S is an authority, copied from the certificate. Only the exact certificate value `grounded` delivers as grounded; an absent or other value is `draft`. A draft is delivered only when the consumer opted in (SEMANTICS sec 12.6), so a payload carrying `draft` is never an authoritative delivery."
+    },
+    "authority_ref": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "Optional ledger entry_digest of the cited ratify event, copied from the certificate iff present. A digest pointer, not fetchable."
+    },
     "advisory": {
       "type": "boolean",
       "description": "Derived render hint = NOT ec_reproducible. When true the delivery is ADVISORY and the portal MUST NOT gate on it (parity over a non-reproducible E(C) is meaningless)."

@@ -35,6 +35,15 @@ from typing import Any, Iterable, Tuple
 PROFILES = ("semantic-content", "run", "artifact-byte", "certificate")
 _DOMAIN_PREFIX = "spec-canon:v2:"
 
+# SPEC.md section 1 — maximum nesting depth (CAN-12). A container's depth is
+# 1 + the number of containers enclosing it, so ``[]`` is depth 1 and ``[[]]`` is depth 2. A value
+# that holds any container deeper than MAX_DEPTH is rejected with CanonError, identically in every
+# port, at decode and at encode. Without the cap the ports failed differently and non-deterministically
+# (Python RecursionError near 250, TS RangeError between 2,000 and 5,000, Rust SIGABRT), and the Rust
+# JSON entry points rejected anything past serde_json's own 127-level text limit.
+MAX_DEPTH = 128
+_DEPTH_MESSAGE = "nesting depth exceeds the maximum of %d" % MAX_DEPTH
+
 
 class CanonError(ValueError):
     """Raised for any value outside the supported canonical domain (SPEC.md section 1/6)."""
@@ -81,31 +90,36 @@ def _encode_int(value: int) -> str:
 # Object encoding (SPEC.md sections 3, 7) — keys sorted by code point.
 # --------------------------------------------------------------------------- #
 
-def _encode_object(obj: dict) -> str:
+def _encode_object(obj: dict, depth: int) -> str:
     # canon v2 does NOT NFC-normalize keys (the ingest boundary did that, and it also detected
     # post-NFC collisions — see canon/py/canon_ingest.py.normalize_keyed). canon sorts the already-NFC keys
     # by Unicode code point as-is. Python str comparison is already by code point (correct for astral
-    # chars).
+    # chars). ``depth`` is this object's own nesting depth (already checked by the caller).
     for k in obj:
         if not isinstance(k, str):
             raise CanonError("object keys must be strings, got %r" % type(k).__name__)
-    keys = sorted(obj.keys())
     parts = []
-    for k in keys:
-        parts.append(_encode_string(k) + ":" + _encode_value(obj[k]))
+    for k in sorted(obj.keys()):
+        parts.append(_encode_string(k) + ":" + _encode_value(obj[k], depth))
     return "{" + ",".join(parts) + "}"
 
 
-def _encode_array(arr: Iterable) -> str:
-    # Insertion order preserved ALWAYS (SPEC.md section 4). Never sort.
-    return "[" + ",".join(_encode_value(v) for v in arr) + "]"
+def _encode_array(arr: Iterable, depth: int) -> str:
+    # Insertion order preserved ALWAYS (SPEC.md section 4). Never sort. An explicit loop, not a
+    # generator inside join(): it keeps the Python and C frame cost per nesting level low, so the
+    # MAX_DEPTH cap (not the interpreter's recursion limit) is what a deep value hits.
+    parts = []
+    for v in arr:
+        parts.append(_encode_value(v, depth))
+    return "[" + ",".join(parts) + "]"
 
 
 # --------------------------------------------------------------------------- #
 # Value dispatch — bool BEFORE int (SPEC.md section 6 boolean trap).
 # --------------------------------------------------------------------------- #
 
-def _encode_value(value: Any) -> str:
+def _encode_value(value: Any, depth: int = 0) -> str:
+    # ``depth`` is the number of containers enclosing ``value`` (0 at the top level).
     # Reject markers from the type-tagged decoder (SPEC.md section 2/6).
     if isinstance(value, FloatMarker):
         raise CanonError("floats are forbidden in canonical content; pre-represent as int or string")
@@ -124,9 +138,13 @@ def _encode_value(value: Any) -> str:
     if isinstance(value, str):
         return _encode_string(value)
     if isinstance(value, dict):
-        return _encode_object(value)
+        if depth >= MAX_DEPTH:
+            raise CanonError(_DEPTH_MESSAGE)
+        return _encode_object(value, depth + 1)
     if isinstance(value, (list, tuple)):
-        return _encode_array(value)
+        if depth >= MAX_DEPTH:
+            raise CanonError(_DEPTH_MESSAGE)
+        return _encode_array(value, depth + 1)
     raise CanonError("unsupported type for canonical content: %s" % type(value).__name__)
 
 
@@ -199,7 +217,23 @@ def _parse_int_payload(payload: Any) -> int:
 
 
 def decode_input(node: Any) -> Any:
-    """Decode a type-tagged vector input tree into native values (or reject markers)."""
+    """Decode a type-tagged vector input tree into native values (or reject markers).
+
+    Every tag's payload has exactly one accepted JSON type (SPEC.md section 2); anything else is a
+    fixed-message CanonError, never a truthiness or iteration coercion. Containers deeper than
+    MAX_DEPTH are rejected here as well as in the encoder (SPEC.md section 1).
+    """
+    return _decode(node, 0)
+
+
+def _container_depth(depth: int) -> int:
+    # ``depth`` counts the containers enclosing the one being built; return the new container's depth.
+    if depth >= MAX_DEPTH:
+        raise CanonError(_DEPTH_MESSAGE)
+    return depth + 1
+
+
+def _decode(node: Any, depth: int) -> Any:
     if isinstance(node, dict) and len(node) == 1:
         (tag, payload), = node.items()
         if tag == "$int":
@@ -209,22 +243,41 @@ def decode_input(node: Any) -> Any:
         if tag == "$nan":
             return NanMarker()
         if tag == "$inf":
-            return InfMarker(1 if payload >= 0 else -1)
+            # Rejected by the encoder whatever the payload; the sign is informational, and a
+            # non-number payload must not turn the rejection into a TypeError.
+            negative = isinstance(payload, (int, float)) and not isinstance(payload, bool) and payload < 0
+            return InfMarker(-1 if negative else 1)
         if tag == "$str":
+            if not isinstance(payload, str):
+                raise CanonError("invalid $str payload: expected a JSON string")
             return payload
         if tag == "$bool":
-            return bool(payload)
+            # Python bool(payload) made [], {} and 0.0 false while Rust and TS made them true
+            # (CAN-9). The payload must BE a boolean.
+            if not isinstance(payload, bool):
+                raise CanonError("invalid $bool payload: expected a JSON boolean")
+            return payload
         if tag == "$null":
+            if payload is not True:
+                raise CanonError("invalid $null payload: expected true")
             return None
         if tag == "$obj":
-            return {k: decode_input(v) for k, v in payload.items()}
+            if not isinstance(payload, dict):
+                raise CanonError("invalid $obj payload: expected a JSON object")
+            inner = _container_depth(depth)
+            return {k: _decode(v, inner) for k, v in payload.items()}
         if tag == "$arr":
-            return [decode_input(v) for v in payload]
+            if not isinstance(payload, list):
+                raise CanonError("invalid $arr payload: expected a JSON array")
+            inner = _container_depth(depth)
+            return [_decode(v, inner) for v in payload]
         # one-key dict that is not a tag: fall through to plain-dict handling
     if isinstance(node, dict):
-        return {k: decode_input(v) for k, v in node.items()}
+        inner = _container_depth(depth)
+        return {k: _decode(v, inner) for k, v in node.items()}
     if isinstance(node, list):
-        return [decode_input(v) for v in node]
+        inner = _container_depth(depth)
+        return [_decode(v, inner) for v in node]
     # bare scalars: str/bool/None pass through; a bare JSON number is treated as int if integral.
     if isinstance(node, bool):
         return node

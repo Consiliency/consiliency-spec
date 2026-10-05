@@ -114,29 +114,33 @@ pub unsafe extern "C" fn canon_canonical_bytes_from_json(
     }
 
     let result = catch_unwind(AssertUnwindSafe(|| {
-        let input = borrow_utf8(tagged_json)?;
-        canonical_bytes_from_json(input).map_err(|e| {
-            // Leak into a 'static-ish owned message via set_error at the call site; here return owned.
-            Box::leak(e.to_string().into_boxed_str()) as &str
-        })
+        // The error is an owned String, copied once into the caller's C string by set_error and then
+        // dropped here. (It used to be Box::leak'ed to get a &'static str, leaking one message per
+        // failed call on top of the copy the caller frees.)
+        let input = borrow_utf8(tagged_json).map_err(str::to_string)?;
+        canonical_bytes_from_json(input).map_err(|e| e.to_string())
     }));
 
     match result {
-        Ok(Ok(mut bytes)) => {
+        Ok(Ok(bytes)) => {
             if bytes_out.is_null() || len_out.is_null() {
                 set_error(err_out, "null output pointer");
                 return CANON_ERR;
             }
-            bytes.shrink_to_fit();
-            let len = bytes.len();
-            let ptr = bytes.as_mut_ptr();
-            std::mem::forget(bytes); // ownership transfers to the caller (freed via canon_bytes_free)
+            // A boxed slice's allocation is exactly `len` bytes. `Vec::shrink_to_fit` does NOT
+            // guarantee `capacity == len`, and `canon_bytes_free` used to rebuild the Vec with
+            // capacity `len` — deallocating with a different layout than was allocated is undefined
+            // behaviour (CAN-3). The (ptr, len) pair now describes the
+            // allocation exactly, and `canon_bytes_free` rebuilds the same boxed slice.
+            let boxed: Box<[u8]> = bytes.into_boxed_slice();
+            let len = boxed.len();
+            let ptr = Box::into_raw(boxed) as *mut u8; // ownership transfers to the caller
             *bytes_out = ptr;
             *len_out = len;
             CANON_OK
         }
         Ok(Err(message)) => {
-            set_error(err_out, message);
+            set_error(err_out, &message);
             CANON_ERR
         }
         Err(_) => {
@@ -172,9 +176,9 @@ pub unsafe extern "C" fn canon_digest_from_json(
     }
 
     let result = catch_unwind(AssertUnwindSafe(|| {
-        let input = borrow_utf8(tagged_json)?;
-        let prof = borrow_utf8(profile)?;
-        digest_from_json(input, prof).map_err(|e| Box::leak(e.to_string().into_boxed_str()) as &str)
+        let input = borrow_utf8(tagged_json).map_err(str::to_string)?;
+        let prof = borrow_utf8(profile).map_err(str::to_string)?;
+        digest_from_json(input, prof).map_err(|e| e.to_string())
     }));
 
     match result {
@@ -192,7 +196,7 @@ pub unsafe extern "C" fn canon_digest_from_json(
             CANON_OK
         }
         Ok(Err(message)) => {
-            set_error(err_out, message);
+            set_error(err_out, &message);
             CANON_ERR
         }
         Err(_) => {
@@ -212,8 +216,8 @@ pub unsafe extern "C" fn canon_bytes_free(ptr: *mut u8, len: usize) {
     if ptr.is_null() {
         return;
     }
-    // Reconstitute the Vec with capacity == len (we shrank_to_fit before forgetting it) and drop it.
-    drop(Vec::from_raw_parts(ptr, len, len));
+    // Rebuild the exact boxed slice `canon_canonical_bytes_from_json` leaked (allocation == len bytes).
+    drop(Box::from_raw(ptr::slice_from_raw_parts_mut(ptr, len)));
 }
 
 /// Free a C string returned by `canon_digest_from_json` or via an `err_out` param.
@@ -245,6 +249,29 @@ mod tests {
         // SAFETY: `ptr` was just produced by `CString::into_raw`; we take ownership back here.
         let owned = unsafe { CString::from_raw(ptr) };
         assert_eq!(owned.to_str().unwrap(), "bad\\u0000payload");
+    }
+
+    /// CAN-3: the returned (ptr, len) pair must round-trip through `canon_bytes_free` for every
+    /// output size (the layout rebuilt at free must be the one allocated). Not a fail-before test —
+    /// the old shrink_to_fit path was UB only when an allocator kept spare capacity, which the
+    /// system allocator does not; Miri would flag it. It pins the boxed-slice contract.
+    #[test]
+    fn canonical_bytes_buffer_round_trips_through_canon_bytes_free() {
+        for input in [r#"null"#, r#"{"$int":"7"}"#, r#"{"$str":"0123456789abcdef0123456789abcdef"}"#, r#"[[],{},[[]]]"#] {
+            let json = CString::new(input).unwrap();
+            let mut bytes: *mut u8 = ptr::null_mut();
+            let mut len: usize = 0;
+            let mut err: *mut c_char = ptr::null_mut();
+            // SAFETY: all out-pointers are valid for the duration of the call.
+            let rc = unsafe { canon_canonical_bytes_from_json(json.as_ptr(), &mut bytes, &mut len, &mut err) };
+            assert_eq!(rc, CANON_OK, "{input}");
+            assert!(err.is_null());
+            let expected = crate::canonical_bytes_from_json(input).unwrap();
+            // SAFETY: (bytes, len) is the pair the call just wrote.
+            assert_eq!(unsafe { std::slice::from_raw_parts(bytes, len) }, expected.as_slice());
+            // SAFETY: freed exactly once with the pair the call wrote.
+            unsafe { canon_bytes_free(bytes, len) };
+        }
     }
 
     #[test]
