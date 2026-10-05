@@ -66,6 +66,14 @@ class IngestError(ValueError):
     """Raised for ingest-time normalization failures (e.g. a key collision after NFC)."""
 
 
+# The canon nesting-depth cap (SPEC.md section 1; MUST equal canon.MAX_DEPTH, asserted by
+# canon/conformance/test_ingest_nfc.py). normalize_tree recurses BEFORE canon sees the value, so
+# without its own cap a deep tree raised RecursionError here (near depth 500) instead of a typed
+# error (CAN-12). A container's depth is 1 + the containers enclosing it.
+MAX_DEPTH = 128
+_DEPTH_MESSAGE = "nesting depth exceeds the maximum of %d" % MAX_DEPTH
+
+
 def normalize_string(s: str) -> str:
     """NFC-normalize a single external string under the pinned Unicode DB. Idempotent."""
     return unicodedata.normalize("NFC", s)
@@ -76,8 +84,24 @@ def normalize_keyed(mapping: Mapping[str, Any]) -> Dict[str, Any]:
 
     The key-collision-after-NFC check moved here from canon v1's ``_encode_object``: canon v2 sorts
     already-NFC keys by code point as-is and no longer normalizes, so the collision must be caught at
-    ingest where the keys are first normalized.
+    ingest where the keys are first normalized. ``mapping`` itself is depth 1.
     """
+    return _normalize_keyed(mapping, 1)
+
+
+def normalize_tree(value: Any) -> Any:
+    """Recursively NFC-normalize every string value and object key in a nested structure.
+
+    Non-string scalars pass through unchanged. Lists preserve order (canon never reorders arrays).
+    A container nested deeper than MAX_DEPTH raises IngestError.
+    """
+    return _normalize(value, 0)
+
+
+def _normalize_keyed(mapping: Mapping[str, Any], depth: int) -> Dict[str, Any]:
+    # ``depth`` is the mapping's own nesting depth.
+    if depth > MAX_DEPTH:
+        raise IngestError(_DEPTH_MESSAGE)
     out: Dict[str, Any] = {}
     for k, v in mapping.items():
         if not isinstance(k, str):
@@ -85,19 +109,21 @@ def normalize_keyed(mapping: Mapping[str, Any]) -> Dict[str, Any]:
         nk = normalize_string(k)
         if nk in out:
             raise IngestError("key collision after NFC normalization: %r" % nk)
-        out[nk] = normalize_tree(v)
+        out[nk] = _normalize(v, depth)
     return out
 
 
-def normalize_tree(value: Any) -> Any:
-    """Recursively NFC-normalize every string value and object key in a nested structure.
-
-    Non-string scalars pass through unchanged. Lists preserve order (canon never reorders arrays).
-    """
+def _normalize(value: Any, depth: int) -> Any:
+    # ``depth`` is the number of containers enclosing ``value``.
     if isinstance(value, str):
         return normalize_string(value)
     if isinstance(value, dict):
-        return normalize_keyed(value)
+        return _normalize_keyed(value, depth + 1)
     if isinstance(value, (list, tuple)):
-        return [normalize_tree(v) for v in value]
+        if depth + 1 > MAX_DEPTH:
+            raise IngestError(_DEPTH_MESSAGE)
+        out = []
+        for v in value:
+            out.append(_normalize(v, depth + 1))
+        return out
     return value

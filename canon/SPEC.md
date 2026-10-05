@@ -57,6 +57,28 @@ Decimals are the caller's responsibility — pre-represent them as strings or sc
 **before** handing a value to `canon`. This deliberately sidesteps cross-language float formatting,
 the single largest source of divergence, for v1.
 
+In TypeScript an "object" means a **plain data** object: its prototype is `Object.prototype` or
+`null`, and every own property is an enumerable, string-keyed data property. `Date`, `Map`, `Set`,
+`RegExp`, typed arrays, boxed primitives and class instances are rejected, never encoded through
+their enumerable fields (a `Date` used to encode as `{}`); so are accessor, symbol-keyed and
+non-enumerable properties, and a sparse-array hole is rejected like `undefined`. The check applies to
+the value as the caller passed it, on every public entry point (`canonicalBytes`, `digest`, whose
+top-level `digest` exclusion copies the object, and `splitRecord`).
+
+**Maximum nesting depth: 128.** A container's depth is 1 + the number of containers enclosing it, so
+`[]` is depth 1, `[[]]` is depth 2 and a scalar adds nothing. A value containing any container
+deeper than `MAX_DEPTH = 128` is **rejected with `CanonError`** by every port, both when decoding a
+tagged tree (§2) and when encoding a native value, and the ingest walk (`canon_ingest.normalize_tree` /
+`normalize_keyed`) rejects the same depth with `IngestError`. 128 is accepted; 129 is not (vectors
+`depth-128-*`, `reject-depth-129-*`). Before the cap no port bounded recursion and each failed
+differently: Python raised `RecursionError` near depth 250, TypeScript a `RangeError` at a
+non-deterministic depth between 2,000 and 5,000, and the Rust native encoder overflowed the stack and
+aborted the process. The cap is checked on the way down, so a value far past it is rejected without
+recursing into it. No committed artifact nests anywhere near 128, so no digest moved. The cap is on
+values: the Python and TypeScript ports take parsed values and have no JSON-text entry point (a host
+JSON parser has its own limit — Python's stdlib `json` raises `RecursionError` near 10,000 levels),
+while Rust's JSON entry points bound text depth themselves (§12).
+
 ---
 
 ## 2. The vector-input encoding (type-tagged) — why JSON can't carry the inputs directly
@@ -78,18 +100,35 @@ decoder that is identical in both languages. Tags:
 | `{"$float": "1.0"}`     | a float marker — the encoder MUST reject it |
 | `{"$nan": true}`        | NaN marker — encoder MUST reject |
 | `{"$inf": 1}` / `{"$inf": -1}` | +/-Infinity marker — encoder MUST reject |
-| `{"$str": "..."}`       | string (explicit; also used to carry a key that looks like a tag) |
-| `{"$bool": true}`       | boolean (explicit) |
-| `{"$null": true}`       | null (explicit) |
-| `{"$obj": {k: <tagged>, ...}}` | object; keys are literal strings, values tagged |
-| `{"$arr": [<tagged>, ...]}` | array; elements tagged |
+| `{"$str": "..."}`       | string (explicit; also used to carry a key that looks like a tag). The payload MUST be a JSON string. |
+| `{"$bool": true}`       | boolean (explicit). The payload MUST be a JSON boolean (`true`/`false`). |
+| `{"$null": true}`       | null (explicit). The payload MUST be JSON `true`. |
+| `{"$obj": {k: <tagged>, ...}}` | object; keys are literal strings, values tagged. The payload MUST be a JSON object. |
+| `{"$arr": [<tagged>, ...]}` | array; elements tagged. The payload MUST be a JSON array. |
+
+**Every tag payload has exactly one accepted JSON type**, and any other payload is a fixed-message
+`CanonError` at decode in every port — never a truthiness or iteration coercion. Before canon-core
+0.3.0 `$bool` was each port's own truthiness, and the three ports disagreed three ways on the
+production `canonical_bytes_from_json` path: `{"$bool": []}` and `{"$bool": {}}` were `false` in Python
+and `true` in Rust and TypeScript, and `{"$bool": 0.0}` was `true` in Rust only. `$str`, `$obj`, `$arr`
+and `$null` payloads were type-checked in Rust only (Python passed `{"$str": 5}` through as an
+integer and iterated `{"$arr": "ab"}` into `["a","b"]`; TypeScript turned `{"$obj": [1]}` into
+`{"0":1}`). Vectors `reject-bool-payload-*`, `reject-str-payload-*`, `reject-null-payload-*`,
+`reject-obj-payload-*`, `reject-arr-payload-*`. The `$float`/`$nan`/`$inf` payloads are not
+type-checked: those tags are rejected by the encoder whatever they carry.
+
+A side effect the depth cap (§1) relies on: with every scalar tag carrying a scalar payload, a tagged
+text that decodes within depth 128 is at most `2 * 128 + 1 = 257` JSON levels deep (a `$obj`/`$arr`
+container costs two levels, a scalar tag one at the leaf).
 
 A bare JSON `true`/`false`/`null`/string/array/object is also accepted by the decoder as the
 obvious thing, but the canonical vectors use explicit tags wherever type intent is load-bearing
 (numbers, booleans, the NaN/Inf/float rejections) so the file is unambiguous in every language.
 
-The decoder is part of the **test harness**, not the canon contract; `canonical_bytes` operates on
-already-decoded native values. But both ports MUST decode the file identically, so the decoder is
+The decoder is part of the **test harness** for the Python and TypeScript reference ports, where
+`canonical_bytes` operates on already-decoded native values. In Rust it is also behind the production
+JSON entry points (`canonical_bytes_from_json` / `digest_from_json`, §12), which is why its rules are
+normative. But both ports MUST decode the file identically, so the decoder is
 specified here and implemented identically in `py/canon.py` and `ts/canon.ts`.
 
 ---
@@ -307,8 +346,10 @@ and pinned in the file. The TS impl must reproduce them.
 
 **EXIT GATE** — `bash conformance/check.sh` (canon v2):
 0. installs the ingest-boundary Unicode pin (`unicodedata2`), then
-1. runs `py/test_canon.py` (Python canon vs the pinned vectors), and
-2. runs `ts/canon.test.ts` (TS canon vs the **same** pinned vectors), and
+1. runs `py/test_canon.py` (Python canon vs the pinned vectors, the engine boundary vectors in
+   `conformance/engine_boundary_vectors.json`, and the native-value depth cap), and
+2. runs `ts/canon.test.ts` (TS canon vs the **same** pinned and boundary vectors, plus the native
+   checks JSON cannot carry: non-plain objects and the depth cap), and
 3. runs the **ingest-boundary** tests — `conformance/test_ingest_nfc.py` (NON-NFC input through
    ingest → canon yields the normalized form) and `conformance/test_unicode_skew.py` (the fail-closed
    pin assertion fires on a stale DB; the `post13-*` inputs are live U13-vs-U16 discriminators), and
@@ -332,7 +373,11 @@ surface is:
 - `canonical_bytes_from_json(tagged_json) -> bytes`
 - `digest_from_json(tagged_json, profile) -> lowercase sha256 hex`
 
-The JSON entrypoints consume the same type-tagged tree used by `vectors/canon-vectors.json`.
+The JSON entrypoints consume the same type-tagged tree used by `vectors/canon-vectors.json`, with the
+same payload rules (§2) and the same depth cap (§1). serde_json's own recursion limit (127 levels of
+JSON **text**) is lifted, because it is not the canonical depth: a `$arr`/`$obj`-tagged value hit it at
+canonical depth 65, which the reference ports accepted. Instead an iterative pre-scan rejects any text
+deeper than 257 levels (§2) before serde parses it, which keeps serde's recursion bounded.
 The Rust core keeps NFC out of the hash exactly like the Python and TypeScript references: callers
 deliver already-normalized content from the ingest boundary, and `digest` applies
 `spec-canon:v2:<profile>\n || canonical_bytes(strip_top_level_digest(value))`.
@@ -345,11 +390,15 @@ The binding surfaces are thin wrappers over that core:
   returns `CANON_OK`/`CANON_ERR`. `*err_out` is **non-null on every `CANON_ERR`**, and error
   messages never echo caller payloads (a fixed message per rejection class), so a rejected value
   cannot leak through the error channel and an interior NUL cannot turn the message into a null
-  pointer.
+  pointer. The `(ptr, len)` pair from `canon_canonical_bytes_from_json` describes a boxed slice whose
+  allocation is exactly `len` bytes, and `canon_bytes_free(ptr, len)` frees exactly that layout (it
+  used to rebuild a `Vec` with capacity `len` after `shrink_to_fit`, which does not guarantee
+  `capacity == len`: undefined behaviour on an allocator that keeps spare capacity).
 
 `conformance/check_xg4_canon_core.sh` is the XG4 exit gate. It runs the existing Python/TypeScript
 canon gate, runs Rust vector tests, diffs Python/TypeScript/Rust emitted bytes and digests over the
-full corpus, and compiles both binding surfaces. Consumers must dual-run against this corpus before
+full corpus, and builds and executes both binding surfaces. The engine boundary vectors run in the
+Python/TypeScript self-tests and in `cargo test`. Consumers must dual-run against this corpus before
 removing a vendored implementation.
 
 ## Open items (0A follow-ups, tracked)

@@ -16,6 +16,8 @@
     "spec_revision_digest",
     "desired_graph_digest",
     "ec_digest",
+    "ec_reproducible",
+    "spec_authority",
     "code_head_sha",
     "overall_result_state",
     "dimension_results",
@@ -23,10 +25,10 @@
     "digest"
   ],
   "properties": {
-    "schema_version": { "const": "1", "description": "This certificate schema version." },
+    "schema_version": { "const": "2", "description": "This certificate schema version (the certificate-contract version). \"2\": hashed `spec_authority` (required) and optional `authority_ref`; `desired_graph_digest` is the normalized spec-graph digest; `ec_reproducible` is required. A \"1\" certificate stays a valid v1 record and is never re-hashed as v2." },
     "projection_algo_version": {
       "type": "string",
-      "description": "Version of the P/N projection+parity ALGORITHM that produced this result. Pinning this makes a certificate reproducible: two certificates over the same inputs but different algo versions are legitimately allowed to differ. (Task item 8.)"
+      "description": "Version of the P/N projection+parity ALGORITHM that produced this result. Pinning this makes a certificate reproducible: two certificates over the same inputs but different algo versions are legitimately allowed to differ. Currently `spec-engine-projection:v3` (certificate schema_version \"2\"); the history is SEMANTICS.md sec 9.2. (Task item 8.)"
     },
     "canon_version": { "type": "string", "description": "canon contract version used (`v2` since NFCBOUNDARY: NFC at the ingest boundary, digest prefix `spec-canon:v2:`). v1 certificates stay valid as v1 records; a v1 digest is never compared to a v2 digest and a mixed-canon_version graph is rejected." },
     "idmodel_version": { "type": "string", "description": "idmodel contract version used (e.g. `v1`)." },
@@ -38,11 +40,11 @@
     },
     "spec_revision_digest": {
       "type": "string",
-      "description": "Digest pinning the exact spec/desired-graph REVISION (the canon digest of the desired graph's revision record). Distinct from desired_graph_digest: this pins the revision identity, that pins the graph content."
+      "description": "Digest pinning the exact spec/desired-graph REVISION: the canon semantic-content digest of {\"spec_revision_id\": S.spec_revision_id (\"\" when absent), \"desired_graph_digest\": desired_graph_digest} (SEMANTICS.md sec 9). Distinct from desired_graph_digest: this binds the graded but unhashed spec_revision_id, that pins the graph content. A verifier binds S by the PAIR."
     },
     "desired_graph_digest": {
       "type": "string",
-      "description": "canon semantic-content digest of the desired-state graph S that was checked."
+      "description": "The NORMALIZED desired-graph digest of the S that was checked: spec_graph.graph_digest(S), i.e. canon semantic-content over S's hashed content only (spec-graph SPEC sec 2; nodes and edges sorted by Normalize). Envelope fields (rationale, notes, source_position, provenance, unratified, graph_id) and authoring order do NOT move it. The engine grades exactly this preimage (the graded view, SEMANTICS sec 9), so two S with one desired_graph_digest AND one spec_revision_digest grade identically against the same E(C), run descriptor, correspondence and waivers. A draft and its ratified S share this digest; `spec_authority` tells them apart, so a verifier binding an S' must structurally validate S', recompute this digest AND spec_revision_digest from S', and check that is_authoritative(S') matches `spec_authority` (SEMANTICS sec 9 binding procedure). (Schema version 1 certificates carried the raw-S canon digest here.)"
     },
     "ec_digest": {
       "type": "string",
@@ -50,7 +52,17 @@
     },
     "ec_reproducible": {
       "type": "boolean",
-      "description": "true iff E(C) is byte-reproducible (Benchmark C green / fixture). When false the certificate is ADVISORY and downstream gates MUST NOT treat it as authoritative."
+      "description": "MEASURED OR FALSE (ENG-1): true iff the producing run MEASURED E(C) to be byte-reproducible (Benchmark C: E(C) extracted twice by independent extractor invocations, canonical bytes identical). A frozen/pinned/fixture E(C) that the run did not re-extract is NOT measured and is false. When false the certificate is ADVISORY and downstream gates MUST NOT treat it as authoritative. Never changes a finding or result_state."
+    },
+    "spec_authority": {
+      "type": "string",
+      "enum": ["grounded", "draft"],
+      "description": "HASHED. Whether the checked S is an authority (SEMANTICS sec 9): `grounded` iff the anti-vacuity predicate is_authoritative(S) holds (at least one contract/architecture node whose effective provenance origin is human_authored and that is not marked unratified), else `draft` (a code-, doc- or LLM-derived or never-ratified S). It is derived from S's provenance envelope, which desired_graph_digest excludes, so it is pinned here. Delivery refuses a `draft` certificate unless the consumer opts in (SEMANTICS sec 12.6). Never changes a finding or result_state."
+    },
+    "authority_ref": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "OPTIONAL, HASHED. The authority-ledger `entry_digest` of the ratify event the producer cites as making S authoritative, recorded verbatim when the caller supplies one (only for a `grounded` S). The engine does NOT verify it; a verifier resolves it against the authority ledger. It cannot be a ratify of THIS certificate (that event signs this certificate's digest). Absent when none was supplied."
     },
     "code_head_sha": {
       "type": "string",
@@ -73,7 +85,7 @@
     },
     "waivers_ref": {
       "type": "string",
-      "description": "Optional digest ref to the set of waivers in effect for this run. Waived findings remain non-pass in dimension_results; this ref records WHY they are not gating. Absent if no waivers."
+      "description": "Optional digest ref to the set of waivers in effect for this run: canon semantic-content digest of {as_of, waivers} (the run descriptor's deterministic evaluation date + the supplied waiver list; an expired waiver -- expiry < as_of -- suppresses nothing). Waived findings remain non-pass in dimension_results; this ref records WHY they are not gating. Absent if no waivers."
     },
     "digest": {
       "type": "string",
@@ -88,8 +100,13 @@
         "is_vacuous": { "const": true },
         "reason": { "type": "string" },
         "realized_boundary_count": { "type": "integer", "minimum": 0 },
-        "kind_aligned_realized_count": { "type": "integer", "minimum": 0, "const": 0 }
+        "kind_aligned_realized_count": { "type": "integer", "minimum": 0, "const": 0 },
+        "extraction_coverage": { "$ref": "result-state.schema.json#/$defs/extraction_coverage_summary" }
       }
+    },
+    "extraction_coverage": {
+      "$ref": "result-state.schema.json#/$defs/extraction_coverage_summary",
+      "description": "OPTIONAL, HASHED (inside the certificate digest preimage). ENG-6: present ONLY when E(C)'s extraction was NOT fully observed — `partial` (the realized adapter measured unextracted source: unparseable files, unlisted on-disk source files, syntax-error trees, uncompiled .proto) or `unmeasured`. A certificate carrying it can never be read as full coverage: under it no prohibition passes, a completeness absence is unknown and closure is unknown (SEMANTICS sec 4.2 / 7.1 / 7.3). Absent when the extraction was measured full or the E(C) declares no extraction_coverage (hand-authored fixture). Mirrors finding_set.extraction_coverage."
     },
     "locator": {
       "type": "object",

@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.consiliency/spec-parity/ec.schema.json",
+  "title": "Realized extract E(C) (engine input shape)",
+  "description": "The structural shape spec-engine requires of a realized extract E(C) before it projects it (ENG-8). Written from the E(C)s every committed engine path feeds the engine (greenfield, treesitter-chunker, protobuf, BAML adapters and the hand-authored fixtures). It is deliberately OPEN (additionalProperties allowed): producers carry extra provenance, and the engine reads only the fields typed here. Graded content (extraction_coverage) is NOT shape-checked: a malformed coverage record is graded `unmeasured` by SEMANTICS sec 4.2, never rejected. Beyond this schema, projection.validate_ec also requires every boundary_id to be unique (JSON Schema cannot express uniqueness by a member key) and rejects every JSON float anywhere in E(C), including an integral one such as 2.0 (canon sec 6 forbids floats in canonical content; JSON Schema's `integer` type admits 2.0, so this rule cannot be stated here). A non-integral line_span entry such as 1.5 is rejected by both. projection.validate_ec is the stdlib mirror of this schema that the engine runs at entry; the two are kept in lockstep by spec-engine/test_engine.py.",
+  "type": "object",
+  "required": ["nodes"],
+  "properties": {
+    "doc": { "type": "string" },
+    "revision": { "type": "string", "description": "The realized revision id (Tier-2 occurrence revision)." },
+    "source": { "type": "string", "description": "The realized_source label kind-alignment.json keys on (greenfield, treesitter-chunker, protobuf, ...)." },
+    "code_head_sha": { "type": "string" },
+    "modeled_domains": { "type": "object" },
+    "provenance": { "type": "object" },
+    "collapsed_boundary_ids": { "type": "array", "description": "Records of lossless duplicate-boundary collapses (evidence; not graded)." },
+    "extraction_coverage": { "description": "Graded, not shape-checked (SEMANTICS sec 4.2): any value that is not a well-formed measurement is `unmeasured`." },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/edge" }
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "required": ["boundary_id", "kind"],
+      "properties": {
+        "boundary_id": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "name": { "type": ["string", "null"] },
+        "qualified_name": { "type": ["string", "null"] },
+        "file": { "type": ["string", "null"] },
+        "line_span": {
+          "description": "null, or [start, end] JSON integers. Written without a fraction: validate_ec rejects 2.0 (canon forbids floats).",
+          "oneOf": [
+            { "type": "null" },
+            { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 }
+          ]
+        },
+        "parent_boundary_id": { "type": ["string", "null"] },
+        "signature": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "properties": {
+                "params": { "type": "array", "items": { "type": "object" } },
+                "return_type": { "type": ["string", "null"] }
+              }
+            }
+          ]
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": ["string", "null"] },
+              "type": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "provenance": { "type": ["object", "null"] }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "required": ["from", "to", "type"],
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "type": { "type": "string" },
+        "resolution": { "type": "string" },
+        "is_internal": { "type": "boolean" },
+        "to_resolved_boundary": { "type": "boolean" }
+      }
+    }
+  }
+}

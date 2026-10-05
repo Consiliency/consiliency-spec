@@ -93,6 +93,7 @@ TARGET_DIR="$(cargo metadata --no-deps --format-version=1 --manifest-path "$CORE
 GOV_CORPUS_VENDORED="$ROOT/canon/vectors/gov-cross-repo-canon-vectors.json"
 GOV_CORPUS_LIVE="${GOV_CORPUS:-}"
 
+TSX="tsx@4.23.15"  # exact pin, same in every tsx script (CI-5; ci/check_ci_hygiene.py)
 echo "== XG4 canon-core conformance gate =="
 echo "root: $ROOT"
 echo "target: $TARGET_DIR"
@@ -109,7 +110,7 @@ echo
 echo "[3/8] Python/TypeScript/Rust byte-identity on spec-local vectors"
 SPEC_CORPUS="$ROOT/canon/vectors/canon-vectors.json"
 python3 "$ROOT/canon/py/test_canon.py" --emit > "$TMP/python.txt"
-npx --yes tsx "$ROOT/canon/ts/canon.test.ts" --emit > "$TMP/typescript.txt"
+npx --yes "$TSX" "$ROOT/canon/ts/canon.test.ts" --emit > "$TMP/typescript.txt"
 cargo run --quiet --manifest-path "$CORE" --bin canon_core_emit -- "$SPEC_CORPUS" > "$TMP/rust.txt"
 diff -u "$TMP/python.txt" "$TMP/typescript.txt"
 diff -u "$TMP/python.txt" "$TMP/rust.txt"
@@ -154,7 +155,7 @@ echo "    BUILT WASM binding is byte-identical to the TypeScript reference on al
 echo
 
 echo "[6/8] SPEC §5.0 lone-surrogate BOUNDARY finding (through the BUILT WASM binding)"
-npx --yes tsx "$CONF/wasm_surrogate_finding.mjs" "$GLUE" "$ROOT/canon/ts/canon.ts"
+npx --yes "$TSX" "$CONF/wasm_surrogate_finding.mjs" "$GLUE" "$ROOT/canon/ts/canon.ts"
 echo
 
 echo "[7/8] REQUIRED cross-repo parity on the vendored downstream-consumer corpus (canon v2 5-way byte-identity)"
@@ -163,7 +164,7 @@ if [[ ! -f "$GOV_CORPUS_VENDORED" ]]; then
   exit 1
 fi
 python3 "$ROOT/canon/py/test_canon.py" --emit "$GOV_CORPUS_VENDORED" > "$TMP/gp_python.txt"
-npx --yes tsx "$ROOT/canon/ts/canon.test.ts" --emit "$GOV_CORPUS_VENDORED" > "$TMP/gp_typescript.txt"
+npx --yes "$TSX" "$ROOT/canon/ts/canon.test.ts" --emit "$GOV_CORPUS_VENDORED" > "$TMP/gp_typescript.txt"
 cargo run --quiet --manifest-path "$CORE" --bin canon_core_emit -- "$GOV_CORPUS_VENDORED" > "$TMP/gp_rust.txt"
 PYTHONPATH="$SO_DIR" python3 "$CONF/emit_pyo3.py" "$GOV_CORPUS_VENDORED" > "$TMP/gp_pyo3.txt"
 node "$CONF/emit_wasm.mjs" "$GLUE" "$GOV_CORPUS_VENDORED" > "$TMP/gp_wasm.txt"

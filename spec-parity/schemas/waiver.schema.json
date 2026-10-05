@@ -16,9 +16,9 @@
         },
         "finding_code": { "type": "string", "description": "Restrict to one finding code (e.g. prohibition_unobservable)." },
         "desired_logical_id": { "type": "string", "description": "Restrict to one desired entity (idmodel Tier-1 logical_id)." },
-        "prohibition_id": { "type": "string", "description": "Restrict to one declared prohibition." },
+        "prohibition_id": { "type": "string", "description": "Restrict to one declared prohibition: its idmodel Tier-1 logical_id. Matches only prohibition-dimension findings whose subject.desired_logical_id equals it." },
         "realized_kind": { "type": "string" },
-        "realized_source": { "type": "string" }
+        "realized_source": { "type": "string", "description": "Restrict to one realized source: the finding's subject.realized_source when present; else, only for a finding naming a realized fact (subject.realized_occurrence_id), the source of the graded E(C). A finding with no realized evidence never matches." }
       }
     },
     "waiver_lifecycle": {
@@ -39,7 +39,7 @@
     "reason": { "type": "string", "minLength": 1, "description": "Why the drift is accepted. Required; an empty reason is invalid (no silent waivers)." },
     "expiry": {
       "type": "string",
-      "description": "Expiry as an ISO-8601 calendar DATE (YYYY-MM-DD), interpreted as end-of-day UTC. Required and bounded -- NO open-ended waivers in v1. After expiry the waiver lifecycle becomes `expired` and it stops suppressing. This is a semantic (hashed) field; it is a fixed date string, NOT a wall-clock timestamp, so it is deterministic across runs.",
+      "description": "Expiry as an ISO-8601 calendar DATE (YYYY-MM-DD), interpreted as end-of-day UTC. Required and bounded -- NO open-ended waivers in v1. After expiry the waiver lifecycle becomes `expired` and it stops suppressing: the engine treats a waiver with expiry < the run descriptor's deterministic `as_of` date (run-descriptor.schema.json) as expired, and refuses to evaluate waivers for a run with no `as_of` (ENG-2). This is a semantic (hashed) field; it is a fixed date string, NOT a wall-clock timestamp, so it is deterministic across runs.",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
     },
     "approver_ref": {

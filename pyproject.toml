@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "consiliency-spec"
-version = "0.3.0"
+version = "0.4.0"
 description = "Public Consiliency canon-core v2 package: Rust core, dep-free TypeScript/Python canon ports, vectors, and public schemas."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -68,6 +68,9 @@ packages = ["consiliency_spec"]
 "spec-parity/schemas/portal-payload.schema.json" = "consiliency_spec/_data/spec-parity/schemas/portal-payload.schema.json"
 "spec-parity/schemas/result-state.schema.json" = "consiliency_spec/_data/spec-parity/schemas/result-state.schema.json"
 "spec-parity/schemas/waiver.schema.json" = "consiliency_spec/_data/spec-parity/schemas/waiver.schema.json"
+"spec-parity/schemas/run-descriptor.schema.json" = "consiliency_spec/_data/spec-parity/schemas/run-descriptor.schema.json"
+"spec-parity/schemas/ec-reproducibility-attestation.schema.json" = "consiliency_spec/_data/spec-parity/schemas/ec-reproducibility-attestation.schema.json"
+"spec-parity/schemas/ec.schema.json" = "consiliency_spec/_data/spec-parity/schemas/ec.schema.json"
 "spec-graph/schema/spec-graph.schema.json" = "consiliency_spec/_data/spec-graph/schema/spec-graph.schema.json"
 "scripts/check_outside_agent_vectors.sh" = "consiliency_spec/_data/scripts/check_outside_agent_vectors.sh"
 "test-vectors/outside-agent/invalid-empty-evidence-refs.json" = "consiliency_spec/_data/test-vectors/outside-agent/invalid-empty-evidence-refs.json"
@@ -134,6 +137,9 @@ only-include = [
 "spec-parity/schemas/portal-payload.schema.json" = "spec-parity/schemas/portal-payload.schema.json"
 "spec-parity/schemas/result-state.schema.json" = "spec-parity/schemas/result-state.schema.json"
 "spec-parity/schemas/waiver.schema.json" = "spec-parity/schemas/waiver.schema.json"
+"spec-parity/schemas/run-descriptor.schema.json" = "spec-parity/schemas/run-descriptor.schema.json"
+"spec-parity/schemas/ec-reproducibility-attestation.schema.json" = "spec-parity/schemas/ec-reproducibility-attestation.schema.json"
+"spec-parity/schemas/ec.schema.json" = "spec-parity/schemas/ec.schema.json"
 "spec-graph/schema/spec-graph.schema.json" = "spec-graph/schema/spec-graph.schema.json"
 "scripts/check_outside_agent_vectors.sh" = "scripts/check_outside_agent_vectors.sh"
 "test-vectors/outside-agent/invalid-empty-evidence-refs.json" = "test-vectors/outside-agent/invalid-empty-evidence-refs.json"

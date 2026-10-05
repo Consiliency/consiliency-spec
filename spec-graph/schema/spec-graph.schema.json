@@ -15,6 +15,8 @@
     },
     "rationale": { "type": "string", "description": "Non-hashed prose envelope for the whole graph." },
     "notes": { "type": "string", "description": "Non-hashed notes envelope for the whole graph." },
+    "doc": { "type": "string", "description": "Non-hashed documentation envelope for the whole graph (fixture prose). ENVELOPE-ONLY: never enters the graph digest." },
+    "spec_revision_id": { "type": "string", "description": "Author label for this revision of S. ENVELOPE-ONLY: never enters the graph digest." },
     "nodes": { "type": "array", "items": { "$ref": "#/$defs/node" } },
     "edges": { "type": "array", "items": { "$ref": "#/$defs/edge" } }
   },
@@ -111,11 +113,11 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["origin"],
-      "description": "Draft-S provenance marker (IF-0-BOOT-1, brownfield freeze). ENVELOPE-ONLY: NON-HASHED — does NOT enter the graph digest OR the node logical_id (a node with vs without provenance is byte-identical in both ids), exactly like rationale/notes. Records how a bootstrapped node originated: code_derived (E(C) scaffold), doc_derived (docs intent), human_authored (ratified intent). A node WITHOUT a provenance block is treated as human_authored (the pre-brownfield default — a hand-authored S is an authority).",
+      "description": "Draft-S provenance marker (IF-0-BOOT-1, brownfield freeze). ENVELOPE-ONLY: NON-HASHED — does NOT enter the graph digest OR the node logical_id (a node with vs without provenance is byte-identical in both ids), exactly like rationale/notes. Records how a bootstrapped node originated: code_derived (E(C) scaffold), doc_derived (docs intent), llm_proposed (NL intake draft built from an LLM-proposed nl_ir), human_authored (ratified intent). A node WITHOUT a provenance block is treated as human_authored (the pre-brownfield default — a hand-authored S is an authority).",
       "properties": {
         "origin": {
           "type": "string",
-          "enum": ["code_derived", "doc_derived", "human_authored"],
+          "enum": ["code_derived", "doc_derived", "llm_proposed", "human_authored"],
           "description": "How this draft node originated. Only human_authored (and not unratified) is an authority (anti-vacuity rule)."
         },
         "boundary_id": { "type": "string", "description": "Optional: the realized E(C) boundary this code-derived node was scaffolded from." },
@@ -176,7 +178,10 @@
         "notes": { "type": "string", "description": "ENVELOPE-ONLY non-hashed notes." },
         "provenance": { "$ref": "#/$defs/node_provenance" },
         "unratified": { "const": true, "description": "Draft-S marker (IF-0-BOOT-1): the node is still an UNRATIFIED bootstrap draft (a human has not asserted its intent). TRUE-OR-ABSENT: omit it for a ratified node — an explicit `false` is rejected (it would break the DSL round-trip, since the truthiness-based envelope render drops a falsy field while Normalize preserves it). ENVELOPE-ONLY: NON-HASHED — does not enter the graph digest OR logical_id. Absent = ratified/not-a-draft. A never-ratified, all-code-derived S is NOT an authority (anti-vacuity rule)." },
-        "source_position": { "$ref": "#/$defs/source_position" }
+        "source_position": { "$ref": "#/$defs/source_position" },
+
+        "logical_id": { "$ref": "#/$defs/derived_logical_id" },
+        "content_digest": { "$ref": "#/$defs/derived_content_digest" }
       },
       "allOf": [
         {
@@ -229,8 +234,18 @@
         "tags": { "$ref": "#/$defs/tags" },
         "rationale": { "type": "string", "description": "ENVELOPE-ONLY." },
         "notes": { "type": "string", "description": "ENVELOPE-ONLY." },
-        "source_position": { "$ref": "#/$defs/source_position" }
+        "source_position": { "$ref": "#/$defs/source_position" },
+        "content_digest": { "$ref": "#/$defs/derived_content_digest" }
       }
+    },
+    "derived_logical_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "DERIVED: the node's logical_id as Normalize writes it (idmodel spec_revision_logical_id, file_role = level). Optional on input; when present it MUST equal the value recomputed from the node. This schema checks only the shape; the equality is enforced by spec_graph.validate (and the MCP validate tool, which runs it), so schema validation alone does not prove a carried id is genuine."
+    },
+    "derived_content_digest": {
+      "type": "string",
+      "description": "DERIVED: the canon semantic-content digest Normalize writes onto a node or edge. Optional on input; when present it MUST equal the value recomputed from the object's hashed fields. This schema checks only the shape; the equality is enforced by spec_graph.validate (and the MCP validate tool, which runs it)."
     }
   }
 }

@@ -25,6 +25,9 @@ CANON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PY="$CANON_DIR/py"
 TS="$CANON_DIR/ts"
 TMP="$(mktemp -d)"
+# tsx pinned exactly (CI-5): a bare `npx --yes tsx` runs whatever npm
+# resolves that day. Every script that runs tsx carries the same pin (ci/check_ci_hygiene.py).
+TSX="tsx@4.23.15"
 trap 'rm -rf "$TMP"' EXIT
 
 echo "== canon v2 conformance gate =="
@@ -47,7 +50,7 @@ echo
 
 # --- 2. TypeScript canon self-conformance ---
 echo "[2/5] TypeScript canon conformance (vs pinned vectors)"
-npx --yes tsx "$TS/canon.test.ts"
+npx --yes "$TSX" "$TS/canon.test.ts"
 echo
 
 # --- 3. Ingest-boundary NFC enforcement (the byte-identity gate CANNOT prove this) ---
@@ -69,7 +72,7 @@ echo
 # --- 5. Cross-language byte-identity ---
 echo "[5/5] Cross-language byte-identity (Python emit vs TypeScript emit)"
 python3 "$PY/test_canon.py" --emit > "$TMP/py.json"
-npx --yes tsx "$TS/canon.test.ts" --emit > "$TMP/ts.json"
+npx --yes "$TSX" "$TS/canon.test.ts" --emit > "$TMP/ts.json"
 
 if diff -u "$TMP/py.json" "$TMP/ts.json" > "$TMP/diff.txt"; then
   N=$(wc -l < "$TMP/py.json" | tr -d ' ')

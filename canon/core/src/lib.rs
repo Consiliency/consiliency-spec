@@ -1,4 +1,5 @@
 use num_bigint::BigInt;
+use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
@@ -6,6 +7,23 @@ use std::fmt;
 
 pub const DOMAIN_PREFIX: &str = "spec-canon:v2:";
 pub const PROFILES: [&str; 4] = ["semantic-content", "run", "artifact-byte", "certificate"];
+
+/// SPEC.md section 1 — maximum nesting depth (CAN-12). A container's depth is
+/// 1 + the number of containers enclosing it (`[]` is depth 1). Any container deeper than this is a
+/// `CanonError` at decode and at encode, identically in the Python and TypeScript ports. Before the
+/// cap the native encoder overflowed the stack (SIGABRT) on deep values, and the JSON entry points
+/// rejected anything past serde_json's own 127-level TEXT limit, which a `$arr`/`$obj`-tagged value
+/// reaches at canonical depth 65 while the reference ports accepted it.
+pub const MAX_DEPTH: usize = 128;
+
+/// The deepest tagged-JSON text that can decode to a value within `MAX_DEPTH`. Every tag payload is a
+/// scalar except `$obj`/`$arr`, which cost two JSON levels per container (wrapper + payload), and a
+/// scalar tag wrapper adds one level at a leaf: so 2 * MAX_DEPTH + 1. Deeper text is rejected before
+/// serde_json parses it (which bounds serde's recursion now that its own limit is lifted); anything
+/// it rejects would be rejected by the reference ports too (depth or payload type).
+const MAX_TAGGED_JSON_DEPTH: usize = 2 * MAX_DEPTH + 1;
+
+const DEPTH_MESSAGE: &str = "nesting depth exceeds the maximum of 128";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CanonValue {
@@ -42,6 +60,15 @@ impl std::error::Error for CanonError {}
 
 pub type CanonResult<T> = Result<T, CanonError>;
 
+/// `depth` counts the containers enclosing the one being built; returns the new container's depth.
+fn container_depth(depth: usize) -> CanonResult<usize> {
+    if depth >= MAX_DEPTH {
+        Err(CanonError::new(DEPTH_MESSAGE))
+    } else {
+        Ok(depth + 1)
+    }
+}
+
 fn compare_code_points(a: &str, b: &str) -> Ordering {
     let mut ai = a.chars();
     let mut bi = b.chars();
@@ -73,7 +100,8 @@ fn encode_string(value: &str) -> CanonResult<String> {
     Ok(out)
 }
 
-fn encode_value(value: &CanonValue) -> CanonResult<String> {
+/// `depth` is the number of containers enclosing `value` (0 at the top level).
+fn encode_value(value: &CanonValue, depth: usize) -> CanonResult<String> {
     match value {
         CanonValue::FloatMarker => Err(CanonError::new(
             "floats are forbidden in canonical content; pre-represent as int or string",
@@ -88,38 +116,43 @@ fn encode_value(value: &CanonValue) -> CanonResult<String> {
         CanonValue::Int(v) => Ok(v.to_string()),
         CanonValue::String(v) => encode_string(v),
         CanonValue::Array(items) => {
+            let inner = container_depth(depth)?;
             let mut parts = Vec::with_capacity(items.len());
             for item in items {
-                parts.push(encode_value(item)?);
+                parts.push(encode_value(item, inner)?);
             }
             Ok(format!("[{}]", parts.join(",")))
         }
-        CanonValue::Object(entries) => {
-            let mut sorted = entries.clone();
-            sorted.sort_by(|(ak, _), (bk, _)| compare_code_points(ak, bk));
-            let mut parts = Vec::with_capacity(sorted.len());
-            for (key, item) in sorted {
-                parts.push(format!("{}:{}", encode_string(&key)?, encode_value(&item)?));
-            }
-            Ok(format!("{{{}}}", parts.join(",")))
-        }
+        CanonValue::Object(entries) => encode_object(entries, container_depth(depth)?, false),
     }
 }
 
-pub fn canonical_bytes(value: &CanonValue) -> CanonResult<Vec<u8>> {
-    Ok(encode_value(value)?.into_bytes())
+/// `depth` is this object's own nesting depth (already checked). Keys are sorted through borrowed
+/// references, so neither encoding nor the digest's top-level `digest`-key exclusion deep-clones
+/// a subtree (a clone of a pathologically deep value would itself recurse past the stack).
+fn encode_object(entries: &[(String, CanonValue)], depth: usize, exclude_digest: bool) -> CanonResult<String> {
+    let mut sorted: Vec<&(String, CanonValue)> = entries
+        .iter()
+        .filter(|(key, _)| !(exclude_digest && key == "digest"))
+        .collect();
+    sorted.sort_by(|(ak, _), (bk, _)| compare_code_points(ak, bk));
+    let mut parts = Vec::with_capacity(sorted.len());
+    for (key, item) in sorted {
+        parts.push(format!("{}:{}", encode_string(key)?, encode_value(item, depth)?));
+    }
+    Ok(format!("{{{}}}", parts.join(",")))
 }
 
-fn strip_top_level_digest(value: &CanonValue) -> CanonValue {
+pub fn canonical_bytes(value: &CanonValue) -> CanonResult<Vec<u8>> {
+    Ok(encode_value(value, 0)?.into_bytes())
+}
+
+/// The digest preimage body: `canonical_bytes` of the value with a TOP-LEVEL `digest` key removed
+/// (SPEC.md section 8).
+fn digest_body(value: &CanonValue) -> CanonResult<Vec<u8>> {
     match value {
-        CanonValue::Object(entries) => CanonValue::Object(
-            entries
-                .iter()
-                .filter(|(key, _)| key != "digest")
-                .cloned()
-                .collect(),
-        ),
-        _ => value.clone(),
+        CanonValue::Object(entries) => Ok(encode_object(entries, container_depth(0)?, true)?.into_bytes()),
+        _ => canonical_bytes(value),
     }
 }
 
@@ -129,18 +162,8 @@ pub fn digest(value: &CanonValue, profile: &str) -> CanonResult<String> {
     }
     let mut hasher = Sha256::new();
     hasher.update(format!("{DOMAIN_PREFIX}{profile}\n").as_bytes());
-    hasher.update(canonical_bytes(&strip_top_level_digest(value))?);
+    hasher.update(digest_body(value)?);
     Ok(hex::encode(hasher.finalize()))
-}
-
-fn json_truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(v) => *v,
-        Value::Number(n) => n.as_i64().map_or(true, |v| v != 0),
-        Value::String(s) => !s.is_empty(),
-        Value::Array(_) | Value::Object(_) => true,
-    }
 }
 
 /// The one payload grammar every port shares (SPEC.md section 2): an optional '-' then one or
@@ -158,7 +181,33 @@ fn parse_int_payload(payload: &Value) -> CanonResult<BigInt> {
     raw.parse::<BigInt>().map_err(|_| CanonError::new(MSG))
 }
 
+/// Decode a type-tagged tree. Every tag's payload has exactly one accepted JSON type (SPEC.md
+/// section 2); anything else is a fixed-message `CanonError` — `$bool` used to be JSON truthiness
+/// here (`[]`, `{}` and `0.0` were all `true`) while Python and TypeScript disagreed with it and with
+/// each other (CAN-9). Containers deeper than `MAX_DEPTH` are rejected.
 pub fn decode_input(node: &Value) -> CanonResult<CanonValue> {
+    decode(node, 0)
+}
+
+fn decode_entries(map: &serde_json::Map<String, Value>, depth: usize) -> CanonResult<CanonValue> {
+    let inner = container_depth(depth)?;
+    let mut entries = Vec::with_capacity(map.len());
+    for (key, item) in map {
+        entries.push((key.clone(), decode(item, inner)?));
+    }
+    Ok(CanonValue::Object(entries))
+}
+
+fn decode_items(items: &[Value], depth: usize) -> CanonResult<CanonValue> {
+    let inner = container_depth(depth)?;
+    items
+        .iter()
+        .map(|item| decode(item, inner))
+        .collect::<CanonResult<Vec<_>>>()
+        .map(CanonValue::Array)
+}
+
+fn decode(node: &Value, depth: usize) -> CanonResult<CanonValue> {
     match node {
         Value::Null => Ok(CanonValue::Null),
         Value::Bool(v) => Ok(CanonValue::Bool(*v)),
@@ -172,7 +221,7 @@ pub fn decode_input(node: &Value) -> CanonResult<CanonValue> {
             }
         }
         Value::String(v) => Ok(CanonValue::String(v.clone())),
-        Value::Array(items) => items.iter().map(decode_input).collect::<CanonResult<Vec<_>>>().map(CanonValue::Array),
+        Value::Array(items) => decode_items(items, depth),
         Value::Object(map) => {
             if map.len() == 1 {
                 let (tag, payload) = map.iter().next().expect("single object entry");
@@ -186,48 +235,95 @@ pub fn decode_input(node: &Value) -> CanonResult<CanonValue> {
                         return payload
                             .as_str()
                             .map(|s| CanonValue::String(s.to_string()))
-                            .ok_or_else(|| CanonError::new("$str payload must be a string"));
+                            .ok_or_else(|| CanonError::new("invalid $str payload: expected a JSON string"));
                     }
-                    "$bool" => return Ok(CanonValue::Bool(json_truthy(payload))),
-                    "$null" => return Ok(CanonValue::Null),
+                    "$bool" => {
+                        return payload
+                            .as_bool()
+                            .map(CanonValue::Bool)
+                            .ok_or_else(|| CanonError::new("invalid $bool payload: expected a JSON boolean"));
+                    }
+                    "$null" => {
+                        return match payload {
+                            Value::Bool(true) => Ok(CanonValue::Null),
+                            _ => Err(CanonError::new("invalid $null payload: expected true")),
+                        };
+                    }
                     "$obj" => {
                         let obj = payload
                             .as_object()
-                            .ok_or_else(|| CanonError::new("$obj payload must be an object"))?;
-                        let mut entries = Vec::with_capacity(obj.len());
-                        for (key, item) in obj {
-                            entries.push((key.clone(), decode_input(item)?));
-                        }
-                        return Ok(CanonValue::Object(entries));
+                            .ok_or_else(|| CanonError::new("invalid $obj payload: expected a JSON object"))?;
+                        return decode_entries(obj, depth);
                     }
                     "$arr" => {
                         let arr = payload
                             .as_array()
-                            .ok_or_else(|| CanonError::new("$arr payload must be an array"))?;
-                        return arr.iter().map(decode_input).collect::<CanonResult<Vec<_>>>().map(CanonValue::Array);
+                            .ok_or_else(|| CanonError::new("invalid $arr payload: expected a JSON array"))?;
+                        return decode_items(arr, depth);
                     }
                     _ => {}
                 }
             }
-            let mut entries = Vec::with_capacity(map.len());
-            for (key, item) in map {
-                entries.push((key.clone(), decode_input(item)?));
-            }
-            Ok(CanonValue::Object(entries))
+            decode_entries(map, depth)
         }
     }
 }
 
+/// The maximum `[`/`{` nesting of JSON text, outside string literals. Iterative, so it is safe on
+/// arbitrarily deep input. Exact for valid JSON; for invalid JSON it is an upper bound on the depth
+/// serde_json reaches before reporting the syntax error (both tokenise strings the same way).
+fn json_nesting_depth(text: &str) -> usize {
+    let (mut depth, mut max, mut in_string, mut escaped) = (0usize, 0usize, false, false);
+    for byte in text.bytes() {
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match byte {
+            b'"' => in_string = true,
+            b'[' | b'{' => {
+                depth += 1;
+                max = max.max(depth);
+            }
+            b']' | b'}' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+    max
+}
+
+/// Parse JSON text whose nesting is first bounded by `max_depth` (iteratively), with serde_json's
+/// own 128-level recursion limit lifted: serde's limit counts TEXT levels, which is not the canonical
+/// depth the cap is defined on (a tagged container costs two).
+fn parse_json_bounded(text: &str, max_depth: usize) -> Result<Value, String> {
+    if json_nesting_depth(text) > max_depth {
+        return Err(DEPTH_MESSAGE.to_string());
+    }
+    let mut deserializer = serde_json::Deserializer::from_str(text);
+    deserializer.disable_recursion_limit();
+    let value = Value::deserialize(&mut deserializer).map_err(|error| format!("invalid JSON: {error}"))?;
+    deserializer.end().map_err(|error| format!("invalid JSON: {error}"))?;
+    Ok(value)
+}
+
 pub fn decode_input_json(tagged_json: &str) -> CanonResult<CanonValue> {
-    let value: Value = serde_json::from_str(tagged_json)
-        .map_err(|error| CanonError::new(format!("invalid JSON: {error}")))?;
+    let value = parse_json_bounded(tagged_json, MAX_TAGGED_JSON_DEPTH).map_err(CanonError::new)?;
     decode_input(&value)
 }
 
 pub fn parse_vector_corpus(raw: &str) -> CanonResult<Vec<Value>> {
     let rust_parseable = raw.replace("\"$str\": \"\\ud800\"", "\"$surrogate\": \"d800\"");
-    serde_json::from_str(&rust_parseable)
-        .map_err(|error| CanonError::new(format!("invalid vector corpus: {error}")))
+    // A corpus file wraps each tagged input in a few levels (the vector list, the vector object);
+    // its deepest inputs are the over-the-cap rejection vectors, one container past MAX_DEPTH.
+    let value = parse_json_bounded(&rust_parseable, MAX_TAGGED_JSON_DEPTH + 16)
+        .map_err(|error| CanonError::new(format!("invalid vector corpus: {error}")))?;
+    serde_json::from_value(value).map_err(|error| CanonError::new(format!("invalid vector corpus: {error}")))
 }
 
 pub fn canonical_bytes_from_json(tagged_json: &str) -> CanonResult<Vec<u8>> {

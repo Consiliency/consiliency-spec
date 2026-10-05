@@ -23,4 +23,6 @@ include = [
     "CANON_OK",
     "CANON_ERR",
 ]
+# The Rust-side nesting cap is enforced inside the engine; it is not part of the C ABI surface.
+exclude = ["MAX_DEPTH"]
 prefix = ""

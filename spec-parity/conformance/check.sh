@@ -52,7 +52,13 @@ echo
 # 3) Empty-frontier delivery guard: the not_applicable payload (the one shape test_deliver.py does
 #    not cover) VALIDATES against the schema AND renders badge neutral (NEVER silent green).
 echo "-- [3/3] empty-frontier delivery guard (schema-valid + badge == neutral, never green) --"
-EMPTY_BADGE="$("$PY" run_engine.py fixtures/empty-run.json --emit payload \
+# The empty-frontier S has no contract/architecture node, so it is a DRAFT (spec_authority=draft):
+# delivery refuses it unless the consumer opts in (SEMANTICS sec 12.6). Prove the refusal, then opt in.
+if "$PY" run_engine.py fixtures/empty-run.json --emit payload >/dev/null 2>&1; then
+  echo "FAIL: a draft-S payload was delivered without --allow-draft"; exit 1
+fi
+echo "   OK: a draft-S certificate is refused without --allow-draft"
+EMPTY_BADGE="$("$PY" run_engine.py fixtures/empty-run.json --emit payload --allow-draft \
   | "$PY" -c "
 import json, sys, os
 sys.path.insert(0, os.path.join('$ROOT', 'spec-engine'))

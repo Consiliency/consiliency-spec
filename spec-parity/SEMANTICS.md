@@ -31,11 +31,34 @@ N(projection) -> finding_set + certificate   # the 5-dimension parity checker; d
   Tier-1 logical ids are computed per idmodel sec 3.
 - **Identity is idmodel's.** Desired entities are keyed by Tier-1 `logical_id`; realized facts carry Tier-2
   `occurrence_id`. Cross-revision continuity is the **correspondence map** (idmodel sec 6), never a raw hash.
+  The engine keys a desired node by idmodel's `engine_join_id` (`file_role` null; the signature of an
+  `operation`/`interface` only, exactly what Normalize keeps). Every finding's `desired_logical_id`, the
+  verdict overlays and NL intake use this key. spec-graph's per-node `logical_id` is the other named id,
+  `spec_revision_logical_id` (`file_role` = level), which feeds the graph digest (idmodel sec 3.1).
+  - **The one exception: NL coverage on a normalized graph.** The NL coverage certifier keys a raw node
+    by `engine_join_id`. A normalized node keeps the `logical_id` it carries (its
+    `spec_revision_logical_id`), because NL mappings over a normalized graph are made in that space. That
+    carried id is verified, never trusted: one that does not recompute is refused. Two nodes sharing a
+    coverage key are refused too, never merged.
 - **Determinism.** Every output of `P` and `N` is content-addressed (canon) and reproducible byte-for-byte
   for fixed inputs + fixed `projection_algo_version`. **No floats anywhere** (canon sec 6): all confidence /
   threshold / score fields are string-decimals or scaled ints.
 - **Never silently green.** The result-state machinery (sec 6) exists so that a fact the extractor cannot
   observe yields `unknown`, never a silent `pass`.
+- **Inputs are validated before they are graded.** Every engine entry (`projection.load_inputs` /
+  `run_engine`, the MCP `parity`/`project` tools, the ingest packages) validates its inputs before
+  projecting them. `S` must pass `spec_graph.validate` under the engine subset: every rule except
+  decomposes_to level-adjacency and operation-requires-signature, which 8 committed graphs predate.
+  `E(C)` must match `schemas/ec.schema.json` with unique `boundary_id`s and no JSON floats. The minimal
+  ingest package, which does not ship spec-graph, checks only the structure of `S` (node and edge lists,
+  unique non-empty names, edge endpoints that resolve) instead of the full engine subset.
+  Independently of the entry point, `P` and `N` themselves refuse a structurally malformed input before
+  grading it: duplicate or empty `S` node names, dangling edges, a malformed `E(C)` (duplicate
+  `boundary_id`s, wrong types, floats), run, continuity map or correspondence container. So a driver
+  that builds its inputs directly can never grade a malformed `S`. The run descriptor and the
+  continuity map must be well formed. An invalid input is refused with an input error. It is never
+  graded, because a verdict over a malformed `S` (for example, two nodes sharing a name) would be
+  meaningless.
 
 ---
 
@@ -61,15 +84,22 @@ Everything in `S` is *potentially* in-scope; the run declares which subset is ac
 Frontier membership is the **disjunction** of three deterministic sources, evaluated in this order; a node is
 in-scope if ANY yields true:
 
-1. **Explicit run selector (highest precedence).** A run MAY carry a `frontier_selector` = an ordered list of
-   desired `logical_id`s (and/or a kind filter). If present and non-empty, the frontier is exactly the
-   declared nodes **plus their decomposition descendants** (sec 1.3). An empty/absent selector falls through.
+1. **Explicit run selector (highest precedence).** A run MAY carry a `frontier_selector` = a list of desired
+   node **`name`s** (the key `S`'s edges and every caller — the brownfield architecture frontier, the MCP
+   `parity`/`project` tools — already use). If present and non-empty, the frontier is exactly the declared
+   nodes **plus their decomposition descendants** (sec 1.3). An empty/absent selector falls through. An
+   entry that names no node in `S` is an **input error** (the run is refused before any verdict), never
+   silently dropped: dropping it would turn a one-character typo into an all-`not_applicable` certificate.
+   There is no kind filter: no caller needs one, and a selector of names already says exactly what is
+   checked.
 2. **Node-level `frontier` flag.** A desired node MAY declare `frontier: true` in its metamodel attributes.
    All such nodes (plus descendants) are in-scope. This is the default authoring mechanism.
 3. **Default closure (fallback).** If neither (1) nor (2) selects anything, the frontier is **every
    `capability` node and every `component`/`interface`/`operation` reachable from a `capability` via
    decomposition edges.** Leaf `type`/`field` detail below the lowest declared node is NOT auto-in-scope (it
-   is refinement-below-frontier, sec 3) unless explicitly named.
+   is refinement-below-frontier, sec 3) unless explicitly named. Only this source filters by kind: a node
+   of any other kind reached by the decomposition walk is left out of the default frontier. Sources 1 and 2
+   include every decomposition descendant (sec 1.3).
 
 The chosen source and the resolved node set are recorded in the projection so the run is auditable.
 
@@ -100,12 +130,44 @@ any) correspond to it. This uses idmodel:
 - **Fallback (no correspondence entry):** compute the realized fact's Tier-1 `logical_id` and match by equality
   to `d`'s `logical_id` for the same revision (idmodel sec 3).
 - **Kind gate:** a correspondence is only parity-bearing if the realized kind aligns to `d`'s desired kind per
-  `kind-alignment.json` (sec 5). A correspondence across a kind that does not align records
-  `ambiguous_kind_alignment` and yields `unknown` for kind-dependent checks.
+  `kind-alignment.json` (sec 5). A correspondence whose realized kind has more than one candidate desired
+  kind that correspondence cannot settle records `ambiguous_kind_alignment` and yields `unknown` for
+  kind-dependent checks. A correspondence whose realized kind aligns to a single, **different** desired kind
+  is a soundness `fail kind_mismatch` (sec 7.2).
 
 The result of `P` is a **projection**: for each in-scope `d`, a `match` record = `{desired d,
 realized_occurrences[], match_origin (correspondence|logical_id|none), confidence}` — confidence as a
 string-decimal.
+
+**Correspondence-entry resolution (ENG-3).** A map entry is parity-bearing only if
+it *resolves*. Each match record carries `correspondence_status` (and the entry's
+`correspondence_lifecycle` when there is exactly one entry):
+
+| map state for `d` | `correspondence_status` | parity-bearing? | completeness (sec 7.1) |
+|---|---|---|---|
+| no entry | `none` | no | `fail` `missing_desired_element` |
+| one entry, boundary in `E(C)`, lifecycle `active`/`moved`/`renamed`/`split`/`merged`/`superseded` | `resolved` | **yes** | present (`pass`) |
+| one entry, lifecycle `ambiguous` | `ambiguous` | no | `unknown` `correspondence_ambiguous` |
+| one entry, lifecycle `deleted` | `deleted` | no | `fail` `correspondence_deleted` |
+| two or more entries for the same `desired_name` | `duplicate` | no | `unknown` `correspondence_duplicate` (never last-wins) |
+| one entry whose `realized_boundary_id` is absent from `E(C)` (dangling), lifecycle not `deleted` | `dangling` | no | `unknown` `correspondence_unresolved` |
+
+The lifecycle is classified **before** the dangling check: a `deleted` entry whose boundary is absent from
+`E(C)` (the expected state of a removed entity) is still `fail` with its own code, never `unknown`.
+`renamed`/`moved`/`split`/`merged` keep the element **present** — the entity is still realized; whether
+the spec revision *ratified* that lifecycle event is `revision_alignment`'s question (sec 7.5).
+
+**`superseded` is present (projection v2).** idmodel sec 7 defines `superseded` as the
+**signature-only change**: a kept signature component (e.g. the return type) changed, so the Tier-1
+`logical_id` moves, but the entity is still realized at the entry's occurrence. Whether it is realized *as
+declared* is a signature question, so **soundness** answers it (sec 7.2: the normalized signatures are
+compared; `structural_mismatch` while `S` still declares the old signature, `pass` once `S` carries the new
+one), and `revision_alignment` still fails the unratified lifecycle event when a continuity map is supplied
+(sec 7.5). v1 graded it as a completeness `fail correspondence_superseded`, which misattributed a signature
+change to a missing element. A `superseded` entry whose boundary is absent from `E(C)` is `dangling`
+(`unknown`), like every other present lifecycle — the signature-changed occurrence is expected to exist. A
+non-parity-bearing record has `match_origin: none` and no realized occurrence, so no other dimension ever
+compares against an unresolved occurrence.
 
 ---
 
@@ -198,6 +260,97 @@ A violating fact always wins (a single observed violation is `fail` even on part
 violation is `pass` **only** under full coverage; otherwise `unknown`. This is the construction that makes
 "unobservable → unknown" enforceable rather than aspirational.
 
+**Coverage is MEASURED, not declared (ENG-6; projection v2).** `coverage(D, E(C))` is
+`full` iff **both**:
+
+1. **declared:** the extractor models the domain *type* at all — `D.type ∈ E(C).modeled_domains.full_coverage`
+   (a constant per extractor: tsc and protobuf model `node_kind_set`/`edge_set`/`signature_facts`, never
+   `capability_registration`/`external`); and
+2. **measured:** this run's extraction observed all the realized source — `E(C).extraction_coverage.status ==
+   "full"`.
+
+Before v2, (1) alone decided coverage, so a repo where the extractor parsed 3 of 40 files still certified
+`node_kind_set`/`edge_set` prohibitions `pass` under "full" coverage.
+
+`E(C).extraction_coverage` is written by the realized adapters on every run (root-independent: repo-relative
+paths, sorted; no floats):
+
+```
+{ "status": "full" | "partial" | "unmeasured",
+  "files_total": int,            # files the extractor saw or should have seen
+  "files_extracted": int,        # parsed with no syntax error and no attributed diagnostic
+  "unextracted": [ {"path", "language", "reason"} ... ],
+  "unattributed_diagnostics": { code: count } }   # run-level extractor diagnostics
+```
+
+| `reason` | measured how |
+|---|---|
+| `parse_error` | tsc `files[].status == "error"` (missing grammar, parser exception) |
+| `no_language` | tsc `files[].status == "skipped"` |
+| `syntax_error` | tsc reports the file `parsed`, but re-parsing it with tsc's own parser yields a tree with `ERROR`/`MISSING` nodes (tsc reports these files `parsed` with **empty** diagnostics), or a tsc diagnostic is attributed to it |
+| `unsupported_extension` | a source file on disk (spec-pinned extension catalog, `realized/extract.py` `SOURCE_CODE_EXTENSIONS`) that tsc never listed in `files[]` — e.g. `.mjs`, `.cjs`, `.mts`, `.proto`, `.vue` |
+| `excluded_directory` | a source file below a directory tsc skips by name although it can hold real source (`build`, `dist`, `archive`), or below a directory the brownfield ingest excluded — its default generated/build set (`baml_client`, `out`, `coverage`, `build`, ...) or an operator `--exclude`. The ingest re-walks each excluded directory in the repo with the same walker the direct extract uses, so both paths report the same entry for the same file |
+| `unreadable` | a directory that could not be listed (permissions, I/O) — ONE entry, language null — in the direct walk, the protobuf walk and the brownfield mirror; or a source file the brownfield mirror could not read (permissions, I/O), with its language |
+| `symlink_not_followed` | a source file tsc never listed because it is a symlink (incl. dangling) or not a regular file (a FIFO, socket or device, which is never opened); or a symlinked **directory** — never descended (its contents may lie outside the repo, and links can fan out), recorded as ONE entry with `language: null`, exactly as the brownfield mirror records it; or a symlinked or non-regular source file the mirror skipped |
+| `oversize_skipped` | a source file the brownfield mirror dropped at its byte cap before tsc saw it |
+| `not_compiled` | protobuf: a `.proto` below the root that protoc was not given (the adapter compiles the top-level files) — including under `build/` or a symlinked directory |
+
+**One source classification.** "Source file" means the same thing everywhere: an extension in
+`SOURCE_CODE_EXTENSIONS`, which contains every code extension tsc itself maps (COBOL, Fortran, SQL,
+...) plus the ones it does not (`.mjs`, `.pyw`, `.cljc`, `.proto`, ...). The on-disk diff and the
+brownfield mirror fold both use it (`extract.is_source_path`), so a file the mirror drops for size is
+reported whenever any catalog calls it source. **Only** version-control, dependency, virtualenv and
+tool-cache directories (`.git`, `node_modules`, `venv`/`.venv`/`.tox`/`.toxenv`, `__pycache__`,
+`.pytest_cache`, `.eggs`, and the `.next` / `.dart_tool` build caches) are silently outside coverage; nothing else below the root is dropped
+without a reason — including the brownfield ingest's excluded directories: an exclusion keeps
+generated code out of the draft, but the code it removes was not extracted, so the run is partial
+(the committed `ingest-fixture` is partial for exactly this reason: `baml_client/client.ts`). Both
+walks are iterative and the `.proto` match is case-insensitive.
+
+**`.tsx` is always partial under tsc 5.0.1.** tsc maps `.tsx` to the plain `typescript` grammar, so
+any JSX yields `ERROR` nodes and the file is `syntax_error`. The measurement is honest — tsc really
+under-extracts these files — so a React/TSX repo's absence-based claims are `unknown` until tsc
+parses `.tsx` with the TSX grammar.
+
+Data / documentation / configuration formats tsc also parses (`.md`, `.json`, `.yaml`, `.toml`, `.xml`,
+`.html`, `.css`, ... — `NON_SOURCE_EXTENSIONS`) carry no interface boundary and are not coverage subjects:
+a templated YAML that trips its grammar neither counts nor makes coverage partial. Every other file tsc
+lists is a source file, including languages outside the on-disk catalog that tsc maps (COBOL, Fortran, ...).
+`status` is `full` iff `unextracted` and `unattributed_diagnostics` are both empty. The coverage *basis* of an
+`E(C)` is one of:
+
+- **measured** — `extraction_coverage.status` is `full` or `partial`.
+- **unmeasured** — `extraction_coverage` is present but not a measurement (`status: "unmeasured"`: the adapter
+  was handed an IR carrying no coverage record). Graded exactly like **partial**: an unmeasured extraction
+  never claims full coverage, so a producer that forgets to measure surfaces as non-`pass`.
+- **declared** — `E(C)` carries **no** `extraction_coverage` at all: a hand-authored / greenfield fixture
+  `E(C)`, or a frozen pre-v2 capture (e.g. the brownfield `ga_author`/`ga_e2e` fixtures, trimmed captures of a
+  source that is not available to re-measure). Its producer's `modeled_domains` declaration stands alone (the v1
+  rule). The adapters always emit the field, so a live extraction is never `declared`.
+
+**What a partial (or unmeasured) extraction changes.** Absence is not evidence over unobserved source, so every
+*universal* (absence-based) claim degrades, while observed facts keep their verdicts:
+
+- **prohibition** (sec 7.4): `coverage` is `partial` for every domain, including the sec-4.4 `edge_set` token
+  scan (its token-observability verdict is capped at `partial`). No violation → `unknown`
+  (`prohibition_unobservable`); an **observed** violation is still `fail`.
+- **completeness** (sec 7.1): a desired element with no realized correspondence is `unknown`
+  (`desired_element_unobservable`) — it may be realized in an unextracted file — never `fail
+  missing_desired_element`. A correspondence that **was** observed still passes.
+- **closure** (sec 7.3): one extra check, `unknown` (`closure_extraction_partial`): realized facts in unextracted
+  source were never classified, so the partition cannot be shown total. Observed unclassifiable facts still fail.
+- the **finding_set** and the **certificate** pin the summary `extraction_coverage: {status, files_total,
+  files_extracted, unextracted_count, unattributed_diagnostic_count}` (certificate: hashed). It is absent when
+  the basis is measured-full or declared, so its presence alone says "this result is not over the whole
+  source".
+- the **vacuity tripwire** (sec 6.5) is unchanged in *when* it fires (no kind-aligned realized boundary) but its
+  record also carries that summary when the extraction was partial/unmeasured, so a vacuous refusal says
+  *why* there is no code (every source file an unsupported extension, or unparseable).
+
+Scope note: the rule is deliberately global — one unextracted file anywhere makes every universal claim
+`unknown`. A finer, per-domain rule (e.g. an `edge_set` scan is unaffected when every *governed* boundary's
+file was extracted) is sound and a possible refinement; it is not v2.
+
 ### 4.3 Prohibitions the extractor cannot observe
 
 The `capability_registration` and `external` domains are precisely the ones that bite pmcp's Non-Goals ("no
@@ -277,6 +430,11 @@ therefore asserts the scanned domain is **non-empty** (at least one in-domain ed
 if the domain descriptor names `edge_types` that match no in-scope edge at all, the domain is not actually
 observed and the prohibition is `unknown` (`prohibition_unobservable`), not a silent `pass`.
 
+**Extraction coverage caps the scan (ENG-6).** Token observability is necessary, not sufficient: over a
+measured-partial or unmeasured extraction (sec 4.2) an unextracted file may hold a governed body or a violating
+call, so the scan's coverage is capped at `partial` and a clean scan is `unknown`. An observed forbidden token
+is still `fail`.
+
 ---
 
 ## 5. Kind-alignment matrix
@@ -342,7 +500,7 @@ pass | fail | unknown | unsupported | not_applicable
 |---|---|
 | **pass** | The check is **in-scope and applicable**, the required fact was **observed**, and there is **no violation**. (For prohibitions: no violation AND full closed-world coverage, sec 4.2.) |
 | **fail** | An in-scope violation was **observed**: a structural mismatch against an in-scope desired element; a prohibition violated; a missing capability/required element. |
-| **unknown** | The check is **in-scope and applicable**, but the required fact was **NOT OBSERVABLE** in this `E(C)` (data absent). This is the anti-silent-pass guard: partial closed-world coverage (sec 4.2), an `unresolved`/`ambiguous` edge a check depends on, or a correspondence the map cannot resolve. *Distinct from `unsupported`: the question is askable, the answer is just not in evidence.* |
+| **unknown** | The check is **in-scope and applicable**, but the required fact was **NOT OBSERVABLE** in this `E(C)` (data absent). This is the anti-silent-pass guard: partial closed-world coverage (sec 4.2), a measured-partial or unmeasured extraction under an absence-based check (sec 4.2), an `unresolved`/`ambiguous` edge a check depends on, or a correspondence the map cannot resolve. *Distinct from `unsupported`: the question is askable, the answer is just not in evidence.* |
 | **unsupported** | The **checker** cannot ask the question — a capability gap in `P`/`N`: an unmapped desired kind, an unmapped realized kind on a kind-dependent check, a dimension not implemented for this entity class, a prohibition with no declared domain. *Distinct from `unknown`: the data might exist, but the checker has no way to evaluate it.* |
 | **not_applicable** | No subject exists, so the check is vacuous. E.g. the `prohibition` dimension on an entity that declares no prohibition; `revision_alignment` on a first revision (no prior to align to). Labeled explicitly so it is **not** miscounted as an evaluated `pass`. |
 
@@ -391,6 +549,22 @@ carries BOTH the `overall_result_state` and the per-dimension `dimension_results
 > read as green. If consumers prefer `unsupported` to be neutral (green-eligible) for genuinely
 > out-of-checker-scope kinds, that is a 0C/4 gating-policy decision. Marked `OPEN-4`.
 
+### 6.5 The vacuity tripwire (no real code to certify)
+
+When `E(C)` has **no kind-aligned realized boundary** (every boundary's realized kind is unmapped — e.g. only
+YAML/TOML `block_mapping` noise because the repo's real language was not extracted), every desired element is
+trivially "missing" and every prohibition scans an empty set, so a pass/fail certificate would be
+vacuous-by-construction. `N` short-circuits: every dimension is `not_applicable`, no findings, overall
+`not_applicable`, and a `vacuity` record (`is_vacuous`, `reason: no_kind_aligned_realized_boundary`,
+`realized_boundary_count`, `kind_aligned_realized_count: 0`) is pinned in the finding_set and the certificate.
+
+**Partial coverage and the tripwire (ENG-6, v2).** A partial extraction that still yields real code is **not**
+vacuous — there is code, and observed violations in it are real — so the tripwire does not fire on partial
+coverage alone; instead sec 4.2 degrades every absence-based claim to `unknown` and pins the coverage summary
+on the certificate, so no partial run can certify `pass` on a universal claim. When the tripwire *does* fire
+over a partial/unmeasured extraction (the motivating case: a JS-only repository of 759 `.mjs` files tsc never listed, 0 code),
+the `vacuity` record additionally carries `extraction_coverage` (the summary), so the refusal says why.
+
 ---
 
 ## 7. The five parity dimensions
@@ -410,27 +584,67 @@ result-state range. All five ALWAYS appear in `dimension_results` (a dimension w
 ### 7.1 completeness
 For each in-scope desired node `d`, if `P` found at least one parity-bearing realized correspondence → the
 element is present. **fail** if a required `d` has no correspondence (`missing_desired_element`; for a
-`capability` with no realized decomposition, `capability_missing`). **unknown** if correspondence is
-unresolvable (map says `ambiguous`, or the only candidate is via an `unresolved` edge). **unsupported** if `d`
+`capability` with no realized decomposition, `capability_missing`), or the map marks its realized entity
+`deleted` (`correspondence_deleted`). (`superseded` is present since v2 — its signature change is
+soundness's, sec 2.) **unknown** if correspondence is unresolvable (map says `ambiguous`, the map has
+duplicate entries for `d`, the entry dangles outside `E(C)`, or the only candidate is via an `unresolved`
+edge) — see the sec 2 table — or if `d` has no correspondence but the extraction is measured-partial or
+unmeasured (`desired_element_unobservable`, sec 4.2: absence is not evidence over unextracted source). **unsupported** if `d`
 is an unmapped/no-realized-path kind (sec 5 / `kind-alignment.json` `no_realized_mapping`). **not_applicable**
 if the frontier selected no completeness-bearing nodes.
 
 ### 7.2 soundness
 For each realized fact at/above the frontier corresponding to a `d`, compare structure (kind alignment,
-normalized signature per idmodel sec 4, declared constraints). **fail** on `structural_mismatch` or a violated
-in-scope constraint. Allowed-freedom (sec 3) is **excused** (never a soundness fail). **unknown** if the
-comparison depends on a fact not observed (e.g. signature normalization needs a type the extractor left null
-where the spec is typed). **unsupported** for unmapped realized kinds on a kind-dependent comparison.
+normalized signature per idmodel sec 4, declared constraints). **fail** on `structural_mismatch`,
+`kind_mismatch` or a violated in-scope constraint. Allowed-freedom (sec 3) is **excused** (never a soundness
+fail). **unknown** if the comparison depends on a fact not observed (e.g. signature normalization needs a type
+the extractor left null where the spec is typed). **unsupported** for unmapped realized kinds on a
+kind-dependent comparison. A `superseded` correspondence (idmodel's signature-only change) is compared here
+like any present one, so the changed signature is reported as `structural_mismatch` until `S` carries it
+(sec 2).
+
+Each matched pair is ONE soundness check, decided by the first rule that applies:
+
+1. **`type`** — the member-set comparison (sec 3 `order_insensitive_members`): `d` declares no `members` →
+   **pass** (nothing to compare); the realized fact carries none → **unknown** `member_set_unobservable`;
+   different membership, or different order without the token → **fail** `structural_mismatch`. It is
+   kind-agnostic: a desired `type` corresponded to a record-shaped class/interface/struct is the sec 5
+   ambiguous mapping, where the declared kind wins.
+2. **Kind alignment** (every other desired kind) — the realized kind aligns (sec 5) to a desired kind other
+   than `d`'s → **fail** `kind_mismatch` (e.g. a desired `component` corresponded to a realized `function`,
+   which aligns to `operation`). No signature comparison is made across kinds. An *unmapped* realized kind is
+   not a mismatch; it is `unmapped_realized_kind` (**unsupported**, sec 5) and the comparison continues.
+3. **Signature** — `d` declares no signature → **pass**: `S` places no signature constraint, so there is
+   nothing to compare. **Exception — an `operation`:** spec-graph requires every operation to declare a
+   signature, but the engine-entry subset (sec 0) relaxes that rule until the committed graphs that
+   predate it are re-authored. An `operation` that declares none, matched to a realized fact that
+   carries one, is **unknown** `signature_undeclared`, never a pass over an `S` the authoring
+   validator rejects. (When neither side carries a signature there is nothing to compare: **pass**.)
+   `d` declares one and the realized fact carries none → **unknown** `signature_unobservable`. Otherwise the normalized signatures are compared: equal → **pass**; a
+   trailing extension under `open_interface` → **pass** (`permitted_freedom` finding); anything else →
+   **fail** `structural_mismatch`.
 
 ### 7.3 closure
-Audits sec 3: every in-scope realized fact at/above the frontier is in exactly one class. **fail** if a fact
-at/above the frontier is **unclassifiable** (neither matched, nor refinement, nor permitted, nor a clean
-finding) — that is a projection/coverage hole, not a clean result. **unknown** if classification depends on an
-unobserved decomposition edge. **pass** when the partition is total.
+Audits sec 3 over the **matched subtree**: every matched realized fact and every realized descendant of one
+(its realized children, transitively) is in exactly one class — matched, refinement_below_frontier,
+permitted_freedom, or the subject of a clean finding (violation_subject). One check per such fact. `P`
+classifies every descendant (refinement_below_frontier by default, sec 3), so within this scope the partition
+is total by construction and an observed fact never fails closure. **unknown** — one extra check,
+`closure_extraction_partial` — if the extraction is measured-partial or unmeasured (sec 4.2: facts in
+unextracted source were never classified). **pass** otherwise. **not_applicable** if nothing was matched.
+
+**Scope (what closure does NOT audit).** Realized facts outside every matched subtree — top-level code no
+in-scope desired node corresponds to, or a sibling of a matched fact under an unmatched parent — are not
+closure subjects. Closure answers "is everything under what the spec claims accounted for", not "is all code
+specified". Unspecified code is caught, when it matters, by **completeness** (a desired element with no
+realized correspondent) and by **prohibition** (its closed-world domain scan, sec 4, ranges over the realized
+facts under the nodes it governs, whether or not the spec names them). Bringing unmatched facts into scope would
+need a `permitted_freedom`-style declaration of what unspecified code is allowed; v1 does not have one.
 
 ### 7.4 prohibition
 Runs sec 4.2 per in-scope `prohibition`. **fail** on observed violation; **pass** on no-violation-under-full-
-coverage; **unknown** (`prohibition_unobservable`) on no-violation-under-partial-coverage; **unsupported** if a
+coverage (declared AND measured, sec 4.2); **unknown** (`prohibition_unobservable`) on no-violation-under-partial-coverage
+(including a measured-partial or unmeasured extraction); **unsupported** if a
 prohibition declares no domain; **not_applicable** if no in-scope prohibition exists.
 
 ### 7.5 revision_alignment
@@ -452,12 +666,28 @@ Schema: `schemas/waiver.schema.json`. A waiver records **accepted drift** withou
 **waived**. Suppression changes only how the result is *gated/presented* downstream, never the measured truth.
 This mirrors the `unknown` philosophy: never overwrite "we don't know / it failed" with green.
 
-- **Scope** (`waiver.scope`) — at least one selector; matches a finding iff every present selector matches.
+- **Scope** (`waiver.scope`) — at least one selector (`minProperties: 1`: an empty scope would match every
+  finding); matches a finding iff **every** present selector matches. Every selector the schema allows is
+  evaluated: `dimension`, `finding_code`, `desired_logical_id`, `realized_kind` (against the finding's
+  `subject`), `realized_source` (the finding's `subject.realized_source` when it has one; else, only
+  for a finding that names a realized fact (`subject.realized_occurrence_id`), the source of the `E(C)`
+  that fact came from. A finding with no realized evidence — e.g. `missing_desired_element`,
+  `prohibition_unobservable` — never matches a `realized_source` selector, so a source-only scope can
+  never act as the forbidden empty scope), and
+  `prohibition_id` — the prohibition's idmodel Tier-1 `logical_id`, matching only
+  `prohibition`-dimension findings whose `subject.desired_logical_id` is it.
+- **Validation** — waivers are validated against `waiver.schema.json` at every entry point
+  (`run_engine.py --waivers`, the spec-mcp `parity` tool) and structurally again inside `parity()`; an
+  invalid waiver is a configuration error raised **before** any finding is touched, never a silent
+  (non-)suppression.
 - **suppressed_states** — a subset of `[fail, unknown]` only. A waiver can **never** suppress `unsupported`
   (that is a checker gap, fix the checker — not accepted drift) and never applies to `pass`/`not_applicable`.
 - **expiry** — a bounded ISO date (`YYYY-MM-DD`), end-of-day UTC. **No open-ended waivers.** A fixed date is a
   deterministic, hashed semantic field (NOT a wall-clock). After expiry the waiver lifecycle is `expired` and
-  it **stops suppressing** — the finding gates again.
+  it **stops suppressing** — the finding gates again. "After" is decided against the run descriptor's
+  deterministic **`as_of`** date (`schemas/run-descriptor.schema.json`, `YYYY-MM-DD`), never the wall clock:
+  a waiver with `expiry < as_of` is expired; `expiry == as_of` still suppresses (end-of-day). A run that
+  supplies waivers **must** carry `as_of` — the engine refuses to evaluate waivers without it (ENG-2).
 - **approver_ref** — a reference to the governance approval (ratification id / portal governance_event_id),
   not a name/timestamp. Wall-clock of approval is provenance → `locator` (non-hashed, canon sec 10).
 - **waiver_id** — canon `semantic-content` digest over the hashed content fields. Identifies the waiver by
@@ -465,7 +695,8 @@ This mirrors the `unknown` philosophy: never overwrite "we don't know / it faile
 - **lifecycle** — `proposed → active → expired|revoked`. Only `active` (and unexpired) waivers suppress.
 
 A waiver does not change `overall_result_state` computed from raw results; instead the certificate's
-`waivers_ref` lets a downstream gate decide whether to treat a waived `fail`/`unknown` as blocking. The raw
+`waivers_ref` (canon `semantic-content` digest of `{as_of, waivers}` — the waiver set *and* the date it was
+evaluated at) lets a downstream gate decide whether to treat a waived `fail`/`unknown` as blocking. The raw
 truth is always preserved in `dimension_results`/`findings`.
 
 ---
@@ -481,19 +712,77 @@ store verbatim** (canon sec 9).
 
 A certificate MUST pin (union of the Storage `certificates` record shape and Phase-3a task item 8):
 
-- **`schema_version`** — the **certificate schema version** (currently `"1"`, a `const` in
-  `certificate.schema.json`). This IS the certificate-contract version: it is a hashed, meaning-bearing
+- **`schema_version`** — the **certificate schema version** (currently `"2"`, a `const` in
+  `certificate.schema.json`; `"2"` since the authority-in-certificate bump, AUTH-1: hashed
+  `spec_authority`, optional `authority_ref`, the normalized `desired_graph_digest`, and a required
+  `ec_reproducible`. A `"1"` certificate stays a valid v1 record and is never re-hashed as v2). This IS the certificate-contract version: it is a hashed, meaning-bearing
   field inside the certificate's own preimage, so the version travels with — and is byte-pinned by — the
   certificate's `digest`. It is deliberately named `schema_version` (not `certificate_schema_version`):
   renaming it would change every existing certificate's frozen preimage and break produce-once/verbatim
   replay. Bump it only on a breaking change to the certificate field set.
 - **`ec_revision_id`** — the realized-side revision this certificate is about (distinct from the spec
   revision, which `spec_revision_digest` pins).
-- **`spec_revision_digest`** — pins the exact spec/desired revision.
-- **`desired_graph_digest`** — canon `semantic-content` digest of `S`.
-- **`ec_digest`** + **`ec_reproducible`** — the `E(C)` digest and whether it is byte-reproducible. A
+- **`spec_revision_digest`** — pins the exact spec/desired revision: the canon `semantic-content`
+  digest of the two-key object `{"spec_revision_id": <S.spec_revision_id, or "" when absent>,
+  "desired_graph_digest": <desired_graph_digest>}`. It moves whenever `desired_graph_digest` moves,
+  and it is how the graded but unhashed `spec_revision_id` is bound (see the binding procedure below).
+- **`desired_graph_digest`** — the **normalized** desired-graph digest `spec_graph.graph_digest(S)`:
+  canon `semantic-content` over `S`'s hashed content only (spec-graph SPEC §2; Normalize sorts nodes
+  and edges first). Every field `P`/`N` grade on is inside it; the envelope (`rationale`, `notes`,
+  `source_position`, `provenance`, `unratified`, `graph_id`, `doc`) and authoring order are not, so a
+  prose edit or moving a node to another line of a `.specdsl` file does **not** move the certificate.
+  **The engine grades the digest's own preimage.** `P` and `N` never read the raw `S`: they read the
+  *graded view*, `spec_graph.hashed_content(S)` (Unicode NFC applied, token sets sorted, `frontier`
+  present only as boolean `true`, a normalized `signature` only on `operation`/`interface`, `members`
+  only on `type`, edges reduced to kind/source/target/tags) plus `spec_revision_id` (pinned by
+  `spec_revision_digest`). So two `S` with the same **pair** (`desired_graph_digest`,
+  `spec_revision_digest`) have the same graded view and grade identically (given the same other
+  inputs), by construction, and no field outside that pair can be graded. `spec_revision_id` alone
+  is outside the graph digest but is graded (sec 7.5 revision alignment), which is why the pair, not
+  the graph digest, is the binding. The authority markers are read from the raw `S` and pinned as
+  `spec_authority`; `is_authoritative` fails closed on a malformed marker. At entry, `frontier` and
+  `unratified` must be booleans, `provenance` an object, token sets (`tags`, `permitted_freedom`,
+  domain sets) lists of strings, and node names must match the spec-graph name pattern (ASCII, so NFC
+  cannot change them). A draft and its ratified `S` share this digest; `spec_authority` tells them
+  apart.
+  **Binding procedure for a verifier that holds a candidate `S'`** (the certified-projection gate
+  C1/C6 and any downstream verifier): (1) run the engine's structural check on `S'` and refuse it if
+  malformed; (2) recompute `spec_graph.graph_digest(S')` and require it to equal
+  `desired_graph_digest`; (3) recompute `spec_revision_digest` from `S'`'s `spec_revision_id` (`""` when absent) and
+  that digest, as defined above, and require equality; (4) require `is_authoritative(S') == (spec_authority == "grounded")`.
+  Any one alone is insufficient: the graph digest excludes `spec_revision_id` and the draft markers. (Schema-1 certificates carried the canon digest of the
+  **raw** `S`, envelope included.)
+- **`spec_authority`** — `grounded` or `draft` (AUTH-1), hashed and always present:
+  `grounded` iff the anti-vacuity predicate `is_authoritative(S)` holds (sec 0 / brownfield
+  IF-0-BOOT-1: at least one `contract`/`architecture` node whose effective provenance origin is
+  `human_authored` and that is not marked `unratified`), else `draft` (a code-, doc- or LLM-derived,
+  never-ratified `S`). It is derived from the provenance envelope that `desired_graph_digest`
+  excludes, which is why it is pinned as its own field: ratifying `S` moves the certificate through
+  this field even though the graph digest is unchanged. A `draft` certificate is not deliverable by
+  default (sec 12.6). It never changes a finding or a `result_state`. "Grounded" here names
+  `is_authoritative`; it is not the AUTHCON grounded-correspondence predicate.
+- **`authority_ref?`** — optional, hashed: the authority-ledger `entry_digest` (64 lowercase hex) of
+  the `ratify` event the producer cites as making `S` authoritative, recorded verbatim when the caller
+  supplies it. Supplying one for a `draft` `S`, or a malformed one, refuses the run (an input fault,
+  never a verdict). The engine does **not** verify it: a downstream verifier resolves it against the
+  ledger (sec 13). It can never be a ratify of *this* certificate, because that event signs this
+  certificate's `digest`, which would then contain it; it points at a ratification of `S` (for
+  example the ratify of an earlier certificate over the same `S`). A signed ratification record
+  minted for `S` itself is a follow-up.
+- **`ec_digest`** + **`ec_reproducible`** — the `E(C)` digest and whether it is byte-reproducible
+  (both required). A
   certificate over a non-reproducible `E(C)` is **advisory** (`ec_reproducible:false`) and not gating
-  (Benchmark C: parity over non-reproducible `E(C)` is meaningless).
+  (Benchmark C: parity over non-reproducible `E(C)` is meaningless). **Measured or false** (ENG-1): `parity()` takes `ec_reproducible` as an input defaulting to `false`; only a
+  producer that actually *measured* it — extracted `E(C)` twice with independent extractor invocations and
+  found the canonical bytes identical (`spec-engine/realized/reproducibility.py`, used by the live realized
+  drivers) — passes `true`. A PINNED `E(C)` may be `true` only by citing a committed **reproducibility
+  attestation** (`schemas/ec-reproducibility-attestation.schema.json`): a recorded two-extraction
+  measurement against the real source whose compared digest equals the digest of the exact `E(C)` being
+  certified (the graphbase pin: in-anger run, brownfield E2E, the spec-mcp `graphbase` subject). Any other
+  run over a frozen / pinned / caller-supplied `E(C)` that it did not re-extract (the fixture engine gate,
+  `run_engine.py`, inline spec-mcp subjects, the spec-nl loop, the pip `evaluate()`) is `false`. The bit never changes a finding or a
+  `result_state` (it sits outside the `finding_set_id` preimage); it changes only the certificate digest
+  and whether downstream gates may treat the certificate as authoritative.
 - **`code_head_sha`** — the code HEAD the extract came from.
 - **`canon_version`, `idmodel_version`, `kind_alignment_version`, `projection_algo_version`** — every input
   whose change can change the result is pinned, so a certificate is reproducible and two certificates that
@@ -501,11 +790,13 @@ A certificate MUST pin (union of the Storage `certificates` record shape and Pha
   relocated Unicode NFC out of the hash to the ingestion boundary; digest prefix `spec-canon:v1:`→
   `spec-canon:v2:`). This is a **certificate-version boundary**: every cert digest changed at v1→v2 by
   construction (the prefix is in the preimage), but **no parity verdict changed** — only the digests and
-  `canon_version` moved. `idmodel_version` / `projection_algo_version` are UNCHANGED, so a v2 cert is
-  distinguishable from a v1 cert by `canon_version` alone. **Historical-cert policy:** a v1 certificate
+  `canon_version` moved. `idmodel_version` was unchanged by that move, so a canon-v2 cert is distinguishable
+  from a canon-v1 cert by `canon_version` alone. **Historical-cert policy:** a canon-v1 certificate
   stays valid *as a v1 record*; a v1 digest is never compared against a v2 digest; a mixed-`canon_version`
   graph is rejected at the consumer (never silently re-hashed). See `canon/SPEC.md` §9. Downstream
-  consumers cut over to v2 wholesale (metadata-only notification; OPEN-5).
+  consumers cut over to v2 wholesale (metadata-only notification; OPEN-5). Separately,
+  **`projection_algo_version` is `spec-engine-projection:v3`** since the authority-in-certificate
+  release (sec 9.2), under the same historical-cert policy.
 - **`overall_result_state`** + **`dimension_results`** (all five) — per sec 6. **Invariant:** these are
   byte-equal (after canon canonicalization) to the referenced `finding_set`'s `overall_result_state` /
   `dimension_results` — the certificate copies, never recomputes, them. An implementer derives the embedded
@@ -513,7 +804,11 @@ A certificate MUST pin (union of the Storage `certificates` record shape and Pha
 - **`permitted_freedom_vocab_version`** — version of `permitted-freedom-vocab.json`; a vocab change can
   excuse (or stop excusing) a below-frontier deviation, so it is pinned alongside the other input versions.
 - **`findings_ref`** — digest pointer to the `finding_set` (pointer, not payload; portal `metadata_only`).
+- **`vacuity?`** — the sec 6.5 tripwire record, present only on a vacuous run (hashed).
+- **`extraction_coverage?`** — the sec 4.2 coverage summary, present only when the `E(C)` extraction was
+  measured-partial or unmeasured (hashed). Its absence means measured-full or a declared (fixture) `E(C)`.
 - **`waivers_ref?`** — digest pointer to the waivers in effect (waived findings stay non-pass).
+- **`authority_ref?`** — see above (present only when the caller supplied one).
 - **`digest`** — the certificate-profile content digest (the certificate's authoritative identity).
 - **`locator`** — non-hashed envelope (wall-clock, producer, run_id, optional `certificate_id` mirror).
 
@@ -523,6 +818,75 @@ certificate emitter and downstream verifiers, and (b) **`parity-gate` vs `policy
 checkpoint_type. The certificate schema is built to satisfy either (the `certificate` profile + verbatim
 storage make byte-replay possible), but the exact verifier-side comparison domain and the checkpoint label are
 co-designed with consumers in a later phase. Marked `OPEN-5`.
+
+### 9.2 `projection_algo_version` history
+
+`projection_algo_version` pins the **grading semantics of `P`/`N`**: two certificates over byte-identical
+inputs (same `E(C)`, `S`, correspondence, kind-alignment, vocab, waivers, run) can differ **only** if their
+`projection_algo_version` (or another pinned version) differs. A consumer must never compare verdicts across
+algo versions as if they were the same function, and must not re-hash or re-grade a stored certificate under
+a newer version: a v1 certificate stays a valid **v1** record.
+
+- **`spec-engine-projection:v3`** (the authority-in-certificate release, certificate `schema_version`
+  `"2"`). Every certificate digest changes (the version and the new fields are in the preimage); no
+  committed `result_state` or finding changed. The first five grading changes below (ENG-5,
+  D2, ENG-7, ENG-8, ENG-4) already shipped in code that still stamped `v2`, so certificates graded by
+  that code cannot be told apart by version; they are versioned here. The graded view is new in this
+  release:
+  - **ENG-5 absent signatures** (sec 7.2): a desired element that declares no signature passes the signature
+    comparison, except an `operation` matched to a realized signature, which is `unknown
+    signature_undeclared`; a declared signature over a realized fact that carries none is `unknown
+    signature_unobservable` (all were `fail structural_mismatch`).
+  - **D2 `kind_mismatch`** (sec 7.2): a realized kind that aligns to a different desired kind is `fail
+    kind_mismatch`, for every desired kind except `type`. Where the desired side declared no signature but
+    the realized side did, this only re-codes a fail (was `fail structural_mismatch`). Where NEITHER side
+    carries a signature it turns a former **pass into a fail** — e.g. a `capability` (or any other
+    `no_realized_mapping` kind) bound to a signatureless `class`, or a desired `interface` bound to a
+    signatureless realized kind that aligns to `component`. No committed run has such a pair, but new
+    inputs can. The old sec 2 text graded a non-aligning correspondence `unknown
+    ambiguous_kind_alignment`; it is now `fail` unless the realized kind is genuinely ambiguous.
+  - **ENG-7** (sec 1.2): an unknown `frontier_selector` name refuses the run (was dropped silently); the
+    default closure keeps only capability/component/interface/operation nodes.
+  - **ENG-8** (sec 0): `S` and `E(C)` are validated at engine entry and an invalid input refuses the run.
+  - **ENG-4** (sec 7.3): closure's scope is documented; the unreachable `unclassified_realized_fact` branch is
+    removed. No output changes.
+  - **The graded view** (sec 9): `P`/`N` grade `spec_graph.hashed_content(S)`, the preimage of
+    `desired_graph_digest`, instead of the raw `S`. Consequences: strings are compared after Unicode
+    NFC; a desired `signature` is compared only on `operation`/`interface` and `members` only on
+    `type` (the kinds whose field the digest hashes; no committed graph carries one elsewhere); and a
+    non-boolean `frontier`, `unratified` or a non-object `provenance` refuses the run instead of being
+    read by truthiness.
+  - Certificate changes in the same release (no grading effect): `spec_authority` (hashed, required) and
+    the optional `authority_ref`; `desired_graph_digest` is the normalized `spec_graph.graph_digest(S)`
+    (was the raw-`S` canon digest), so `spec_revision_digest` moves with it; `ec_reproducible` is a
+    required certificate field. Delivery refuses a `draft` certificate without an explicit opt-in
+    (sec 12.6).
+- **`spec-engine-projection:v2`** (with ENG-6 measured coverage and REAL-6 protobuf nested/map/oneof). Every certificate digest changes (the version is in the preimage). Grading changes
+  relative to the last v1 code:
+  - **ENG-3 correspondence lifecycle** (shipped under v1 and only now versioned): an `ambiguous` entry is completeness `unknown`; `deleted` is `fail correspondence_deleted`
+    (even when its boundary is absent); two or more entries for one desired node are `unknown
+    correspondence_duplicate` (never last-wins); a dangling entry is `unknown correspondence_unresolved`
+    (was `fail missing_desired_element`).
+  - **`superseded` is present** (the projection-v2 ruling, sec 2): soundness grades the changed
+    signature; completeness no longer fails it (`correspondence_superseded` is retired). Absent boundary →
+    `dangling` → `unknown`.
+  - **ENG-6 measured coverage** (sec 4.2): coverage is declared ∧ measured; a measured-partial or unmeasured
+    extraction makes prohibition no-violation `unknown`, completeness absence `unknown`
+    (`desired_element_unobservable`), adds `closure_extraction_partial` (`unknown`), and pins
+    `extraction_coverage` on the finding_set / certificate / vacuity record.
+  - Not grading changes, but they move `ec_digest` in the same release: the tsc and protobuf `E(C)` gain
+    `extraction_coverage`; the protobuf `E(C)` walks nested messages / enums, lifts map key/value types onto
+    the map field and records `oneof` grouping (REAL-6) — node identities of every pre-existing boundary are
+    unchanged.
+- **`spec-engine-projection:v1`** — the original Phase-3b engine, and every change made to it before v2 without
+  a bump. Those changes are documented here retroactively; certificates pinned under v1 cannot be told apart by
+  version across them, which is exactly the gap v2 closes (any later grading change MUST bump the version):
+  wrapper-kind coalescing; revision_alignment over a continuity map; the permitted_freedom vocabulary as
+  the single source of truth; structural below-frontier kind classification and the real `edge_set`
+  forbidden-call-target scan; lossless boundary-id collapse and the vacuity tripwire; AUTHCON
+  grounded-intent correspondence; ENG-1 measured `ec_reproducible` and ENG-2 waiver expiry/validation
+  (certificate/annotation changes, no `result_state` change); ENG-3 (above, first versioned at v2). The canon v1→v2 move (NFCBOUNDARY) is versioned by `canon_version`,
+  not here.
 
 ---
 
@@ -625,8 +989,13 @@ The payload is built by **allowlist**: only known-safe fields are copied in. Not
 - **`badge`** — a derived render hint, **green IFF `overall_result_state == pass`**. `not_applicable` is
   **neutral/non-green** (sec "never silently green" / line ~298), `fail`→failing, `unknown`/`unsupported`→
   non-green. The badge is a convenience; `overall_result_state` is the load-bearing truth.
+- **`spec_authority`** (+ **`authority_ref?`**) — copied from the certificate (sec 9). Only the exact
+  certificate value `grounded` delivers as `grounded`; an absent or other value (a schema-1
+  certificate) is `draft`. A `draft` payload exists only when the consumer opted in (sec 12.6).
 - **`ec_reproducible`** + **`advisory`** — `advisory = not ec_reproducible`. A non-reproducible E(C) makes the
-  delivery **advisory** (the portal must not gate on it).
+  delivery **advisory** (the portal must not gate on it). Only an explicit `ec_reproducible: true` on the
+  certificate is reproducible; an absent or non-boolean value delivers as `ec_reproducible: false`,
+  `advisory: true` (fail-closed, ENG-1).
 - **`finding_summaries`** — one per finding, each carrying ONLY: `dimension`, `result_state`, `code`,
   `title` (**derived from `code`**, a stable machine label — NOT the finding `message`), a **location ref**
   (`subject.desired_logical_id` / `subject.realized_occurrence_id` — idmodel digests, SSRF-safe), the kinds
@@ -672,45 +1041,156 @@ the draft status; it bumps to `"1"` on portal sign-off.
 
 ---
 
-## 13. XG2 authority event contract (IF-0-XG2-1)
+### 12.6 Draft certificates are refused unless the consumer opts in (AUTH-1)
 
-The XG1 certificate proves **parity**. It does **not** confer authority for a consumer decision. XG2 adds a
-separate signed authority event, `event_type: governance_bridge_decision`, recorded in the append-only
-`spec-engine/authority/authority-event.schema.json` ledger contract. The cert and the authority event travel
-together, but they answer different questions:
+A certificate over a `draft` `S` (`spec_authority` other than `grounded`, including a schema-1
+certificate that carries no `spec_authority`) certifies parity against an `S` that no human has
+asserted. Delivery therefore **refuses** it by default:
 
-- the cert proves the producer's parity verdict for a specific `decision_id` and `canon_version`;
-- the authority event proves that the Portal/org layer granted authority for that exact audience.
+- `deliver.deliver(certificate, finding_set, *, allow_draft=False)` raises `DraftCertificateRefused`;
+- `deliver_to_phase(..., allow_draft=False)` raises `DeliveryRefused(reason="draft_spec_authority")`
+  before writing anything (CLI: `--allow-draft`);
+- `run_engine.py --emit payload` needs `--allow-draft`; the MCP `export`/`explain` tools need
+  `allow_draft: true` (else the broker error `draft_spec_authority`). `explain` applies it to a
+  supplied payload too: a payload whose `spec_authority` is not exactly `grounded` (a draft, or a
+  payload with no field) renders only with the opt-in, and the report labels it `DRAFT`. The MCP
+  models take `allow_draft` as a strict boolean (`1`, `"yes"` are rejected, not coerced).
+
+The opt-in is explicit and literal: only `allow_draft=True` (not a truthy value) opts in. Opting in
+never upgrades the certificate: the payload carries `spec_authority: "draft"`, the consumer decides
+what a draft delivery may do, and the two-file delivery shape is unchanged. A grounded certificate
+needs no flag. `payload_schema_version` stays `"0"` (it bumps only on portal sign-off, sec 12.5); the
+payload gains the required `spec_authority` and the optional `authority_ref`.
+
+## 13. Authority event protocol (`authority_event_protocol.v1`)
+
+The XG1 certificate proves **parity**. It does **not** confer authority for a consumer decision. Authority
+is a separate, Portal-signed **authority event** in the `consiliency.authority_event_protocol.v1` shape,
+defined by the vendored, digest-pinned contract in `spec-engine/authority/vendor/`
+(`authority-event-protocol.schema.json`, `authority-key-registry.json`, `authority.py`; provenance in
+`vendor/PROVENANCE.md`). spec **verifies** these events at ingress (`spec-engine/authority/ingress.py`,
+served by `serve.py`), records them in an append-only ledger, and **delivers** one next to the certificate
+it is bound to (`spec-engine/deliver_to_phase.py`). The cert and the authority event travel together, but
+they answer different questions:
+
+- the cert proves the producer's parity verdict for a specific `cert_digest` and `canon_version`;
+- the authority event proves that the Portal/org layer granted authority for that exact audience and cert.
+
+An event has four parts: the signed `core` (`authority_event_version`, `event_type` ∈
+{`ratify`, `revoke`, `supersede`}, `decision_id`, `audience`, `cert_digest`, `approver`, `key_id`,
+`validity`, `custody_binding`, `proposal_ref`, `ratify_ref`), its `signature`, the `schema` tag, and the
+ledger `chain` that spec appends outside the signature (§13.3).
 
 ### 13.1 Audience scoping
 
-Every authority entry carries an exact audience scoping tuple:
-`{repo, env, lineage, policy_epoch, canon_version, decision_id}`.
-Matching is **exact** and fail-closed. A consumer gate rejects repo, env, lineage, policy_epoch,
-canon_version, or decision-id drift as a scope mismatch; there is no silent prefix, wildcard, or partial match.
+Every authority event carries an exact seven-field audience
+`{repo, env, lineage, policy_epoch, canon_version, phase, subgraph}` (`ingress.AUDIENCE_FIELDS`) and binds
+one certificate through `cert_digest`. The **resolution key** is the exact audience plus `cert_digest`.
+Matching is **exact** and fail-closed: there is no prefix, wildcard, or partial match, and a drift in any
+field (or a different cert) is a different key. Delivery refuses an event whose `cert_digest` is not the
+digest of the certificate being delivered.
 
-### 13.2 Custody binding + separation of powers
+### 13.2 Signature, trust root, and separation of powers
 
-Each entry carries `key_id` plus a `custody_binding` object. The custody binding freezes who is allowed to sign
-and records that the **phase-loop driver cannot mint authority**. The driver may verify and route authority
-events, but the authority-conferral event originates from the Portal/org layer, never from the automation
-driver. A signature that claims a driver origin, a wrong approver, or the wrong key id is rejected fail-closed.
+The Portal **mints** authority: it holds the Ed25519 private key and signs the domain-separated preimage
+`"spec-canon:v2:authority\n" ‖ canonical_core_bytes(core)` (canon-core v2 bytes of the `core`). spec is a
+**verifying ledger**: it holds no private key and never re-signs. It verifies every event against the
+vendored `authority_key_registry.v1` registry, which is authoritative for the scheme and public key (the
+event's self-declared `signature.scheme` is never trusted). Ingress rejects, fail-closed and before
+anything is appended: an unknown, revoked or expired key; a missing or bad signature; algorithm
+confusion; a signer whose registry `approver` is not the core's `approver`; and a core outside its
+`validity` window. Ingress is also gated by a bearer token checked before any parsing (optionally mTLS).
+
+The `core.custody_binding.phase_loop_driver_allowed` field is schema-fixed to `false`: the **phase-loop
+driver cannot mint authority**. The driver may verify and route authority events; the authority-conferral
+event originates from the Portal/org layer only.
 
 ### 13.3 Append-only history, revocation, and supersession
 
-The ledger is append-only and hash-chained through `previous_entry_digest`, `entry_digest`, and
-`inclusion_proof`. Authority history is never rewritten:
+The ledger is an append-only JSONL file of chain-appended events. Each row's `chain` block holds
+`entry_digest` = SHA-256 of `canonical_core_bytes(core)`, the `previous_entry_digest` link (all zeros
+for the first row), a running `root_digest`, and an `inclusion_proof` mirroring the three. Because the
+chain lies outside the signed core, appending it never invalidates the signature. Authority history is
+never rewritten:
 
 - revocation is a later signed entry that marks the scoped decision revoked;
-- supersession is a later signed entry that replaces an older entry while preserving history.
+- supersession is a later signed entry that retires older entries while preserving history.
 
-The effective-authority resolver selects the latest valid signed entry for the exact audience after applying
-revocation and supersession. Missing signatures, tampering, duplicate entries, broken links, expired validity,
+The effective-authority resolver (`ingress.resolve_effective_authority`) selects the effective `ratify`
+for the exact key after applying revocation and supersession. Tampering, duplicate entries, broken links,
 revoked entries, superseded entries, and scope mismatches all fail closed.
+
+**Live protocol (`authority_event_protocol.v1`) binding.** On the live ingress → delivery path
+(`spec-engine/authority/ingress.py`, `spec-engine/deliver_to_phase.py`) the resolution key is the exact
+seven-field audience plus the bound `cert_digest`, and entries are ordered by ledger append order. These
+rules are **normative** (MUST):
+
+- `ratify` confers authority; the effective authority for a key MUST be the latest `ratify` for that key.
+  Only a `ratify` can be delivered as authority.
+- `supersede` MUST retire every earlier entry for the key (the v1 signed core names no explicit target, so
+  the key is the target); it is not itself authority, and a later `ratify` is required for the key to carry
+  authority again.
+- `revoke` MUST be terminal for the key: once a `revoke` for an exact (audience, cert_digest) is in the
+  ledger, no `ratify` for that key — earlier or later, and regardless of arrival order — is effective.
+  Renewed authority requires a new scope (for example a new `policy_epoch`) or a new cert.
+
+Only `revoke` is arrival-order independent. `ratify` and `supersede` take effect in ledger append order: v1
+cores carry no signing time, so a `ratify` appended after a `supersede` is effective even if it was signed
+earlier. Ingress admits every verified `ratify`/`revoke`/`supersede` (history is append-only); delivery
+requires the live ledger and refuses any event that is not a `ratify`, not a row of that ledger, or not the
+effective entry for its key. Delivery resolves the effective authority and publishes its artifacts while
+holding the ledger's exclusive lock, so no entry can be admitted between the check and the write. `decision_id` is the authority identity and is admitted
+at most once: a byte-identical re-submission is an idempotent replay (accepted, not appended, and the stored
+row is returned), while a re-used `decision_id` with different signed content is a duplicate entry and is
+rejected.
+
+**Ledger integrity (MUST).** Ingress verifies the whole stored chain on load, under the ledger's exclusive
+lock, before it reads the head or the admitted `decision_id`s; it refuses to extend a ledger whose chain
+is tampered (`ledger_tampered`), broken (`ledger_chain_broken`) or unparseable (`malformed_ledger_entry`),
+so such a ledger is never extended. The verified state may be cached only while the ledger file is
+unchanged (same device, inode, size, mtime and ctime). Delivery re-reads the ledger from disk and
+re-verifies it. Every append writes one newline-terminated row and fsyncs it, and the append that creates
+the ledger also fsyncs its directory. A non-empty ledger whose final byte is not a newline has a **torn
+tail** (an interrupted append): ingress and delivery MUST refuse it with `ledger_torn_tail` and MUST NOT
+truncate it themselves. The operator repair is
+`python3 spec-engine/authority/ingress.py repair-torn-tail <ledger.jsonl>`. Without `--confirm` it is a
+dry run that reports the tail's kind. It verifies the intact prefix and then classifies the tail.
+
+- **Partial row:** an interrupted append, never acknowledged. With `--confirm` the repair archives the
+  torn bytes atomically to a `<ledger>.torn-<digest>` sidecar and fsyncs the directory, both before it
+  truncates to the last complete row. The sender's retry re-admits the event.
+- **Complete row:** a whole row that verifies and links to the chain, with only its newline missing. It
+  may have been acknowledged (for example a `revoke`), so the repair MUST NOT truncate it. It refuses
+  with `ledger_tail_complete_row` unless `--restore-newline` is given, which appends the newline and
+  keeps the row.
+- **Complete row that does not verify:** complete JSON that fails chain verification (tampered,
+  corrupted, broken link, or a re-used `decision_id`). An interrupted append cannot produce complete
+  JSON, so this is damage, not a torn write. The repair MUST refuse it with the row's own reason
+  (`ledger_tampered`, `ledger_chain_broken`, `decision_id_conflict`, …) and MUST NOT truncate it.
+
+`python3 spec-engine/authority/ingress.py verify-ledger <ledger.jsonl>` verifies a ledger without
+changing it. Both tools refuse a missing path with `ledger_not_found`.
+
+**Limit: the chain does not defend against a writer.** The hash chain is an unkeyed, recomputable
+hash. It detects accidental corruption, torn writes and edits that do not recompute the chain. It does
+NOT detect a writer who deletes, reorders or truncates rows and recomputes the chain: for example,
+dropping a `revoke` so that the revoked `ratify` becomes deliverable again, or rolling back to a valid
+shorter prefix, which needs no recomputation at all. Write access to the ledger file is therefore a
+**trusted boundary**. The same applies to signatures: they are verified at ingress, and delivery does
+not re-check them (the consumer re-verifies the delivered event). Detecting such edits needs an anchor
+outside the file, such as signed checkpoints or an externally recorded head (a tracked
+follow-up).
 
 ### 13.4 External freeze reference
 
-IF-0-XG2-1 is a **spec-produced contract**. A downstream **governed pipeline fail-close gate** consumes
-this contract as an external freeze reference. spec owns the authority-event schema, append-only ledger, scoped
-resolver behavior, and custody semantics; it does **not** own the consumer enforcement switch or downstream UI
-ratification flow.
+`authority_event_protocol.v1` is a **contract-owned** shape (`consiliency-contract`), vendored verbatim and
+digest-pinned here. A downstream **governed pipeline fail-close gate** consumes what delivery writes:
+`authority-event.json` (the stored, chain-appended ledger row) and `authority-event.schema.json` (a copy of
+the vendored protocol schema), next to `spec-certificate.json`. spec owns the verifying ingress, the
+append-only ledger, and the resolver semantics above; it does **not** own the signing key, the consumer
+enforcement switch, or the downstream UI ratification flow.
+
+The earlier XG2 design (IF-0-XG2-1: a `governance_bridge_decision` entry with a six-field audience and
+a keyless, hash-only "signature") is **superseded** by this protocol and is not implemented. Its
+schema `spec-engine/authority/authority-event.schema.json` is still published in the package for
+compatibility, but it is not normative and no spec code reads it.

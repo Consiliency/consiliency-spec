@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://spec.consiliency/spec-parity/ec-reproducibility-attestation.schema.json",
+  "title": "E(C) reproducibility attestation",
+  "description": "A committed record that a PINNED E(C) was MEASURED byte-reproducible from its real source (Benchmark C): the source was extracted twice by independent extractor invocations through the same pipeline that produced the pin, and both extractions' canonical bytes were identical AND identical to the pinned E(C). A certificate over a pinned E(C) may set ec_reproducible=true ONLY by citing an attestation whose compared_digest equals the canon semantic-content digest of the exact E(C) being certified (SEMANTICS sec 9, measured or false). Any mismatch -- a different E(C), an edited pin, a malformed attestation -- yields ec_reproducible=false. Deterministic: no wall-clock fields.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "subject", "ec_path", "source", "extractor", "method", "digest_profile",
+               "extraction_digests", "compared_digest", "reproducible"],
+  "properties": {
+    "schema": { "const": "ec_reproducibility_attestation.v1" },
+    "subject": { "type": "string", "minLength": 1, "description": "Stable label of the measured subject (e.g. graphbase)." },
+    "ec_path": { "type": "string", "minLength": 1, "description": "Repo-relative path of the pinned E(C) this attestation covers." },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repo", "commit", "subdir"],
+      "properties": {
+        "repo": { "type": "string", "minLength": 1 },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "subdir": { "type": "string", "description": "Path inside the source checkout that was extracted." }
+      }
+    },
+    "extractor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pipeline", "pins", "tsc_version", "ec_revision"],
+      "properties": {
+        "pipeline": { "type": "string", "minLength": 1, "description": "Repo-relative path of the driver that produced the pin (and was re-run to measure)." },
+        "pins": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Extractor package version pins in effect for the measurement."
+        },
+        "tsc_version": { "type": "string" },
+        "ec_revision": { "type": "string" }
+      }
+    },
+    "method": { "type": "string", "minLength": 1, "description": "How reproducibility was measured." },
+    "digest_profile": { "const": "semantic-content" },
+    "extraction_digests": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+      "description": "canon semantic-content digest of each of the two independent extractions."
+    },
+    "compared_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "The digest both extractions and the pinned E(C) share. MUST equal the canon semantic-content digest of the E(C) at ec_path."
+    },
+    "reproducible": { "const": true, "description": "Only a successful measurement is recorded; a failed one is never committed as an attestation." }
+  }
+}

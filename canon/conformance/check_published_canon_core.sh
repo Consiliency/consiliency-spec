@@ -22,9 +22,15 @@
 #   5. Count guards (>=30 valid, >=6 error) so a truncated corpus cannot silently pass.
 #
 # NETWORK: this gate installs from npm + PyPI. It is wired as a REQUIRED step on the HOSTED CI runner
-# (ubuntu-latest), which has egress, so it always runs there. Where the registries are unreachable
-# (an offline Dagger container, a firewalled dev box) it prints a clear SKIP and exits 0 — a REGISTRY
-# being unreachable is a skip; a reachable registry MISSING the pinned version (yank) is a hard FAIL.
+# (ubuntu-latest), which has egress, so it always runs there. Exit codes follow the ci/gate.sh skip
+# protocol, which this script used to miss because ci.yml runs it directly
+# (CAN-13 / CI-3):
+#   0  green;
+#   1  a real failure — a reachable registry MISSING the pinned version (yank) included;
+#   3  SKIPPED: a registry stayed unreachable through the preflight retries, or (locally) this
+#      interpreter has no published wheel. It used to exit 0 here, i.e. report green.
+# Under CANON_STRICT=1 (the hosted CI step, a runner with egress and a cp312 interpreter) either skip
+# is a hard FAIL (exit 1) instead: a required check must never pass without having run.
 #
 # Local run: set CANON_PY to an interpreter that has a published wheel (0.2.0 ships cp312 wheels), e.g.
 #   CANON_PY=python3.12 bash canon/conformance/check_published_canon_core.sh
@@ -37,7 +43,7 @@ BOUNDARY="$CONF/engine_boundary_vectors.json"
 
 NPM_PKG="@consiliency/canon-core"
 PYPI_PKG="consiliency-canon-core"
-VERSION="0.2.0"
+VERSION="0.3.0"
 PYBIN="${CANON_PY:-python3}"
 # The crate version in the tree. Equal to VERSION except during a PRE-RELEASE WINDOW: the tree
 # already carries the next canon-core (Cargo.toml bumped, corpus extended) but the tag has not been
@@ -67,7 +73,9 @@ import json, sys, urllib.request, urllib.error
 version = sys.argv[1]
 py_tag = f"cp{sys.version_info.major}{sys.version_info.minor}"
 
-def fetch(url):
+import time
+
+def fetch_once(url):
     try:
         with urllib.request.urlopen(url, timeout=15) as r:
             return ("ok", r.read())
@@ -75,6 +83,16 @@ def fetch(url):
         return ("http", e.code)
     except Exception:                        # DNS/TCP/TLS/timeout => registry unreachable
         return ("unreachable", None)
+
+def fetch(url, attempts=3):
+    # Ride out a transient blip before declaring a registry unreachable (the install step below
+    # already retried; the single 15 s preflight did not).
+    for attempt in range(1, attempts + 1):
+        st, body = fetch_once(url)
+        if st != "unreachable" or attempt == attempts:
+            return st, body
+        print(f"    (preflight: {url} unreachable, attempt {attempt}/{attempts}; retrying)", file=sys.stderr)
+        time.sleep(5 * attempt)
 
 # npm registry
 st, body = fetch("https://registry.npmjs.org/@consiliency%2Fcanon-core")
@@ -111,7 +129,10 @@ set -e
 echo "$PRE_OUT"
 case "$PRE_RC" in
   0)  : ;;
-  10) echo; echo "PUBLISHED-PARITY GATE SKIPPED (registry unreachable; hosted CI has egress and runs it)."; exit 0 ;;
+  10) if [ "${CANON_STRICT:-0}" = "1" ]; then
+        echo; echo "PUBLISHED-PARITY GATE FAILED (CANON_STRICT=1 and a registry stayed unreachable — this runner is expected to have egress)."; exit 1
+      fi
+      echo; echo "PUBLISHED-PARITY GATE SKIPPED (registry unreachable; exit 3 — hosted CI has egress and runs it)."; exit 3 ;;
   11) echo; echo "PUBLISHED-PARITY GATE FAILED (pinned version missing at a reachable registry)."; exit 1 ;;
   12) # wheel-mismatch skip. On a runner we control (CANON_STRICT=1) this is a HARD FAIL — a required
       # check must never vacuously green because the interpreter lacks a published wheel. Elsewhere
@@ -119,7 +140,7 @@ case "$PRE_RC" in
       if [ "${CANON_STRICT:-0}" = "1" ]; then
         echo; echo "PUBLISHED-PARITY GATE FAILED (CANON_STRICT=1 and no wheel for this interpreter — expected a published wheel here)."; exit 1
       fi
-      echo; echo "PUBLISHED-PARITY GATE SKIPPED (no wheel for this interpreter; set CANON_PY locally)."; exit 0 ;;
+      echo; echo "PUBLISHED-PARITY GATE SKIPPED (no wheel for this interpreter; exit 3 — set CANON_PY locally)."; exit 3 ;;
   *)  echo "FAIL: unexpected preflight status $PRE_RC"; echo "$PRE_OUT"; exit 1 ;;
 esac
 echo
@@ -149,7 +170,7 @@ echo
 echo "[2/6] Install PUBLISHED PyPI $PYPI_PKG==$VERSION (wheel only)"
 VENV="$TMP/venv"
 "$PYBIN" -m venv "$VENV"
-"$VENV/bin/python" -m pip install --quiet --disable-pip-version-check --upgrade pip >/dev/null 2>&1 || true
+"$VENV/bin/python" -m pip install --quiet --disable-pip-version-check "pip==26.2.1" >/dev/null 2>&1 || true
 retry "$VENV/bin/python" -m pip install --quiet --disable-pip-version-check --only-binary=:all: "$PYPI_PKG==$VERSION" \
   || { echo "FAIL: pip install $PYPI_PKG==$VERSION (wheel) failed"; exit 1; }
 WHEEL_CORPUS="$("$VENV/bin/python" - <<'PY'

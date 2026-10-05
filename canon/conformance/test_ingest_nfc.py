@@ -12,6 +12,7 @@ as `*-verbatim` in canon-vectors.json for canon's own byte-identity coverage):
   - decomposed 'e'+U+0301 ingests to precomposed U+00E9 (string value AND object key)
   - a post-NFC key collision is detected at ingest (canon v2 itself no longer raises)
   - post-13 combining marks reorder by canonical combining class under the pinned U16 DB
+  - the ingest walk enforces canon's nesting cap with a typed IngestError (CAN-12)
 
 All non-ASCII is built with chr() so the exact codepoints are unambiguous in source.
 
@@ -101,18 +102,60 @@ def test_post13_reorder():
           "canon(raw) == canon(ingested) for a post-13 reorder; ingest NFC is not effective")
 
 
+def test_depth_cap_at_ingest():
+    """normalize_tree/normalize_keyed recurse BEFORE canon, so they enforce the same MAX_DEPTH cap.
+
+    They used to raise RecursionError near depth 500 (not a typed error); a value past the cap must
+    now be an IngestError at any depth, and a value at exactly the cap must still ingest AND encode.
+    """
+    check(ingest.MAX_DEPTH == canon.MAX_DEPTH,
+          "canon_ingest.MAX_DEPTH (%r) != canon.MAX_DEPTH (%r)" % (ingest.MAX_DEPTH, canon.MAX_DEPTH))
+
+    def nested_list(depth):
+        value = [DECOMPOSED_EACUTE]
+        for _ in range(depth - 1):
+            value = [value]
+        return value
+
+    def nested_dict(depth):
+        value = {DECOMPOSED_EACUTE: 1}
+        for _ in range(depth - 1):
+            value = {"k": value}
+        return value
+
+    for build in (nested_list, nested_dict):
+        at_cap = ingest.normalize_tree(build(canon.MAX_DEPTH))
+        check(COMPOSED_EACUTE.encode("utf-8") in canon.canonical_bytes(at_cap),
+              "%s at depth %d did not ingest + encode" % (build.__name__, canon.MAX_DEPTH))
+        for depth in (canon.MAX_DEPTH + 1, 100000):
+            for label, fn in (("normalize_tree", ingest.normalize_tree),
+                              ("normalize_keyed", ingest.normalize_keyed)):
+                if label == "normalize_keyed" and build is nested_list:
+                    continue
+                try:
+                    fn(build(depth))
+                    raised = "nothing"
+                except ingest.IngestError:
+                    raised = None
+                except Exception as error:  # noqa: BLE001
+                    raised = repr(error)
+                check(raised is None, "%s(%s depth %d) raised %s, expected IngestError"
+                      % (label, build.__name__, depth, raised))
+
+
 def main():
     print("== canon v2 ingest-NFC enforcement test ==")
     test_value_nfc()
     test_key_nfc()
     test_key_collision_detected_at_ingest()
     test_post13_reorder()
+    test_depth_cap_at_ingest()
     if failures:
         print("INGEST-NFC ENFORCEMENT: FAIL (%d)" % len(failures))
         for f in failures:
             print("  - " + f)
         return 1
-    print("INGEST-NFC ENFORCEMENT: PASS (value + key NFC, collision detection, post-13 reorder)")
+    print("INGEST-NFC ENFORCEMENT: PASS (value + key NFC, collision detection, post-13 reorder, depth cap)")
     return 0
 
 
