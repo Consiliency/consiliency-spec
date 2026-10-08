@@ -28,7 +28,7 @@
     "schema_version": { "const": "2", "description": "This certificate schema version (the certificate-contract version). \"2\": hashed `spec_authority` (required) and optional `authority_ref`; `desired_graph_digest` is the normalized spec-graph digest; `ec_reproducible` is required. A \"1\" certificate stays a valid v1 record and is never re-hashed as v2." },
     "projection_algo_version": {
       "type": "string",
-      "description": "Version of the P/N projection+parity ALGORITHM that produced this result. Pinning this makes a certificate reproducible: two certificates over the same inputs but different algo versions are legitimately allowed to differ. Currently `spec-engine-projection:v3` (certificate schema_version \"2\"); the history is SEMANTICS.md sec 9.2. (Task item 8.)"
+      "description": "Version of the P/N projection+parity ALGORITHM that produced this result. Pinning this makes a certificate reproducible: two certificates over the same inputs but different algo versions are legitimately allowed to differ. Currently `spec-engine-projection:v4` (certificate schema_version \"2\"); the history is SEMANTICS.md sec 9.2. (Task item 8.)"
     },
     "canon_version": { "type": "string", "description": "canon contract version used (`v2` since NFCBOUNDARY: NFC at the ingest boundary, digest prefix `spec-canon:v2:`). v1 certificates stay valid as v1 records; a v1 digest is never compared to a v2 digest and a mixed-canon_version graph is rejected." },
     "idmodel_version": { "type": "string", "description": "idmodel contract version used (e.g. `v1`)." },

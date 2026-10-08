@@ -30,6 +30,18 @@ import canon  # noqa: E402
 
 VECTORS = os.path.join(HERE, "..", "vectors", "canon-vectors.json")
 BOUNDARY = os.path.join(HERE, "..", "conformance", "engine_boundary_vectors.json")
+# Boundary vectors for behaviour no PUBLISHED canon-core has yet. check_published_canon_core.sh runs
+# BOUNDARY against the pinned published engines; this file runs only against the in-tree engines (these
+# self-tests, cargo test, XG4). Fold it into BOUNDARY when the published gate is repinned. Empty since the
+# canon-core 0.4.0 repin, which folded duplicate-key-f1..f6 into BOUNDARY.
+BOUNDARY_NEXT = os.path.join(HERE, "..", "conformance", "engine_boundary_vectors_next.json")
+
+# Count guards (CAN-15): a truncated local corpus must fail, not pass on whatever is left. The
+# corpus only grows (published vectors are never removed), so these are floors, raised with it.
+MIN_VALID = 44
+MIN_ERROR = 37
+MIN_BOUNDARY = 26
+MIN_BOUNDARY_NEXT = 0
 
 
 def load(path=VECTORS):
@@ -69,17 +81,13 @@ def emit(path=VECTORS):
 def run_boundary(bv):
     """Return (status, bytes_b64, digest) for one engine boundary vector; ('ERROR', '-', '-') on reject.
 
-    ``raw`` vectors are JSON text (e.g. nesting past every port's cap); ``input`` vectors are tagged trees.
-    Only CanonError counts as a rejection; any other exception propagates as a real failure.
+    ``raw`` vectors are JSON text (nesting past every port's cap, bare-number spellings) and go through
+    the text entry point ``decode_input_json``, which maps the stdlib parser's RecursionError (near
+    10,000 levels) to CanonError; ``input`` vectors are tagged trees. Only CanonError counts as a
+    rejection; any other exception propagates as a real failure.
     """
     try:
-        node = json.loads(bv["raw"]) if "raw" in bv else bv["input"]
-    except RecursionError:
-        # The stdlib parser recurses per level (it fails near 10,000 on 3.12). Raw text that deep is
-        # a rejection, never an uncaught crash of the self-test.
-        return ("ERROR", "-", "-")
-    try:
-        value = canon.decode_input(node)
+        value = canon.decode_input_json(bv["raw"]) if "raw" in bv else canon.decode_input(bv["input"])
         cbytes = canon.canonical_bytes(value)
     except canon.CanonError:
         return ("ERROR", "-", "-")
@@ -91,10 +99,13 @@ def emit_boundary(path=BOUNDARY):
     sys.stdout.write("\n".join(sorted(lines)) + "\n")
 
 
-def boundary_failures(path=BOUNDARY):
+def boundary_failures(path=BOUNDARY, minimum=MIN_BOUNDARY):
     failures = []
-    for bv in load(path):
-        status, _, _ = run_boundary(bv)
+    vectors = load(path)
+    if len(vectors) < minimum:
+        failures.append("%s has %d vectors (< %d); it looks truncated" % (os.path.basename(path), len(vectors), minimum))
+    for bv in vectors:
+        status, b64, _ = run_boundary(bv)
         if bv["expect"] == "reject":
             if status != "ERROR":
                 failures.append("boundary %s: expected CanonError, accepted" % bv["name"])
@@ -103,7 +114,7 @@ def boundary_failures(path=BOUNDARY):
             failures.append("boundary %s: expected acceptance, rejected" % bv["name"])
             continue
         if isinstance(bv.get("bytes"), str):
-            got = canon.canonical_bytes(canon.decode_input(bv["input"])).decode("utf-8")
+            got = base64.b64decode(b64).decode("utf-8")
             if got != bv["bytes"]:
                 failures.append("boundary %s: bytes %r != %r" % (bv["name"], got, bv["bytes"]))
     return failures
@@ -142,12 +153,44 @@ def native_failures():
                 failures.append("native %s depth %d: expected CanonError, got %r" % (label, depth, error))
                 continue
             failures.append("native %s depth %d: expected CanonError, accepted" % (label, depth))
+
+    # CAN-5: a tuple is Python's native array alias, encoded exactly like a list (SPEC.md section 1).
+    if not canon.canonical_bytes((1, (2, 3))) == canon.canonical_bytes([1, [2, 3]]) == b"[1,[2,3]]":
+        failures.append("tuple no longer encodes as an array")
+
+    # D6: the tagged-JSON TEXT entry point reads bare numbers the way Rust and TypeScript do.
+    for text, expected in (("9007199254740991", b"9007199254740991"), ("[-9007199254740991,0]",
+                                                                       b"[-9007199254740991,0]")):
+        got = canon.canonical_bytes(canon.decode_input_json(text))
+        if got != expected:
+            failures.append("decode_input_json(%s): %r != %r" % (text, got, expected))
+    for text in ("9007199254740992", "-9007199254740992", "18446744073709551616", "1" * 5000, "-0",
+                 "1.0", "1e3", "10E-1", "NaN", "Infinity", "[1,", "{\"n\": 1e3}"):
+        try:
+            canon.canonical_bytes(canon.decode_input_json(text))
+        except canon.CanonError:
+            continue
+        except Exception as error:  # noqa: BLE001
+            failures.append("decode_input_json(%.20s): expected CanonError, got %r" % (text, error))
+            continue
+        failures.append("decode_input_json(%.20s): expected CanonError, accepted" % text)
+    # A parsed tree (no spelling left) applies the same range rule to native ints.
+    for value in (2 ** 53, -(2 ** 53), 2 ** 64):
+        try:
+            canon.decode_input({"n": value})
+        except canon.CanonError:
+            continue
+        failures.append("decode_input(bare %d): expected CanonError, accepted" % value)
     return failures
 
 
 def test():
     vectors = load()
-    failures = boundary_failures() + native_failures()
+    failures = boundary_failures() + boundary_failures(BOUNDARY_NEXT, MIN_BOUNDARY_NEXT) + native_failures()
+    n_error = sum(1 for vec in vectors if vec.get("expect_error"))
+    if len(vectors) - n_error < MIN_VALID or n_error < MIN_ERROR:
+        failures.append("corpus has %d valid / %d reject vectors (< %d / %d); it looks truncated"
+                        % (len(vectors) - n_error, n_error, MIN_VALID, MIN_ERROR))
     for vec in vectors:
         name = vec["name"]
         b64, dig = run_vector(vec)
@@ -166,8 +209,8 @@ def test():
         for f in failures:
             print("  - " + f)
         return 1
-    print("PYTHON CONFORMANCE: PASS (%d vectors, %d boundary vectors, native depth cap) "
-          "[canon v2: Unicode-DB-independent]" % (len(vectors), len(load(BOUNDARY))))
+    print("PYTHON CONFORMANCE: PASS (%d vectors, %d+%d boundary vectors, native depth cap) "
+          "[canon v2: Unicode-DB-independent]" % (len(vectors), len(load(BOUNDARY)), len(load(BOUNDARY_NEXT))))
     return 0
 
 

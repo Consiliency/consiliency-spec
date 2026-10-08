@@ -18,6 +18,9 @@
  * Usage:  node emit_published_npm.mjs <corpus.json> <boundary.json> <out_corpus.txt> <out_boundary.txt>
  *   cwd MUST contain node_modules/@consiliency/canon-core (the orchestrator installs it there).
  * Exit 0 = all assertions hold. Exit 1 = a divergence (bytes/digest/accept/reject/count) — gate fail.
+ *
+ * Only the engine's own error counts as a rejection: wasm-bindgen throws a CanonError's message as a
+ * JS STRING. Any other throw (a TypeError, a RuntimeError from a trap) is a real failure (CAN-15).
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -44,6 +47,8 @@ const MIN_ERROR = 6;
 
 let failures = 0;
 const fail = (msg) => { console.error(`FAIL: ${msg}`); failures++; };
+// Rethrow anything that is not the engine's own (string) CanonError.
+const engineError = (e) => { if (typeof e !== "string") throw e; return e; };
 
 // --- Corpus vectors: assert against the package-shipped oracle (expected_* fields) ----------------
 const vectors = JSON.parse(readFileSync(corpusPath, "utf8"));
@@ -58,7 +63,8 @@ for (const v of vectors) {
       canonicalBytesFromJson(tagged);
       fail(`vector ${v.name}: expected rejection but the PUBLISHED npm engine accepted it`);
       corpusLines.push(`${v.name}\tACCEPTED-BUG\tACCEPTED-BUG`);
-    } catch {
+    } catch (e) {
+      engineError(e);
       corpusLines.push(`${v.name}\tERROR\tERROR`);
     }
     continue;
@@ -89,7 +95,8 @@ for (const bv of boundary) {
       canonicalBytesFromJson(tagged);
       fail(`boundary ${bv.name}: expected rejection but the PUBLISHED npm engine accepted it`);
       boundaryLines.push(`${bv.name}\tACCEPTED-BUG\t-\t-`);
-    } catch {
+    } catch (e) {
+      engineError(e);
       boundaryLines.push(`${bv.name}\tERROR\t-\t-`);
     }
     continue;
@@ -105,7 +112,8 @@ for (const bv of boundary) {
       fail(`boundary ${bv.name}: canonical bytes ${JSON.stringify(Buffer.from(out).toString("utf8"))} != expected ${JSON.stringify(bv.bytes)}`);
     }
   } catch (e) {
-    fail(`boundary ${bv.name}: expected acceptance but the PUBLISHED npm engine rejected it (${String(e.message || e).slice(0, 80)})`);
+    engineError(e);
+    fail(`boundary ${bv.name}: expected acceptance but the PUBLISHED npm engine rejected it (${String(e).slice(0, 80)})`);
     b64 = "REJECTED-BUG";
     dig = "REJECTED-BUG";
   }

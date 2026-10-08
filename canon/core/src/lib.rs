@@ -4,6 +4,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
 use std::fmt;
+use std::fmt::Write as _;
 
 pub const DOMAIN_PREFIX: &str = "spec-canon:v2:";
 pub const PROFILES: [&str; 4] = ["semantic-content", "run", "artifact-byte", "certificate"];
@@ -25,6 +26,26 @@ const MAX_TAGGED_JSON_DEPTH: usize = 2 * MAX_DEPTH + 1;
 
 const DEPTH_MESSAGE: &str = "nesting depth exceeds the maximum of 128";
 
+/// SPEC.md section 2 — a BARE JSON number decodes to an integer only inside +/-(2^53 - 1), the range
+/// every port's JSON parser holds exactly (D6). TypeScript's JSON.parse silently rounds past it and
+/// serde_json falls back to f64 past u64, so the same JSON text gave different bytes per port.
+/// Private (not `pub`) so it stays out of the cbindgen C header.
+const MAX_BARE_INT: i64 = (1 << 53) - 1;
+const BARE_INT_MESSAGE: &str = "bare JSON integer beyond +/-(2^53 - 1): use a $int tag";
+
+/// The key `parse_vector_corpus` rewrites the corpus's lone-surrogate `$str` escape to (serde_json
+/// cannot hold a lone surrogate in a `String`). Only `decode_vector_input` reads it; the production
+/// decoder treats it, and `$surrogate`, as ordinary object keys (CAN-11).
+const VECTOR_LONE_SURROGATE_KEY: &str = "$canon-vector:lone-surrogate";
+
+/// Which decoder is running: the production JSON API, or the test-only vector-corpus decoder that
+/// also understands the corpus loader's lone-surrogate rewrite.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    Production,
+    VectorCorpus,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CanonValue {
     Null,
@@ -36,6 +57,8 @@ pub enum CanonValue {
     FloatMarker,
     NanMarker,
     InfMarker,
+    /// Produced only by `decode_vector_input` (the test-corpus decoder), standing in for the corpus's
+    /// lone-surrogate string. The production decoder never produces it (CAN-11).
     SurrogateMarker,
 }
 
@@ -92,7 +115,10 @@ fn encode_string(value: &str) -> CanonResult<String> {
         match ch {
             '"' => out.push_str("\\\""),
             '\\' => out.push_str("\\\\"),
-            _ if cp <= 0x1f => out.push_str(&format!("\\u{cp:04x}")),
+            _ if cp <= 0x1f => {
+                // Written straight into the buffer: no per-character String allocation.
+                let _ = write!(out, "\\u{cp:04x}");
+            }
             _ => out.push(ch),
         }
     }
@@ -136,6 +162,11 @@ fn encode_object(entries: &[(String, CanonValue)], depth: usize, exclude_digest:
         .filter(|(key, _)| !(exclude_digest && key == "digest"))
         .collect();
     sorted.sort_by(|(ak, _), (bk, _)| compare_code_points(ak, bk));
+    // A native Rust caller can build an Object with a repeated key (JSON input cannot: serde_json keeps
+    // one entry per key). It used to be emitted twice; Python dicts and JS objects cannot hold one.
+    if sorted.windows(2).any(|pair| pair[0].0 == pair[1].0) {
+        return Err(CanonError::new("duplicate object key in canonical content"));
+    }
     let mut parts = Vec::with_capacity(sorted.len());
     for (key, item) in sorted {
         parts.push(format!("{}:{}", encode_string(key)?, encode_value(item, depth)?));
@@ -186,42 +217,64 @@ fn parse_int_payload(payload: &Value) -> CanonResult<BigInt> {
 /// here (`[]`, `{}` and `0.0` were all `true`) while Python and TypeScript disagreed with it and with
 /// each other (CAN-9). Containers deeper than `MAX_DEPTH` are rejected.
 pub fn decode_input(node: &Value) -> CanonResult<CanonValue> {
-    decode(node, 0)
+    decode(node, 0, Mode::Production)
 }
 
-fn decode_entries(map: &serde_json::Map<String, Value>, depth: usize) -> CanonResult<CanonValue> {
+/// TEST-CORPUS decoder: `decode_input` plus the lone-surrogate marker that `parse_vector_corpus`
+/// rewrites the corpus's `{"$str": "\ud800"}` vector to. Use it only on trees from
+/// `parse_vector_corpus`; production callers use `decode_input` / `decode_input_json`, where the
+/// marker key is an ordinary key and a real lone-surrogate escape is a JSON parse error (CAN-11).
+pub fn decode_vector_input(node: &Value) -> CanonResult<CanonValue> {
+    decode(node, 0, Mode::VectorCorpus)
+}
+
+fn decode_entries(map: &serde_json::Map<String, Value>, depth: usize, mode: Mode) -> CanonResult<CanonValue> {
     let inner = container_depth(depth)?;
     let mut entries = Vec::with_capacity(map.len());
     for (key, item) in map {
-        entries.push((key.clone(), decode(item, inner)?));
+        entries.push((key.clone(), decode(item, inner, mode)?));
     }
     Ok(CanonValue::Object(entries))
 }
 
-fn decode_items(items: &[Value], depth: usize) -> CanonResult<CanonValue> {
+fn decode_items(items: &[Value], depth: usize, mode: Mode) -> CanonResult<CanonValue> {
     let inner = container_depth(depth)?;
     items
         .iter()
-        .map(|item| decode(item, inner))
+        .map(|item| decode(item, inner, mode))
         .collect::<CanonResult<Vec<_>>>()
         .map(CanonValue::Array)
 }
 
-fn decode(node: &Value, depth: usize) -> CanonResult<CanonValue> {
+/// A bare JSON number (SPEC.md section 2; D6). serde_json without `arbitrary_precision` reads an
+/// integer spelling into i64/u64 when it fits and anything else (fraction, exponent, `-0`, or an
+/// integer past u64) into f64, so the f64 arm cannot see the spelling: a whole-valued f64 at or past
+/// 2^53 gets the bare-integer message, every other f64 is a float. Either way it is rejected.
+fn decode_number(n: &serde_json::Number) -> CanonResult<CanonValue> {
+    if let Some(v) = n.as_i64() {
+        if (-MAX_BARE_INT..=MAX_BARE_INT).contains(&v) {
+            return Ok(CanonValue::Int(BigInt::from(v)));
+        }
+        return Err(CanonError::new(BARE_INT_MESSAGE));
+    }
+    if n.as_u64().is_some() {
+        return Err(CanonError::new(BARE_INT_MESSAGE)); // above i64::MAX, so past 2^53
+    }
+    match n.as_f64() {
+        Some(v) if v.is_finite() && v.fract() == 0.0 && v.abs() > MAX_BARE_INT as f64 => {
+            Err(CanonError::new(BARE_INT_MESSAGE))
+        }
+        _ => Ok(CanonValue::FloatMarker),
+    }
+}
+
+fn decode(node: &Value, depth: usize, mode: Mode) -> CanonResult<CanonValue> {
     match node {
         Value::Null => Ok(CanonValue::Null),
         Value::Bool(v) => Ok(CanonValue::Bool(*v)),
-        Value::Number(n) => {
-            if let Some(v) = n.as_i64() {
-                Ok(CanonValue::Int(BigInt::from(v)))
-            } else if let Some(v) = n.as_u64() {
-                Ok(CanonValue::Int(BigInt::from(v)))
-            } else {
-                Ok(CanonValue::FloatMarker)
-            }
-        }
+        Value::Number(n) => decode_number(n),
         Value::String(v) => Ok(CanonValue::String(v.clone())),
-        Value::Array(items) => decode_items(items, depth),
+        Value::Array(items) => decode_items(items, depth, mode),
         Value::Object(map) => {
             if map.len() == 1 {
                 let (tag, payload) = map.iter().next().expect("single object entry");
@@ -230,7 +283,9 @@ fn decode(node: &Value, depth: usize) -> CanonResult<CanonValue> {
                     "$float" => return Ok(CanonValue::FloatMarker),
                     "$nan" => return Ok(CanonValue::NanMarker),
                     "$inf" => return Ok(CanonValue::InfMarker),
-                    "$surrogate" => return Ok(CanonValue::SurrogateMarker),
+                    VECTOR_LONE_SURROGATE_KEY if mode == Mode::VectorCorpus => {
+                        return Ok(CanonValue::SurrogateMarker)
+                    }
                     "$str" => {
                         return payload
                             .as_str()
@@ -253,18 +308,18 @@ fn decode(node: &Value, depth: usize) -> CanonResult<CanonValue> {
                         let obj = payload
                             .as_object()
                             .ok_or_else(|| CanonError::new("invalid $obj payload: expected a JSON object"))?;
-                        return decode_entries(obj, depth);
+                        return decode_entries(obj, depth, mode);
                     }
                     "$arr" => {
                         let arr = payload
                             .as_array()
                             .ok_or_else(|| CanonError::new("invalid $arr payload: expected a JSON array"))?;
-                        return decode_items(arr, depth);
+                        return decode_items(arr, depth, mode);
                     }
                     _ => {}
                 }
             }
-            decode_entries(map, depth)
+            decode_entries(map, depth, mode)
         }
     }
 }
@@ -312,13 +367,67 @@ fn parse_json_bounded(text: &str, max_depth: usize) -> Result<Value, String> {
     Ok(value)
 }
 
+const FLOAT_MESSAGE: &str = "floats are forbidden in canonical content; pre-represent as int or string";
+
+/// Check EVERY number token in JSON text, in text order — including one that a later duplicate key
+/// overwrites, which serde_json's `Value` (last member wins) never shows (SPEC.md section 2). An
+/// integer spelling must lie within +/-(2^53 - 1); a fraction or exponent spelling, or bare `-0`, is
+/// a float, whatever its magnitude. Iterative and string-aware; malformed text is left for serde_json
+/// to reject. Same rule and messages as the Python and TypeScript text entry points.
+fn check_number_tokens(text: &str) -> CanonResult<()> {
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'"' => {
+                i += 1;
+                while i < bytes.len() && bytes[i] != b'"' {
+                    i += if bytes[i] == b'\\' { 2 } else { 1 };
+                }
+                i += 1;
+            }
+            b'-' | b'0'..=b'9' => {
+                let start = i;
+                i += 1;
+                while i < bytes.len() && matches!(bytes[i], b'0'..=b'9' | b'e' | b'E' | b'.' | b'+' | b'-') {
+                    i += 1;
+                }
+                let token = &text[start..i];
+                let digits = token.strip_prefix('-').unwrap_or(token);
+                let integer_spelled = !digits.is_empty()
+                    && digits.bytes().all(|b| b.is_ascii_digit())
+                    && (digits == "0" || !digits.starts_with('0'));
+                if !integer_spelled || token == "-0" {
+                    return Err(CanonError::new(FLOAT_MESSAGE));
+                }
+                let in_range = digits.len() <= 16
+                    && token.parse::<i64>().map_or(false, |v| (-MAX_BARE_INT..=MAX_BARE_INT).contains(&v));
+                if !in_range {
+                    return Err(CanonError::new(BARE_INT_MESSAGE));
+                }
+            }
+            _ => i += 1,
+        }
+    }
+    Ok(())
+}
+
 pub fn decode_input_json(tagged_json: &str) -> CanonResult<CanonValue> {
+    if json_nesting_depth(tagged_json) > MAX_TAGGED_JSON_DEPTH {
+        return Err(CanonError::new(DEPTH_MESSAGE));
+    }
+    check_number_tokens(tagged_json)?;
     let value = parse_json_bounded(tagged_json, MAX_TAGGED_JSON_DEPTH).map_err(CanonError::new)?;
     decode_input(&value)
 }
 
+/// Parse a vector-corpus FILE (test harness only). serde_json cannot hold a lone surrogate in a
+/// `String`, so the corpus's one lone-surrogate vector (`{"$str": "\ud800"}`, as gen_vectors.py
+/// writes it) is rewritten to a marker that only `decode_vector_input` understands. Decode the
+/// returned inputs with `decode_vector_input`, never `decode_input`.
 pub fn parse_vector_corpus(raw: &str) -> CanonResult<Vec<Value>> {
-    let rust_parseable = raw.replace("\"$str\": \"\\ud800\"", "\"$surrogate\": \"d800\"");
+    let rewritten = format!("\"{VECTOR_LONE_SURROGATE_KEY}\": \"d800\"");
+    let rust_parseable = raw.replace("\"$str\": \"\\ud800\"", &rewritten);
     // A corpus file wraps each tagged input in a few levels (the vector list, the vector object);
     // its deepest inputs are the over-the-cap rejection vectors, one container past MAX_DEPTH.
     let value = parse_json_bounded(&rust_parseable, MAX_TAGGED_JSON_DEPTH + 16)

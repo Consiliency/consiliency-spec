@@ -3,6 +3,128 @@
 All notable changes to `@consiliency/spec` / `consiliency-spec` are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## 0.5.0 — projection v4, full spec-graph validation at every entry, canon-core 0.4.0 ports
+
+The certificate stays `schema_version` `"2"`, but `projection_algo_version` is
+`spec-engine-projection:v4`. The algorithm version is in every certificate's hashed preimage, so every
+certificate and portal-payload digest changes once. `E(C)` produced by the reference extractor now records
+treesitter-chunker `5.2.0` in its provenance, so a re-extracted realized `ec_digest` changes too. On the
+reference engine's own test inputs, verdicts, findings and `finding_set_id` are unchanged, except where an
+input had to be corrected to pass the full validation below (operations gaining declared signatures).
+
+### BREAKING CHANGES
+
+**Grading — `spec-engine-projection:v4`** (`SEMANTICS.md` §0, §1.2, §7.2, §9.2):
+
+- **Full validation at every entry.** The desired graph `S` must pass the full spec-graph rule set
+  before any verdict. `0.4.0` validated an engine subset that skipped level ordering and "every
+  `operation` declares a signature"; that subset is gone. An invalid `S` that `0.4.0` graded is now
+  refused as an input error, and `P` / `N` run the same full validation at their shared grading
+  boundary, so a driver that builds its inputs directly cannot grade it either. In particular an
+  `operation` without a `signature` is refused, and a graph without its `spec_graph_version` envelope is
+  refused.
+- **`decomposes_to` is strictly descending.** The target must sit at a strictly lower level. Skipping a
+  level going down (`contract` → `detailed`) is now valid; same-level and upward edges stay invalid and
+  are refused at entry. A graph that only skipped a level keeps its digest.
+- **`signature_undeclared` is retired.** An unsigned `operation` never reaches grading, so the code is
+  never emitted (`result-state.schema.json` keeps it readable in older records).
+- **Default-closure prohibitions are reported, never dropped.** Under the default closure, a prohibition
+  in `S` that no in-scope node is `governed_by` (its governed nodes filtered out by kind, unreachable
+  from a capability, or none) is a `prohibition` check `unknown` with the new code
+  `prohibition_outside_default_closure` (it was silently out of scope). The projection lists them in
+  `default_closure_dropped_prohibition_names`.
+- **Verifier binding.** Step (1) of the four-step binding in §9 (the entry check on a candidate `S`)
+  is now the full spec-graph rule set.
+
+**Portal payload** (`portal-payload.schema.json`, §12.2): gains an optional `extraction_coverage` (the
+certificate's coverage summary, copied verbatim iff present). `payload_schema_version` stays `"0"`, but a
+consumer that copies the schema with `additionalProperties: false` must take the `0.5.0` copy.
+
+**Authority delivery** (`SEMANTICS.md` §13.2, §13.3; normative text only, `authority-event.schema.json`
+is byte-unchanged):
+
+- **Re-verification at delivery (MUST).** A ledger row is no longer trusted because it is in the hash
+  chain. Under the ledger lock, delivery re-verifies key status, scheme, approver, certificate binding
+  and the Ed25519 signature of every admitted row for the delivered event's resolution key, each at its
+  signing instant, then verifies the delivered `ratify` in full, validity windows included, at the
+  delivery clock. `0.4.0` said delivery did not re-check signatures. An authority whose validity window
+  has lapsed, or whose key has since been revoked or has expired in the registry, is no longer
+  deliverable; the refusal carries the verifier's own reason (`bad_signature`, `unknown_key_id`,
+  `key_revoked`, `key_expired`, `core_validity_expired`, `algorithm_confusion`,
+  `signer_approver_mismatch`, `missing_signature`, …).
+- **Delivery head anchor (MUST).** Delivery keeps a monotonic head anchor outside the ledger file,
+  `.spec-authority-ledger-anchor.json`, in the decision-log directory when one is used, otherwise in the
+  target directory. It refuses a ledger shorter than the anchored head (`ledger_rollback`), a ledger whose
+  anchored row no longer carries the anchored digests (`ledger_forked`) and an unreadable anchor
+  (`ledger_anchor_unreadable`). An anchor problem after publishing never refuses: it is reported in a
+  `ledger_anchor_warning` result field (`anchor_warning` on a refusal) and a log line. This replaces the
+  `0.4.0` limit that the chain does not defend against a writer; the remaining limits are listed in §13.3.
+
+**Canon ports** (track canon-core `0.4.0`, `canon/SPEC.md`):
+
+- a bare JSON number decodes to an integer only when it is integer-spelled and within ±(2^53 − 1), in
+  every port. A larger bare integer is a `CanonError` (send it as a `$int` tag); a fraction or exponent
+  spelling, or `-0`, is a float and is rejected. Previously Rust accepted bare integers up to u64,
+  Python any size, and TypeScript rounded silently;
+- the JSON-text entry points check every number token, including one a later duplicate key overwrites;
+  Python gains `decode_input_json(text)` and TypeScript `decodeInputJson(text)` and the exact-number
+  loader `parseTaggedJson(text)`, matching Rust's text entry point;
+- `{"$surrogate": …}` is an ordinary key in Rust (it was rejected as a tag);
+- TypeScript: an array must be plain data (no extra named properties, no index getters), a `Proxy` is
+  rejected, a revoked `Proxy` is a `CanonError`, and `__proto__` is an ordinary key;
+- Rust: a native `CanonValue::Object` with a repeated key is rejected.
+
+`$int` tags, native values and the 69 earlier corpus vectors keep their bytes and digests. The corpus
+grows to 81 vectors and the engine boundary vectors (`canon/conformance/engine_boundary_vectors.json`)
+from 9 to 26; `canon/conformance/check_published_canon_core.sh` pins the published canon-core at
+`0.4.0` and runs all 26 against the published npm and PyPI engines.
+
+### Migration
+
+1. **Re-pin stored digests.** Every certificate and payload digest changes once. Do not compare
+   verdicts or digests across a `v3` and a `v4` certificate.
+2. **Upgrade schemas.** Replace any vendored `certificate.schema.json`, `portal-payload.schema.json`
+   and `result-state.schema.json` with the `0.5.0` copies, and verify each file's `sha256` against
+   `consiliency-spec.public-manifest.json`.
+3. **Validate your `S` with the full spec-graph rule set before upgrading:** give every `operation` a
+   `signature`, relevel any same-level or upward `decomposes_to`, and always send a versioned graph
+   (`{"spec_graph_version": "1", "nodes": [], "edges": []}` for an empty one).
+4. **Finding codes:** handle `prohibition_outside_default_closure`; stop expecting
+   `signature_undeclared` from a `v4` certificate.
+5. **Canon callers:** send any integer beyond ±(2^53 − 1) as a `$int` tag, never as a bare number or a
+   fraction/exponent spelling; in TypeScript, pass plain arrays and no `Proxy`.
+6. **Authority deliveries:** expect a delivery to be refused when its authority has lapsed, its key has
+   been revoked or has expired, or a row for its key fails signature verification. Keep
+   `.spec-authority-ledger-anchor.json` and point every delivery at one stable decision-log directory so
+   that they share one anchor; a deleted anchor starts again at first use and trusts the ledger as it is.
+   Handle `ledger_rollback`, `ledger_forked` and `ledger_anchor_unreadable`, and watch for
+   `ledger_anchor_warning`.
+7. **Coming from `0.3.0`:** apply the `0.4.0` migration below first.
+
+The normative text is `SEMANTICS.md` §0 (entry validation), §1.2 (default closure), §7.2 (signatures),
+§9.2 (the projection version history) and §13.2–§13.3 (re-verification at delivery and the delivery head
+anchor).
+
+### Added
+
+- `SEMANTICS.md` §9.3: an opt-in digest preimage sidecar. A producer can hand back the exact canonical
+  bytes behind `desired_graph_digest`, `finding_set_id` and the certificate `digest`, so a verifier
+  never re-encodes them. It is outside every digest and never part of a portal payload.
+- `canon/conformance/engine_boundary_vectors_next.json` (manifest 75 → 76 files): boundary vectors for
+  behaviour no published canon-core has yet, run only by the in-tree engines. It is empty in this
+  release.
+
+The outside-agent contract (schemas, vectors, contract document) is byte-unchanged; the reference
+router's behaviour is unchanged.
+
+`consiliency-spec.public-manifest.json` records `source.authority_contract_version` `"0.6.5"` (was
+`"0.6.0"`). The vendored authority schema, `spec-engine/authority/authority-event.schema.json`, is
+byte-unchanged.
+
+`spec-parity/kind-alignment.json` changes one `note` only (no row change; `version` stays `"1"`): the
+generic `treesitter-chunker` `class` → `component` row now documents how BAML types are graded
+(`SEMANTICS.md` §5).
+
 ## 0.4.0 — parity certificate contract 2, projection v3, canon-core 0.3.0 ports
 
 Every parity certificate digest changes in this release. No verdict, result state or finding

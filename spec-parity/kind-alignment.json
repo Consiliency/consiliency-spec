@@ -125,7 +125,7 @@
       "realized_kind": "class",
       "desired_kind": "component",
       "alignment": "exact",
-      "note": "Cross-language anchor. Confirmed against tsc 3.0.0 for Java: `class Gateway { ... }` emits a boundary node kind=`class` (symbol=Gateway, semantic path `Gateway.java::Gateway`) in the C++/JAVA realized sample. NOTE the C++ asymmetry: tsc 3.0.0's C++ grammar does NOT emit a `class` boundary for a class in a .hpp — it surfaces only free `function` boundaries — so C++ never reaches this row (see the cppjava sample/README)."
+      "note": "Cross-language anchor. Confirmed against tsc 3.0.0 for Java: `class Gateway { ... }` emits a boundary node kind=`class` (symbol=Gateway, semantic path `Gateway.java::Gateway`) in the C++/JAVA realized sample. NOTE the C++ asymmetry: tsc 3.0.0's C++ grammar does NOT emit a `class` boundary for a class in a .hpp — it surfaces only free `function` boundaries — so C++ never reaches this row (see the cppjava sample/README). BAML (P2 decision D3): BAML has no realized source of its own. baml_adapter.py runs the GENERATED Python SDK (baml_client) through treesitter-chunker, so a BAML `class` reaches the engine as this generic tsc `class` row and aligns to `component`. That is deliberate and not a mis-grading: a desired BAML data type is authored as a desired `type`, and a desired `type` is graded by the declared-kind member-set comparator (SEMANTICS.md sec 5, ambiguous_mapping: the desired graph's declared kind wins), not by this row's kind. Changing this row would regrade every class in every language; a BAML-specific row would need a `baml` realized source. No version bump."
     },
     {
       "realized_source": "treesitter-chunker",

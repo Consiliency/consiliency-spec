@@ -20,8 +20,13 @@ dependency-free; install the `outside-agent` extra to use the router.
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # annotations only: importing consiliency_spec stays dependency-free
+    from jsonschema.exceptions import ValidationError
+    from jsonschema.protocols import Validator
 
 SUBMISSION_SCHEMA_TARGET = "outside_agent_submission.v0.1"
 VERDICT_SCHEMA_TARGET = "outside_agent_route_verdict.v0.1"
@@ -49,13 +54,17 @@ def _load_schema(filename: str) -> dict[str, Any]:
     return load_json(f"schemas/{filename}")
 
 
-def _validator(filename: str):
+@lru_cache(maxsize=None)
+def _validator(filename: str) -> "Validator":
+    """One validator per schema file for the life of the process. The schemas are read-only package
+    data, and a Draft 2020-12 validator holds no per-call state, so rebuilding it on every route
+    call only repeated the schema load and compile."""
     from jsonschema.validators import Draft202012Validator
 
     return Draft202012Validator(_load_schema(filename))
 
 
-def _classify(error) -> str:
+def _classify(error: "ValidationError") -> str:
     """Map one schema error to a blocker class. Deterministic, total.
 
     The split is by *what the failure means*, not by which keyword tripped:
@@ -101,7 +110,7 @@ def _semantic_blockers(payload: dict[str, Any]) -> list[str]:
     return blockers
 
 
-def _safe_summary(error) -> str:
+def _safe_summary(error: "ValidationError") -> str:
     """Describe a validation failure WITHOUT echoing the submitted value.
 
     `jsonschema` messages embed the offending value (`'sk-live-…' does not

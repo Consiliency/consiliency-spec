@@ -361,6 +361,46 @@ SPECS = [
      "profile": "semantic-content"},
     {"name": "reject-depth-129-mixed-bare-tagged", "input": _nested(129, ("bare", "obj", "arr"), {"$null": True}),
      "profile": "semantic-content", "expect_error": True},
+    # ---- canon-core 0.4.0 additions (appended: every vector above stays byte-identical, in order) ----
+    # --- bare JSON numbers: an integer only inside +/-(2^53 - 1) (SPEC.md section 2; D6) ---
+    # TypeScript's JSON.parse silently rounded 9007199254740993 to ...992 (different bytes, no error),
+    # Rust accepted bare integers up to u64 and Python accepted any size. Every port now rejects a bare
+    # integer past the safe range. The fraction/exponent/-0 spellings, which json.dumps cannot write,
+    # are raw-text vectors in conformance/engine_boundary_vectors.json.
+    {"name": "bare-int-safe-bounds",
+     "input": {"$arr": [9007199254740991, -9007199254740991, 0]},
+     "profile": "semantic-content", "_note": "+/-(2^53 - 1) is the widest bare integer every port reads exactly"},
+    {"name": "reject-bare-int-2pow53", "input": 9007199254740992,
+     "profile": "semantic-content", "expect_error": True},
+    {"name": "reject-bare-int-neg-2pow53", "input": -9007199254740992,
+     "profile": "semantic-content", "expect_error": True},
+    {"name": "reject-bare-int-2pow53-plus-1", "input": {"n": 9007199254740993},
+     "profile": "semantic-content", "expect_error": True,
+     "_note": "JSON.parse rounds this to 9007199254740992: TypeScript used to emit {\"n\":9007199254740992}"},
+    {"name": "reject-bare-int-u64-max", "input": 18446744073709551615,
+     "profile": "semantic-content", "expect_error": True, "_note": "Rust used to accept bare integers up to u64"},
+    {"name": "reject-bare-int-above-u64", "input": 18446744073709551616,
+     "profile": "semantic-content", "expect_error": True, "_note": "Python used to accept bare integers of any size"},
+    # --- `$surrogate` is an ordinary key in every port (CAN-11) ---
+    # Rust's production decoder used to treat it as a tag (a test-corpus device) and reject this input,
+    # which Python and TypeScript encode as an ordinary one-key object.
+    {"name": "dollar-surrogate-key-is-ordinary", "input": {"$surrogate": "d800"},
+     "profile": "semantic-content"},
+    # --- corpus gaps (CAN-16) ---
+    {"name": "keys-prefix-order",
+     "input": {"$obj": {"ab": {"$int": "3"}, "a\u0000": {"$int": "2"}, "a": {"$int": "1"}}},
+     "profile": "semantic-content", "_note": "a key sorts before every key it prefixes: a < a\\u0000 < ab"},
+    {"name": "ls-ps-raw", "input": {"$str": "a\u2028b\u2029c"},
+     "profile": "semantic-content", "_note": "U+2028/U+2029 are emitted raw (they are not <= U+001F controls)"},
+    {"name": "nested-empty",
+     "input": {"$obj": {"o": {"$obj": {}}, "a": {"$arr": []}, "n": {"$arr": [{"$arr": []}, {"$obj": {}}]}}},
+     "profile": "semantic-content"},
+    # --- `__proto__` is an ordinary key (TypeScript used to assign it through the inherited setter) ---
+    {"name": "proto-key-is-ordinary", "input": {"__proto__": {"$int": "1"}},
+     "profile": "semantic-content", "_note": "TypeScript decoded this as {}"},
+    {"name": "proto-key-object-value",
+     "input": {"$obj": {"__proto__": {"$obj": {"a": {"$int": "1"}}}, "b": {"$int": "2"}}},
+     "profile": "semantic-content", "_note": "TypeScript replaced the decoded object's prototype and emitted {\"b\":2}"},
 ]
 
 
@@ -389,8 +429,9 @@ def build():
 
 # Inputs nested deeper than this are written on one line (the depth-cap vectors): indent=2 would
 # spend tens of KB of whitespace on a 257-level input. Shallower inputs keep the indent=2 layout, so
-# every pre-existing vector's text is unchanged (and Rust's parse_vector_corpus surrogate rewrite,
-# keyed on the indented `"$str": "\ud800"` spelling, still matches).
+# every pre-existing vector's text is unchanged (and Rust's test-only parse_vector_corpus rewrite of
+# the lone-surrogate vector, keyed on the indented `"$str": "\ud800"` spelling, still matches; the
+# rewritten marker is read only by decode_vector_input, never by the production decoder).
 _COMPACT_INPUT_DEPTH = 16
 
 
