@@ -57,13 +57,25 @@ Decimals are the caller's responsibility — pre-represent them as strings or sc
 **before** handing a value to `canon`. This deliberately sidesteps cross-language float formatting,
 the single largest source of divergence, for v1.
 
+In Python a `tuple` is the native immutable array and encodes exactly like a `list` (CAN-5): it is an
+alias, not a distinct canonical type, and no other port can produce one. A `dict` key must be a `str`.
+
 In TypeScript an "object" means a **plain data** object: its prototype is `Object.prototype` or
 `null`, and every own property is an enumerable, string-keyed data property. `Date`, `Map`, `Set`,
 `RegExp`, typed arrays, boxed primitives and class instances are rejected, never encoded through
 their enumerable fields (a `Date` used to encode as `{}`); so are accessor, symbol-keyed and
-non-enumerable properties, and a sparse-array hole is rejected like `undefined`. The check applies to
-the value as the caller passed it, on every public entry point (`canonicalBytes`, `digest`, whose
-top-level `digest` exclusion copies the object, and `splitRecord`).
+non-enumerable properties, and a sparse-array hole is rejected like `undefined`. An "array" likewise
+means a **plain data** array (canon-core 0.4.0): prototype `Array.prototype`, and own properties that
+are exactly the data indices `0..length-1` plus `length`. An extra named or symbol-keyed property
+(which used to be silently dropped), an accessor on an index (re-evaluated on every encode) and an
+`Array` subclass are rejected. A `Proxy`, of an array or of an object, is rejected outright: its
+`get` trap can report plain data descriptors and still return a different value on every read, so the
+same value could encode differently twice; a revoked `Proxy` is a `CanonError` too, never the
+`TypeError` that `Array.isArray` throws on it. The check applies to the value as the caller passed it,
+before any of it is read or copied, on every public entry point: `canonicalBytes`, `digest` (whose
+top-level `digest` exclusion copies the object), `splitRecord`, and `decodeInput` / `decodeInputJson`,
+which check every container of the tree they are given, `$obj`/`$arr` payloads included, before
+building their own plain copy.
 
 **Maximum nesting depth: 128.** A container's depth is 1 + the number of containers enclosing it, so
 `[]` is depth 1, `[[]]` is depth 2 and a scalar adds nothing. A value containing any container
@@ -75,9 +87,9 @@ differently: Python raised `RecursionError` near depth 250, TypeScript a `RangeE
 non-deterministic depth between 2,000 and 5,000, and the Rust native encoder overflowed the stack and
 aborted the process. The cap is checked on the way down, so a value far past it is rejected without
 recursing into it. No committed artifact nests anywhere near 128, so no digest moved. The cap is on
-values: the Python and TypeScript ports take parsed values and have no JSON-text entry point (a host
-JSON parser has its own limit — Python's stdlib `json` raises `RecursionError` near 10,000 levels),
-while Rust's JSON entry points bound text depth themselves (§12).
+values. Rust's JSON entry points bound text depth themselves (§12); the Python and TypeScript text
+entry points (`decode_input_json` / `decodeInputJson`, §2) map their host parser's own limit
+(Python's stdlib `json` raises `RecursionError` near 10,000 levels, V8 a `RangeError`) to `CanonError`.
 
 ---
 
@@ -99,7 +111,7 @@ decoder that is identical in both languages. Tags:
 | `{"$int": "123"}`       | integer: a decimal string matching `^-?[0-9]+$` — ASCII digits only, optional leading `-`, arbitrary precision; leading zeros and `-0` are accepted and normalised (`"007"` → `7`, `"-0"` → `0`). Any other payload (empty, whitespace, `+`, `_`, `0x`, non-ASCII digits, a JSON number instead of a string) MUST be rejected with a `CanonError` by every port, at decode. The native parsers (`int()`, `BigInt()`, `str::parse`) each accept a different superset of this grammar, so a port that leans on them digests inputs the others reject. |
 | `{"$float": "1.0"}`     | a float marker — the encoder MUST reject it |
 | `{"$nan": true}`        | NaN marker — encoder MUST reject |
-| `{"$inf": 1}` / `{"$inf": -1}` | +/-Infinity marker — encoder MUST reject |
+| `{"$inf": 1}` / `{"$inf": -1}` | +/-Infinity marker — encoder MUST reject (the sign is informational; no port reads it) |
 | `{"$str": "..."}`       | string (explicit; also used to carry a key that looks like a tag). The payload MUST be a JSON string. |
 | `{"$bool": true}`       | boolean (explicit). The payload MUST be a JSON boolean (`true`/`false`). |
 | `{"$null": true}`       | null (explicit). The payload MUST be JSON `true`. |
@@ -121,15 +133,76 @@ A side effect the depth cap (§1) relies on: with every scalar tag carrying a sc
 text that decodes within depth 128 is at most `2 * 128 + 1 = 257` JSON levels deep (a `$obj`/`$arr`
 container costs two levels, a scalar tag one at the leaf).
 
+The tag table is exhaustive. Any other single-key object — `{"$surrogate": "d800"}`, `{"$x": 1}` — is
+an ordinary object in every port. Before canon-core 0.4.0 the Rust production decoder also treated
+`$surrogate` as a tag (a device for loading the lone-surrogate vector) and rejected that input, which
+Python and TypeScript encode as a one-key object (CAN-11; vector `dollar-surrogate-key-is-ordinary`).
+The device is now test-only (§12).
+
 A bare JSON `true`/`false`/`null`/string/array/object is also accepted by the decoder as the
 obvious thing, but the canonical vectors use explicit tags wherever type intent is load-bearing
 (numbers, booleans, the NaN/Inf/float rejections) so the file is unambiguous in every language.
 
+**Bare JSON numbers (canon-core 0.4.0, D6).** A bare JSON number decodes to an integer only when it
+is spelled as an integer (`-?(0|[1-9][0-9]*)`) and lies within **±(2^53 − 1)**, the range every
+port's JSON parser holds exactly. Every other bare number is rejected by every port.
+
+**From JSON text** — Rust `decode_input_json` (behind `canonical_bytes_from_json` /
+`digest_from_json`), Python `decode_input_json` and TypeScript `decodeInputJson` — **every number token
+in the text is checked, in text order, before the value is built**, including one that a later
+duplicate key overwrites:
+
+- an integer spelling beyond ±(2^53 − 1) fails with
+  `CanonError("bare JSON integer beyond +/-(2^53 - 1): use a $int tag")`;
+- a fraction or exponent spelling fails with the float message (`floats are forbidden …`) **at any
+  magnitude**, so `1.0`, `1e3`, `9007199254740992.0`, `9.007199254740992e15` and `1e300` are all floats,
+  never out-of-range integers. So is bare `-0`: serde_json reads it as `-0.0`, and after parsing no
+  port can tell it from `-0.0` (write `0` or `{"$int": "-0"}`).
+
+Python checks each token in the stdlib `json` number hooks (`parse_int` / `parse_float`, which see every
+token, overwritten ones included). TypeScript and Rust run an iterative, string-aware scan of the
+number tokens before parsing, because `JSON.parse` (and any reviver) and serde_json's `Value` see only
+the surviving member of a duplicate key, and serde_json without `arbitrary_precision` holds a big
+fraction or exponent only as an `f64` whose spelling is gone. Once every number has passed, a
+duplicate key keeps its **last** member in every port (`{"n":1,"n":2}` is `{"n":2}`), with two known
+exceptions, both in Rust's favour of rejecting: Rust parses and bounds the WHOLE text, so it also rejects
+an overwritten member that serde_json cannot parse (a lone-surrogate escape, `{"n":"\ud800","n":0}`) or
+that takes the text past its 257-level nesting pre-scan, where Python and TypeScript keep the survivor
+and accept. Neither member is accepted anywhere when it is not overwritten. Closing these two (Python
+and TypeScript rejecting such text up front) is an open follow-up. Before this change,
+`{"n":10000000000000000,"n":0}` was rejected by Python and encoded as `{"n":0}` by TypeScript and Rust.
+
+**From an already-parsed tree** (`decode_input` / `decodeInput`, Rust `decode_input` on a
+`serde_json::Value`), the spelling is gone, so only what survives parsing is checked: an integer
+beyond ±(2^53 − 1) is rejected at decode (every integer literal that `JSON.parse` could have rounded
+lands at or past 2^53), and a float value becomes a float marker that the encoder rejects. A `1.0`
+that the caller's own parser already turned into `1` is accepted as `1`, and so is a `-0` that Python's
+`json` already turned into the integer `0`; TypeScript's `-0` (the number) and Rust's `-0.0` are
+rejected as floats. Only the text entry points see spellings.
+
+Before 0.4.0 the ports read the same JSON text three ways. TypeScript's `JSON.parse` silently rounded
+`9007199254740993` to `…992` and emitted different bytes from Python **with no error**; it also read
+`1.0` and `1e3` as integers, which Python and Rust reject. Rust accepted bare integers up to u64 and
+read anything larger as a float; Python accepted any size; and Python and TypeScript accepted bare
+`-0`, which Rust rejected. Vectors: `bare-int-safe-bounds` and `reject-bare-int-*` (corpus);
+`bare-number-d*` and `duplicate-key-f*` (raw text, `conformance/engine_boundary_vectors.json`; the
+`duplicate-key-f*` vectors ran only against the in-tree engines until canon-core 0.4.0 was published,
+because canon-core 0.3.0 keeps the last member unchecked).
+
+`TaggedNode` loader: TypeScript's `parseTaggedJson` parses text **without** rejecting it up front (for
+a vector corpus, whose reject vectors hold out-of-range numbers), keeping every integer exact as a
+`bigint` and every fraction or exponent spelling as a float marker, via the `JSON.parse` reviver's
+`context.source`; it fails closed on a runtime without source-text access.
+
+`__proto__` is an ordinary key, like any other (vectors `proto-key-*`). TypeScript used to assign
+decoded members with `out[k] = v`, which for `__proto__` calls the inherited setter: `{"__proto__":1}`
+encoded as `{}`, while Python and Rust keep the key.
+
 The decoder is part of the **test harness** for the Python and TypeScript reference ports, where
 `canonical_bytes` operates on already-decoded native values. In Rust it is also behind the production
 JSON entry points (`canonical_bytes_from_json` / `digest_from_json`, §12), which is why its rules are
-normative. But both ports MUST decode the file identically, so the decoder is
-specified here and implemented identically in `py/canon.py` and `ts/canon.ts`.
+normative. But every port MUST decode the file identically, so the decoder is specified here and
+implemented identically in `py/canon.py`, `ts/canon.ts` and `core/src/lib.rs`.
 
 ---
 
@@ -216,7 +289,8 @@ String output is `"` + escaped-contents + `"`.
 - **Floats, `NaN`, `+Infinity`, `-Infinity` are REJECTED** with a clear error (`allow_nan=false`
   and more — no real numbers at all). The caller pre-represents decimals as strings or scaled
   integers.
-- Arbitrary precision: integers beyond 2^53 are supported. Python uses native `int`. TypeScript
+- Arbitrary precision: integers beyond 2^53 are supported as **values** (and as `$int` tags); only a
+  *bare JSON number* in tagged input is limited to ±(2^53 − 1) (§2). Python uses native `int`. TypeScript
   uses `bigint` for emission so large integers do not lose precision; the `$int` decoder produces
   a `bigint`, and the encoder accepts **`bigint` only**. A plain JS `number` — integral or not —
   is REJECTED: JS cannot distinguish `100` from `100.0`, so accepting whole-valued numbers would
@@ -322,6 +396,10 @@ pid, etc.). Changing envelope fields MUST NOT change the digest — proven by th
 `content-envelope-split` vector, where the same content with two different envelopes yields the
 identical `semantic-content` digest.
 
+`split_record` / `splitRecord` is a **reference-only** helper of the Python and TypeScript ports. It
+is not part of the frozen canon-core surface (§12), and canon-core has no Rust equivalent: a Rust
+caller splits its own record before calling `canonical_bytes` / `digest`.
+
 ---
 
 ## 11. Conformance and the exit gate
@@ -331,15 +409,17 @@ identical `semantic-content` digest.
 ```json
 {
   "name": "...",
-  "input": <type-tagged tree, or {"$error": "..."} for reject cases>,
+  "input": <type-tagged tree (§2)>,
   "profile": "semantic-content | run | artifact-byte | certificate",
   "expected_canonical_bytes_b64": "<base64 of the canonical UTF-8 bytes>",
   "expected_digest_hex": "<lowercase sha-256 hex>"
 }
 ```
 
-Reject vectors (float/NaN/Inf) carry `"expect_error": true` instead of expected bytes/digest;
-both ports MUST raise.
+Reject vectors carry `"expect_error": true` instead of expected bytes/digest, and every port MUST
+raise `CanonError` for them, at decode or at encode. The self-tests also hold the corpus to floors on
+its valid and reject counts, so a truncated file fails instead of passing on what is left. New vectors
+are only ever appended: the published vectors stay byte-identical and in order.
 
 The expected values are **generated by the Python reference impl** (never hand-authored base64/hex)
 and pinned in the file. The TS impl must reproduce them.
@@ -374,7 +454,13 @@ surface is:
 - `digest_from_json(tagged_json, profile) -> lowercase sha256 hex`
 
 The JSON entrypoints consume the same type-tagged tree used by `vectors/canon-vectors.json`, with the
-same payload rules (§2) and the same depth cap (§1). serde_json's own recursion limit (127 levels of
+same payload rules, the same bare-number rule (§2) and the same depth cap (§1). A lone-surrogate
+escape (`"\ud800"`) never reaches the decoder: serde_json rejects it while tokenising the text, which
+is the Rust form of the §5 rejection. The corpus's own lone-surrogate vector is therefore loaded by a
+**test-only** pair, `parse_vector_corpus` + `decode_vector_input`, which rewrites it to a marker that
+only `decode_vector_input` reads; production `decode_input` has no such tag (CAN-11). A native Rust
+caller can build a `CanonValue::Object` with a repeated key, which JSON input cannot; the encoder
+rejects it rather than emitting the key twice. serde_json's own recursion limit (127 levels of
 JSON **text**) is lifted, because it is not the canonical depth: a `$arr`/`$obj`-tagged value hit it at
 canonical depth 65, which the reference ports accepted. Instead an iterative pre-scan rejects any text
 deeper than 257 levels (§2) before serde parses it, which keeps serde's recursion bounded.
@@ -398,7 +484,10 @@ The binding surfaces are thin wrappers over that core:
 `conformance/check_xg4_canon_core.sh` is the XG4 exit gate. It runs the existing Python/TypeScript
 canon gate, runs Rust vector tests, diffs Python/TypeScript/Rust emitted bytes and digests over the
 full corpus, and builds and executes both binding surfaces. The engine boundary vectors run in the
-Python/TypeScript self-tests and in `cargo test`. Consumers must dual-run against this corpus before
+Python/TypeScript self-tests and in `cargo test`, and XG4 diffs them across all five engines (Python,
+TypeScript, Rust, the built PyO3 and WASM bindings), each through its JSON-text entry point. XG4 also
+runs its `--target` mode against the in-tree ingest package, holding the bundled `canon.py` to the
+corpus. Consumers must dual-run against this corpus before
 removing a vendored implementation.
 
 ## Open items (0A follow-ups, tracked)

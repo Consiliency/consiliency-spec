@@ -30,7 +30,7 @@
         "result_state": { "$ref": "#/$defs/result_state" },
         "code": {
           "type": "string",
-          "description": "A stable machine code for the finding class, e.g. missing_desired_element, structural_mismatch, kind_mismatch, signature_unobservable, signature_undeclared, prohibition_violated, prohibition_unobservable, unmapped_realized_kind, unmapped_desired_kind, ambiguous_kind_alignment, refinement_below_frontier, permitted_freedom, correspondence_ambiguous, capability_missing."
+          "description": "A stable machine code for the finding class, e.g. missing_desired_element, structural_mismatch, kind_mismatch, signature_unobservable, prohibition_violated, prohibition_unobservable, prohibition_outside_default_closure, unmapped_realized_kind, unmapped_desired_kind, ambiguous_kind_alignment, refinement_below_frontier, permitted_freedom, correspondence_ambiguous, capability_missing. Retired codes (never emitted by the current projection_algo_version, kept readable in older records): signature_undeclared (retired in spec-engine-projection:v4)."
         },
         "subject": {
           "type": "object",

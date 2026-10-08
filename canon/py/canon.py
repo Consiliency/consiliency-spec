@@ -16,13 +16,18 @@ Public API (SPEC.md section 9):
     digest(value, profile) -> str   (lowercase hex)
 
 Helpers:
-    split_record(record, content_keys) -> (content, envelope)   (SPEC.md section 10)
+    split_record(record, content_keys) -> (content, envelope)   (SPEC.md section 10; reference-only)
     decode_input(tagged) -> native value                        (SPEC.md section 2; test harness)
+    decode_input_json(text) -> native value                     (SPEC.md section 2; tagged JSON TEXT)
+
+A Python ``tuple`` encodes exactly like a ``list`` (SPEC.md section 1): it is Python's native
+immutable array, not a distinct canonical type, and no other port can produce one.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from typing import Any, Iterable, Tuple
 
@@ -43,6 +48,13 @@ _DOMAIN_PREFIX = "spec-canon:v2:"
 # JSON entry points rejected anything past serde_json's own 127-level text limit.
 MAX_DEPTH = 128
 _DEPTH_MESSAGE = "nesting depth exceeds the maximum of %d" % MAX_DEPTH
+
+# SPEC.md section 2 — a BARE JSON number in a tagged input decodes to an integer only inside
+# +/-(2^53 - 1), the range every port's JSON parser holds exactly (D6). Beyond it the TypeScript
+# JSON.parse silently rounds (9007199254740993 -> ...992) and Rust's serde_json falls back to f64,
+# so the same JSON text produced different bytes per port. Larger integers must use a $int tag.
+_MAX_BARE_INT = 2 ** 53 - 1
+_BARE_INT_MESSAGE = "bare JSON integer beyond +/-(2^53 - 1): use a $int tag"
 
 
 class CanonError(ValueError):
@@ -141,7 +153,7 @@ def _encode_value(value: Any, depth: int = 0) -> str:
         if depth >= MAX_DEPTH:
             raise CanonError(_DEPTH_MESSAGE)
         return _encode_object(value, depth + 1)
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, (list, tuple)):  # a tuple is Python's native array alias (SPEC.md section 1)
         if depth >= MAX_DEPTH:
             raise CanonError(_DEPTH_MESSAGE)
         return _encode_array(value, depth + 1)
@@ -198,6 +210,12 @@ class NanMarker:
 
 
 class InfMarker:
+    """A value the encoder must reject (stands in for +/-Infinity).
+
+    ``sign`` is informational only: the encoder rejects every InfMarker identically and never reads
+    it, so it cannot affect any output (SPEC.md section 2).
+    """
+
     def __init__(self, sign: int):
         self.sign = sign
 
@@ -278,12 +296,67 @@ def _decode(node: Any, depth: int) -> Any:
     if isinstance(node, list):
         inner = _container_depth(depth)
         return [_decode(v, inner) for v in node]
-    # bare scalars: str/bool/None pass through; a bare JSON number is treated as int if integral.
+    # bare scalars: str/bool/None pass through; a bare JSON integer is an int only inside the range
+    # every port's JSON parser holds exactly (SPEC.md section 2; D6).
     if isinstance(node, bool):
         return node
     if isinstance(node, int):
-        return node
+        if -_MAX_BARE_INT <= node <= _MAX_BARE_INT:
+            return node
+        raise CanonError(_BARE_INT_MESSAGE)
     if isinstance(node, float):
         # Bare JSON float in a vector input -> a float marker (encoder rejects).
         return FloatMarker()
     return node
+
+
+_FLOAT_MESSAGE = "floats are forbidden in canonical content; pre-represent as int or string"
+
+
+def _parse_bare_int(text: str) -> Any:
+    # json.loads hands EVERY integer-spelled number token here, in text order, including one that a
+    # later duplicate key overwrites, so the check covers every number in the text (SPEC.md section 2).
+    if text == "-0":
+        # Rust's serde_json reads bare `-0` as the float -0.0, and no port can tell it apart from
+        # `-0.0` after parsing. It is a float spelling everywhere.
+        raise CanonError(_FLOAT_MESSAGE)
+    if len(text.lstrip("-")) > 16:
+        # Past +/-(2^53 - 1) by length alone (JSON forbids leading zeros); never call int() on it (a
+        # multi-thousand-digit literal would raise ValueError from the int-string-conversion limit).
+        raise CanonError(_BARE_INT_MESSAGE)
+    value = int(text)
+    if not -_MAX_BARE_INT <= value <= _MAX_BARE_INT:
+        raise CanonError(_BARE_INT_MESSAGE)
+    return value
+
+
+def _parse_bare_float(_text: str) -> Any:
+    # Every fraction or exponent spelling (`1.0`, `1e3`), at any magnitude and even if a later
+    # duplicate key overwrites it, is a float: the text is rejected at parse, as in Rust and TypeScript.
+    raise CanonError(_FLOAT_MESSAGE)
+
+
+def _reject_constant(_name: str) -> Any:
+    # NaN / Infinity / -Infinity are not JSON; the stdlib accepts them, Rust and JS do not.
+    raise CanonError("invalid JSON: NaN and Infinity literals are not JSON")
+
+
+def decode_input_json(text: str) -> Any:
+    """Parse tagged-input JSON TEXT and decode it (SPEC.md section 2), as the Rust and TypeScript
+    ``decode_input_json`` / ``decodeInputJson`` entry points do.
+
+    EVERY number token in the text is checked, including one that a later duplicate key overwrites:
+    a fraction or exponent spelling (``1.0``, ``1e3``) or bare ``-0`` is rejected as a float, and an
+    integer beyond +/-(2^53 - 1) as a bare integer, both at parse. Duplicate keys otherwise keep the
+    last member (Rust alone also rejects an overwritten member serde_json cannot parse or that is
+    over-deep: SPEC.md section 2). Invalid JSON and text nested past the parser's recursion limit are
+    CanonError.
+    """
+    try:
+        node = json.loads(text, parse_int=_parse_bare_int, parse_float=_parse_bare_float,
+                          parse_constant=_reject_constant)
+    except RecursionError:
+        raise CanonError(_DEPTH_MESSAGE) from None
+    except json.JSONDecodeError as error:
+        raise CanonError("invalid JSON: %s" % error.msg) from None
+    return decode_input(node)

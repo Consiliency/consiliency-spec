@@ -17,11 +17,14 @@
  *   digest(value, profile) -> string (lowercase hex)
  *
  * Helpers:
- *   splitRecord(record, contentKeys) -> { content, envelope }   (SPEC.md section 10)
+ *   splitRecord(record, contentKeys) -> { content, envelope }   (SPEC.md section 10; reference-only)
  *   decodeInput(tagged) -> CanonValue                            (SPEC.md section 2; test harness)
+ *   parseTaggedJson(text) -> TaggedNode                          (SPEC.md section 2; exact numbers)
+ *   decodeInputJson(text) -> CanonValue                          (SPEC.md section 2; tagged JSON TEXT)
  */
 
 import { createHash } from "node:crypto";
+import { types } from "node:util";
 
 // canon v2 performs NO Unicode NFC and depends on NO Unicode DB version (SPEC.md section 5). NFC is
 // applied at the ingestion boundary, which owns the relocated Unicode pin and fail-closed assertion.
@@ -55,9 +58,17 @@ export class CanonError extends Error {
 // Reject markers produced by the type-tagged decoder (SPEC.md section 2/6).
 export class FloatMarker {}
 export class NanMarker {}
+// `sign` is informational only: the encoder rejects every InfMarker identically and never reads it.
 export class InfMarker {
   constructor(public readonly sign: number) {}
 }
+
+// SPEC.md section 2 — a BARE JSON number in a tagged input decodes to an integer only inside
+// +/-(2^53 - 1) (D6). JSON.parse silently rounds anything larger (9007199254740993 -> ...992), so
+// this port emitted different bytes from Python for the same JSON text with no error. Every port now
+// rejects it; larger integers must use a $int tag.
+const BARE_INT_MESSAGE = "bare JSON integer beyond +/-(2^53 - 1): use a $int tag";
+const MAX_BARE_INT = BigInt(Number.MAX_SAFE_INTEGER);
 
 // Supported canonical value domain (SPEC.md section 1). Integers are `bigint`. A plain JS `number`
 // is NOT a canonical value and is rejected by the encoder: JS cannot distinguish `100` from `100.0`,
@@ -196,6 +207,11 @@ function isPlainObject(value: object): boolean {
  * launder a non-plain value into a plain one.
  */
 function assertPlainObject(value: object): void {
+  if (types.isProxy(value)) {
+    // A Proxy can report plain data descriptors while its `get` trap returns a different value on
+    // every read, so the same value could encode differently twice.
+    throw new CanonError("unsupported object for canonical content: Proxy");
+  }
   if (!isPlainObject(value)) {
     const ctor = (value as { constructor?: { name?: unknown } }).constructor;
     const name = typeof ctor?.name === "string" && ctor.name ? ctor.name : "object";
@@ -216,12 +232,59 @@ function assertPlainObject(value: object): void {
   }
 }
 
+/**
+ * Throw unless `arr` is a plain data array: not a Proxy, prototype Array.prototype, and its own
+ * properties are exactly the data indices 0..length-1 plus `length`. A getter on an index was
+ * re-evaluated on every encode, an extra named or symbol-keyed property was silently dropped, and a
+ * Proxy's `get` trap could return different elements per read — SPEC.md section 1 forbids each.
+ */
+function assertPlainArray(arr: unknown[]): void {
+  if (types.isProxy(arr)) {
+    throw new CanonError("unsupported array for canonical content: Proxy");
+  }
+  if (Object.getPrototypeOf(arr) !== Array.prototype) {
+    throw new CanonError("unsupported type for canonical content: array subclass (only plain arrays)");
+  }
+  if (Object.getOwnPropertySymbols(arr).length > 0) {
+    throw new CanonError("unsupported array for canonical content: symbol-keyed property");
+  }
+  for (let i = 0; i < arr.length; i++) {
+    const desc = Object.getOwnPropertyDescriptor(arr, i);
+    if (desc === undefined) throw new CanonError("unsupported array for canonical content: sparse array hole");
+    if (!("value" in desc)) throw new CanonError("unsupported array for canonical content: accessor element");
+  }
+  // Every index 0..length-1 is present, so any further own name is a named property.
+  if (Object.getOwnPropertyNames(arr).length !== arr.length + 1) {
+    throw new CanonError("unsupported array for canonical content: named property on an array");
+  }
+}
+
 // --------------------------------------------------------------------------- //
 // Value dispatch (SPEC.md section 6 — booleans are distinct from numbers in JS).
 // --------------------------------------------------------------------------- //
 
+/**
+ * Set an OWN data property. `out[k] = v` on a plain `{}` with k === "__proto__" calls the inherited
+ * `__proto__` setter instead: a primitive value vanished and an object value replaced the prototype,
+ * so `{"__proto__":1}` encoded as `{}` here while Python and Rust keep the key.
+ */
+function setOwn(out: { [k: string]: CanonValue }, k: string, v: CanonValue): void {
+  Object.defineProperty(out, k, { value: v, enumerable: true, writable: true, configurable: true });
+}
+
+/**
+ * Reject a Proxy before anything else touches the value: `Array.isArray`, `instanceof` and
+ * `Object.getPrototypeOf` on a REVOKED Proxy throw a TypeError, which must surface as CanonError.
+ */
+function rejectProxy(value: unknown): void {
+  if (value !== null && (typeof value === "object" || typeof value === "function") && types.isProxy(value)) {
+    throw new CanonError("unsupported value for canonical content: Proxy");
+  }
+}
+
 function encodeValue(value: CanonValue, depth: number): string {
   // `depth` is the number of containers enclosing `value` (0 at the top level).
+  rejectProxy(value);
   if (value instanceof FloatMarker) {
     throw new CanonError("floats are forbidden in canonical content; pre-represent as int or string");
   }
@@ -242,7 +305,10 @@ function encodeValue(value: CanonValue, depth: number): string {
     );
   }
   if (typeof value === "string") return encodeString(value);
-  if (Array.isArray(value)) return encodeArray(value, containerDepth(depth));
+  if (Array.isArray(value)) {
+    assertPlainArray(value);
+    return encodeArray(value, containerDepth(depth));
+  }
   if (typeof value === "object") {
     assertPlainObject(value);
     return encodeObject(value as { [k: string]: CanonValue }, containerDepth(depth));
@@ -260,6 +326,7 @@ export function canonicalBytes(value: CanonValue): Uint8Array {
 
 function stripTopLevelDigest(value: CanonValue): CanonValue {
   // SPEC.md section 8: exclude a top-level "digest" key only.
+  rejectProxy(value);
   if (
     value === null ||
     typeof value !== "object" ||
@@ -277,7 +344,7 @@ function stripTopLevelDigest(value: CanonValue): CanonValue {
   if (!Object.prototype.hasOwnProperty.call(value, "digest")) return value;
   const out: { [k: string]: CanonValue } = {};
   for (const k of Object.keys(value as { [k: string]: CanonValue })) {
-    if (k !== "digest") out[k] = (value as { [k: string]: CanonValue })[k];
+    if (k !== "digest") setOwn(out, k, (value as { [k: string]: CanonValue })[k]);
   }
   return out;
 }
@@ -301,6 +368,7 @@ export function splitRecord(
 ): { content: { [k: string]: CanonValue }; envelope: { [k: string]: CanonValue } } {
   // Same copy-before-check hazard as the digest strip: content/envelope are fresh plain objects, so
   // the record itself must be plain data before its fields are copied out.
+  rejectProxy(record);
   if (record === null || typeof record !== "object" || Array.isArray(record)) {
     throw new CanonError("splitRecord: record must be a plain object");
   }
@@ -309,8 +377,7 @@ export function splitRecord(
   const content: { [k: string]: CanonValue } = {};
   const envelope: { [k: string]: CanonValue } = {};
   for (const k of Object.keys(record)) {
-    if (keyset.has(k)) content[k] = record[k];
-    else envelope[k] = record[k];
+    setOwn(keyset.has(k) ? content : envelope, k, record[k]);
   }
   return { content, envelope };
 }
@@ -319,11 +386,15 @@ export function splitRecord(
 // Type-tagged input decoder (SPEC.md section 2) — identical semantics to Python decode_input.
 // --------------------------------------------------------------------------- //
 
-type TaggedNode =
+// A parsed tagged-input tree. `bigint` and FloatMarker leaves come from parseTaggedJson, which reads
+// each number's SOURCE text; a plain `number` comes from a caller's own JSON.parse.
+export type TaggedNode =
   | null
   | boolean
   | number
+  | bigint
   | string
+  | FloatMarker
   | TaggedNode[]
   | { [k: string]: TaggedNode };
 
@@ -337,17 +408,28 @@ export function decodeInput(node: TaggedNode): CanonValue {
 }
 
 function isJsonObject(node: TaggedNode): node is { [k: string]: TaggedNode } {
-  return node !== null && typeof node === "object" && !Array.isArray(node);
+  return node !== null && typeof node === "object" && !Array.isArray(node) && !(node instanceof FloatMarker);
 }
 
+function bareInteger(value: bigint): bigint {
+  if (value > MAX_BARE_INT || value < -MAX_BARE_INT) throw new CanonError(BARE_INT_MESSAGE);
+  return value;
+}
+
+// The decoder reads the caller's tree, so it holds every container to the same plain-data rule as the
+// encoder, on the ORIGINAL container and before reading or copying any member: the copy it builds is
+// plain, so checking only the copy let an array's named property, an index getter, a Proxy or a
+// subclass (also as a `$obj`/`$arr` payload) through decodeInput with no error.
 function decodeEntries(p: { [k: string]: TaggedNode }, depth: number): { [k: string]: CanonValue } {
+  assertPlainObject(p);
   const inner = containerDepth(depth);
   const out: { [k: string]: CanonValue } = {};
-  for (const k of Object.keys(p)) out[k] = decode(p[k], inner);
+  for (const k of Object.keys(p)) setOwn(out, k, decode(p[k], inner));
   return out;
 }
 
 function decodeItems(p: TaggedNode[], depth: number): CanonValue[] {
+  assertPlainArray(p);
   const inner = containerDepth(depth);
   const out: CanonValue[] = [];
   for (let i = 0; i < p.length; i++) out.push(decode(p[i], inner));
@@ -355,11 +437,16 @@ function decodeItems(p: TaggedNode[], depth: number): CanonValue[] {
 }
 
 function decode(node: TaggedNode, depth: number): CanonValue {
+  rejectProxy(node);
   if (isJsonObject(node)) {
+    assertPlainObject(node); // before Object.keys / reading the tag payload
     const keys = Object.keys(node);
     if (keys.length === 1) {
       const tag = keys[0];
       const payload = node[tag];
+      // Before ANY type check on the payload: Array.isArray, `instanceof`, a `< 0` comparison or
+      // getPrototypeOf on a revoked Proxy throws a TypeError (for every tag, `$float`/`$nan` included).
+      rejectProxy(payload);
       switch (tag) {
         case "$int":
           return parseIntPayload(payload); // grammar-checked decimal string -> exact bigint
@@ -368,7 +455,7 @@ function decode(node: TaggedNode, depth: number): CanonValue {
         case "$nan":
           return new NanMarker();
         case "$inf":
-          return new InfMarker(typeof payload === "number" && payload < 0 ? -1 : 1);
+          return new InfMarker((typeof payload === "number" || typeof payload === "bigint") && payload < 0 ? -1 : 1);
         case "$str":
           if (typeof payload !== "string") {
             throw new CanonError("invalid $str payload: expected a JSON string");
@@ -401,13 +488,102 @@ function decode(node: TaggedNode, depth: number): CanonValue {
     return decodeEntries(node, depth);
   }
   if (Array.isArray(node)) return decodeItems(node, depth);
+  if (node instanceof FloatMarker) return node; // a fraction/exponent spelling (parseTaggedJson)
   if (typeof node === "boolean") return node;
+  if (typeof node === "bigint") return bareInteger(node); // exact, from parseTaggedJson
   if (typeof node === "number") {
-    // A bare JSON number in a vector input: integral -> bigint; fractional -> float marker. This is
-    // a VECTOR-HARNESS convenience for untagged fixtures only, not the public API — the encoder
-    // itself rejects plain numbers (see encodeValue). JSON.parse has already turned `1.0` into `1`,
-    // which is why type intent is carried by tags (SPEC.md section 2).
-    return Number.isInteger(node) ? BigInt(node) : new FloatMarker();
+    // A bare number from a caller's own JSON.parse (the spelling is gone). Inside +/-(2^53 - 1) it
+    // is exact. Any integer-spelled literal past that parses to a double >= 2^53 in magnitude, so the
+    // range check rejects every value JSON.parse could have rounded. `-0` is the float -0.0 (as in
+    // Rust). A whole-valued fraction or exponent spelling (`1.0`, `1e3`) is indistinguishable from an
+    // integer here; parseTaggedJson / decodeInputJson read the source text and reject it.
+    if (Object.is(node, -0) || !Number.isInteger(node)) return new FloatMarker();
+    if (!Number.isSafeInteger(node)) throw new CanonError(BARE_INT_MESSAGE);
+    return BigInt(node);
   }
   return node; // string | null
+}
+
+const INTEGER_SPELLING = /^-?(?:0|[1-9][0-9]*)$/;
+
+/**
+ * Parse tagged-input JSON TEXT without losing any number (a LOADER, e.g. for a vector corpus whose
+ * reject vectors hold out-of-range numbers): an integer spelling becomes an exact `bigint`
+ * (range-checked later by decodeInput), and a fraction or exponent spelling (`1.0`, `1e3`) or bare
+ * `-0` becomes a FloatMarker. Unlike decodeInputJson it does not reject the text up front, and it sees
+ * only the members JSON.parse keeps. It uses JSON.parse source-text access (`context.source`) and
+ * fails closed where the runtime lacks it. Invalid or over-deep JSON is a CanonError.
+ */
+export function parseTaggedJson(text: string): TaggedNode {
+  const reviver = (_key: string, value: unknown, context?: { source?: string }): unknown => {
+    if (typeof value !== "number") return value;
+    const source = context?.source;
+    if (typeof source !== "string") {
+      throw new CanonError("JSON.parse source-text access is unavailable on this runtime; cannot read bare numbers exactly");
+    }
+    return INTEGER_SPELLING.test(source) && source !== "-0" ? BigInt(source) : new FloatMarker();
+  };
+  try {
+    return JSON.parse(text, reviver as (key: string, value: unknown) => unknown) as TaggedNode;
+  } catch (e) {
+    if (e instanceof CanonError) throw e;
+    if (e instanceof RangeError) throw new CanonError(DEPTH_MESSAGE); // host parser stack exhausted
+    if (e instanceof SyntaxError) throw new CanonError("invalid JSON: " + e.message);
+    throw e;
+  }
+}
+
+const FLOAT_MESSAGE = "floats are forbidden in canonical content; pre-represent as int or string";
+const NUMBER_TOKEN_CHAR = /[0-9eE.+-]/;
+
+/**
+ * Check EVERY number token in JSON text, in text order — including one that a later duplicate key
+ * overwrites, which JSON.parse (and so any reviver) never shows. An integer spelling must lie within
+ * +/-(2^53 - 1); a fraction or exponent spelling, or bare `-0`, is a float. Iterative and string-aware;
+ * malformed text is left for JSON.parse to reject. Same rule, and messages, as Python's
+ * `decode_input_json` hooks and the Rust pre-scan (SPEC.md section 2).
+ */
+function checkNumberTokens(text: string): void {
+  let i = 0;
+  const n = text.length;
+  while (i < n) {
+    const ch = text[i];
+    if (ch === '"') {
+      for (i++; i < n && text[i] !== '"'; i++) if (text[i] === "\\") i++;
+      i++;
+      continue;
+    }
+    if (ch === "-" || (ch >= "0" && ch <= "9")) {
+      let j = i + 1;
+      while (j < n && NUMBER_TOKEN_CHAR.test(text[j])) j++;
+      const token = text.slice(i, j);
+      if (!INTEGER_SPELLING.test(token) || token === "-0") throw new CanonError(FLOAT_MESSAGE);
+      if (token.replace("-", "").length > 16 || !Number.isSafeInteger(Number(token))) {
+        throw new CanonError(BARE_INT_MESSAGE);
+      }
+      i = j;
+      continue;
+    }
+    i++;
+  }
+}
+
+/**
+ * The tagged-JSON TEXT entry point, like Rust `decode_input_json` and Python `decode_input_json`:
+ * every number token is checked first (checkNumberTokens), so every number left is an exact safe
+ * integer and the host JSON.parse loses nothing; duplicate keys then keep the last member (Rust alone
+ * also rejects an overwritten member serde_json cannot parse or that is over-deep: SPEC.md section 2).
+ * Invalid or over-deep JSON is a CanonError.
+ */
+export function decodeInputJson(text: string): CanonValue {
+  checkNumberTokens(text);
+  let node: TaggedNode;
+  try {
+    node = JSON.parse(text) as TaggedNode;
+  } catch (e) {
+    if (e instanceof RangeError) throw new CanonError(DEPTH_MESSAGE); // host parser stack exhausted
+    if (e instanceof SyntaxError) throw new CanonError("invalid JSON: " + e.message);
+    throw e;
+  }
+  return decodeInput(node);
 }

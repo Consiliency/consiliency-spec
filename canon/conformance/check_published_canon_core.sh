@@ -9,13 +9,15 @@
 # holds them to the same byte/digest oracle.
 #
 # What it verifies, pinned to the EXACT published version (so a yank/re-publish is caught):
-#   1. `@consiliency/canon-core@0.2.0` from npm, in a temp install, run through the corpus SHIPPED
+#   1. `@consiliency/canon-core@$VERSION` from npm, in a temp install, run through the corpus SHIPPED
 #      INSIDE the tarball (the authoritative oracle) via canonicalBytesFromJson/digestFromJson in Node
 #      — byte(b64)+digest(hex) identity for every valid vector, rejection for every expect_error one.
-#   2. `consiliency-canon-core==0.2.0` from PyPI (WHEEL only — never a source build), in a venv, same
+#   2. `consiliency-canon-core==$VERSION` from PyPI (WHEEL only — never a source build), in a venv, same
 #      corpus, same assertions, via canon_core.canonical_bytes_from_json/digest_from_json in Python.
 #   3. The npm-shipped corpus, the wheel-shipped corpus, and spec's canonical corpus are all
-#      byte-identical (a publish shipping a stale/wrong corpus fails here).
+#      byte-identical (a publish shipping a stale/wrong corpus fails here). In a PRE-RELEASE WINDOW
+#      (canon/core/Cargo.toml already at the next version, see LOCAL_VERSION) the tree's corpus must
+#      instead be a superset of the published one: every published vector present and unchanged.
 #   4. The two published engines agree byte-for-byte on both the corpus and the engine-level BOUNDARY
 #      vectors (engine_boundary_vectors.json): the tag-vs-literal-$int-key razor, 2^53+/-1 exact big
 #      integers, and nesting past the serde recursion ceiling (which MUST reject, not mis-digest).
@@ -32,7 +34,14 @@
 # Under CANON_STRICT=1 (the hosted CI step, a runner with egress and a cp312 interpreter) either skip
 # is a hard FAIL (exit 1) instead: a required check must never pass without having run.
 #
-# Local run: set CANON_PY to an interpreter that has a published wheel (0.2.0 ships cp312 wheels), e.g.
+# The boundary vectors (steps 4-6) are the TREE's file, run against the PUBLISHED engines, so a
+# boundary vector may only be added once the published engine already agrees with it. A vector for a
+# behaviour the pinned release does not have yet goes in the corpus, which steps 4-5 read from the
+# package itself, or in engine_boundary_vectors_next.json, which only the in-tree engines run (the
+# self-tests, cargo test, XG4). Fold that file into engine_boundary_vectors.json when VERSION is
+# repinned to a release that satisfies it (done at the 0.4.0 repin: duplicate-key-f1..f6; it is empty).
+#
+# Local run: set CANON_PY to an interpreter that has a published wheel (cp312 wheels ship), e.g.
 #   CANON_PY=python3.12 bash canon/conformance/check_published_canon_core.sh
 set -euo pipefail
 
@@ -43,7 +52,9 @@ BOUNDARY="$CONF/engine_boundary_vectors.json"
 
 NPM_PKG="@consiliency/canon-core"
 PYPI_PKG="consiliency-canon-core"
-VERSION="0.3.0"
+# Pinned to the latest PUBLISHED canon-core: 0.4.0, from tag canon-core-v0.4.0, equal to the tree's
+# canon/core/Cargo.toml, so step [3] requires the published corpus to be byte-equal to the tree.
+VERSION="0.4.0"
 PYBIN="${CANON_PY:-python3}"
 # The crate version in the tree. Equal to VERSION except during a PRE-RELEASE WINDOW: the tree
 # already carries the next canon-core (Cargo.toml bumped, corpus extended) but the tag has not been

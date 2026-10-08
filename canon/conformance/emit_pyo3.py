@@ -10,6 +10,13 @@ and ``ts/canon.test.ts --emit`` so the gate can ``diff`` them directly.
 
 Usage:
     PYTHONPATH=<dir-with-canon_core.so> python3 emit_pyo3.py <corpus.json>
+    PYTHONPATH=<dir-with-canon_core.so> python3 emit_pyo3.py --boundary <engine_boundary_vectors.json>
+
+``--boundary`` emits ``name\tOK|ERROR\tbytes_b64\tdigest`` (``-\t-`` on rejection), byte-identical in
+format to ``py/test_canon.py --emit-boundary``, for XG4's five-engine boundary diff.
+
+Only the binding's own error (``ValueError``, which PyO3 raises for every CanonError) counts as a
+rejection; any other exception is a real failure and propagates (CAN-15).
 
 The binding takes tagged JSON (``canonical_bytes_from_json`` / ``digest_from_json``); we re-serialize
 each vector's ``input`` with ``ensure_ascii=True`` so a lone-surrogate ESCAPE reaches serde_json as
@@ -29,7 +36,7 @@ def run_vector(vec):
     if vec.get("expect_error"):
         try:
             canon_core.canonical_bytes_from_json(tagged_json)
-        except Exception:
+        except ValueError:
             return ("ERROR", "ERROR")
         raise SystemExit(f"vector {vec['name']}: expected CanonError but PyO3 binding accepted it")
     cbytes = canon_core.canonical_bytes_from_json(tagged_json)
@@ -38,7 +45,22 @@ def run_vector(vec):
     return (b64, dig)
 
 
+def run_boundary(bv):
+    tagged_json = bv["raw"] if "raw" in bv else json.dumps(bv["input"], ensure_ascii=True)
+    try:
+        cbytes = canon_core.canonical_bytes_from_json(tagged_json)
+    except ValueError:
+        return ("ERROR", "-", "-")
+    b64 = base64.b64encode(bytes(cbytes)).decode("ascii")
+    return ("OK", b64, canon_core.digest_from_json(tagged_json, "semantic-content"))
+
+
 def main() -> int:
+    if sys.argv[1:2] == ["--boundary"]:
+        with open(sys.argv[2], encoding="utf-8") as handle:
+            boundary = json.load(handle)
+        print("\n".join(sorted("\t".join((bv["name"],) + run_boundary(bv)) for bv in boundary)))
+        return 0
     corpus = sys.argv[1]
     with open(corpus, encoding="utf-8") as handle:
         vectors = json.load(handle)

@@ -2,16 +2,16 @@
   "package": {
     "npm": "@consiliency/spec",
     "pypi": "consiliency-spec",
-    "version": "0.4.0"
+    "version": "0.5.0"
   },
   "public_files": [
     {
       "path": "canon/README.md",
-      "sha256": "29d76f231f8f2c8719f4773be7bac9ec8ac3497977f60fcf478418b1430fbd1d"
+      "sha256": "d3c94e37d13a6f6bf68bf67b3197de425ca30071e6255baaa9bd406a6031cfb7"
     },
     {
       "path": "canon/SPEC.md",
-      "sha256": "bbc46300d937befc08320c3d0003d132afd447fcb7082bd711752295598d4597"
+      "sha256": "969abdbd66c3b2395f379528b1dc87e51c9eb2cb573ac3609a919510e9a9ebd9"
     },
     {
       "path": "canon/bindings/pyo3/README.md",
@@ -31,31 +31,35 @@
     },
     {
       "path": "canon/conformance/check_published_canon_core.sh",
-      "sha256": "12d65f2cea041c999f50664549df0d540daaefd85e11f6883103abfefbf817bf"
+      "sha256": "c5e4f10622b8e698e0a490921b4189b51d2fafb1729ce01b80a69c9d377a5ef8"
     },
     {
       "path": "canon/conformance/check_xg4_canon_core.sh",
-      "sha256": "11ed0601282eadd6e3c7184e2c0eea800fa593a0cf360fa581a429aabf6997a1"
+      "sha256": "95cd70bc1cee7c99eca60249ff375df62e120f7373b38e472a7ec1787e739efc"
     },
     {
       "path": "canon/conformance/emit_published_npm.mjs",
-      "sha256": "4cf3326cd146ec89096ea035fd8345e6a9ea4b16f81f7e913098b4a26cddd5aa"
+      "sha256": "2b59f2a2cd1abc96a033970d2078b4719a5be74571de7c7513837aa5b33dc3e5"
     },
     {
       "path": "canon/conformance/emit_published_py.py",
-      "sha256": "8721f4faa635a304dd424667cd12676b3777405a801e32dabb8b877da0530009"
+      "sha256": "6664dbe5a8a639b2bb7b8c705e4a4e538bd7134f76974f31a9cbd6b49f3aa345"
     },
     {
       "path": "canon/conformance/emit_pyo3.py",
-      "sha256": "ba3075f7d348645722c471a4ce422048aaee64a858c0351afc0b445bd7c18dd1"
+      "sha256": "4050ab4c63b1afd73940e0bc588b2d7fd275b901f6f8e7c0949ece30ce03122d"
     },
     {
       "path": "canon/conformance/emit_wasm.mjs",
-      "sha256": "8b75c314377bd93c9ddf1d444e69b1a00478e00f52ccec9e7c6b2d3f9ddc3570"
+      "sha256": "df8fe8d8647f9b03bb478944211a1d17977caab594d1283c72f1ababe1c8207b"
     },
     {
       "path": "canon/conformance/engine_boundary_vectors.json",
-      "sha256": "388b2cb3647dc6fb26d630837c5e838268cb0c6dc7045b20d6205a99a01b0b37"
+      "sha256": "e7acdc9638b5ad353caea90b2d0d23799572317713a62f982eda4b8b713654dd"
+    },
+    {
+      "path": "canon/conformance/engine_boundary_vectors_next.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
     },
     {
       "path": "canon/conformance/test_ingest_nfc.py",
@@ -63,7 +67,7 @@
     },
     {
       "path": "canon/conformance/test_unicode_skew.py",
-      "sha256": "cd6338322a2a616dd90c3977d0e705b3ab78a8f1df9ee3445a7078aae61c6794"
+      "sha256": "5e1bbe79793a896a7a070da791131734377ba822c414c4effb85348d3dd339b3"
     },
     {
       "path": "canon/conformance/wasm_surrogate_finding.mjs",
@@ -71,11 +75,11 @@
     },
     {
       "path": "canon/core/Cargo.lock",
-      "sha256": "326e1d5992c64fbeb24d57da1a493ef96bddcab22fd6caa57c1873cfe8af3d82"
+      "sha256": "94cdfc0ca70d3dbdd3d215da6052016f85213455795b1b4e0d156a7319bc322f"
     },
     {
       "path": "canon/core/Cargo.toml",
-      "sha256": "a663370357bbb84de4c8ddff7ca4d5931f64a02e129ecbf725bc4436b5710965"
+      "sha256": "b97528b2a730bcb11464d4851086ac948c4e448febada77fb15400a15ea5eefd"
     },
     {
       "path": "canon/core/cbindgen.toml",
@@ -91,7 +95,7 @@
     },
     {
       "path": "canon/core/src/bin/canon_core_emit.rs",
-      "sha256": "d345436f4503d769e8965babcaf717dc4adf53bdb24be555576fedaa573e228b"
+      "sha256": "7b8bc6c960edd35f47581090acb902c4ef7e6748fa535422bd41db4bf5e659f2"
     },
     {
       "path": "canon/core/src/c_abi.rs",
@@ -99,7 +103,7 @@
     },
     {
       "path": "canon/core/src/lib.rs",
-      "sha256": "80cf3a7b320729d8e36a23353b2489a5dc7f8a8ec27579d4e3719dd6401547fc"
+      "sha256": "0331fb3421263a9cdc247405e27e8be1cec672325f0a4d8c09d70ac2f7d5d7b6"
     },
     {
       "path": "canon/core/tests/c_abi_smoke.c",
@@ -107,11 +111,11 @@
     },
     {
       "path": "canon/core/tests/parity.rs",
-      "sha256": "6ab1ebdced73f41d053f63400d9f4ed2e891cd0e74bea3caf774a1241497b81f"
+      "sha256": "0ddee405eb2faed27c3222f08e00d6d8d2ec2be91e90ef9bfccd0f25a7745721"
     },
     {
       "path": "canon/py/canon.py",
-      "sha256": "af2d2cfb1d5f5bdf42966dc11768f03d53cbb84ccdfb5675aceeebfa0bca9977"
+      "sha256": "c7baf9db1c8835c1aad547b0d6b9e977c6ce9970d34e91df37bd2641d69cfb22"
     },
     {
       "path": "canon/py/canon_ingest.py",
@@ -123,23 +127,23 @@
     },
     {
       "path": "canon/py/test_canon.py",
-      "sha256": "1bb07b0f9a06448642e90c0e88c3d971a2bbd77bf0b0c9968d9230a8bf356156"
+      "sha256": "0c34e3d0ae0ad606239d19d404008fb186c6d11b3366223602e64b938ef18718"
     },
     {
       "path": "canon/ts/canon.test.ts",
-      "sha256": "6835a9349e89f26a9faf93cda95ec6c61cef6970d1841cee519825332c115174"
+      "sha256": "bce6064a37c31523bb45e06ecaaca79dbf415f8e28146c9baee699d0c0474872"
     },
     {
       "path": "canon/ts/canon.ts",
-      "sha256": "b41a95a24ec2469b752b2f1165d0737714395f11015e7c0b0847f9fbfdd5cf15"
+      "sha256": "82d4849ffcd33485ef050a46e2ba1f8dc74b6731e56dec4f859604101129362f"
     },
     {
       "path": "canon/vectors/canon-vectors.json",
-      "sha256": "331d6264ffc1c14bc4f1d53c1e57d11014aa521d794f5d4b9c69a99fcf77f0f3"
+      "sha256": "934b45325eba37d121ffca886eaa32b5e2dfeb0eb0bb65a3b331d141bdcd0b84"
     },
     {
       "path": "canon/vectors/gen_vectors.py",
-      "sha256": "22817e4790439a568c3d7320b2c2e3d3a87819c62430a8bb6694cde3cc6ab250"
+      "sha256": "842e1a973c1a0938af3083dd702aec67909ad4267e8b7a016dffb400681a42c6"
     },
     {
       "path": "canon/vectors/gov-cross-repo-canon-vectors.PROVENANCE.md",
@@ -151,11 +155,11 @@
     },
     {
       "path": "consiliency_spec/__init__.py",
-      "sha256": "1a3fbac5965fb58685bf95ec8bdc2bc014e2feae315c14de5ba732f6275e0187"
+      "sha256": "2a1c87313b23950aa069b0fa247bb05daeca25c6b5f18ff51a536e865dcfb5bb"
     },
     {
       "path": "consiliency_spec/outside_agent_router.py",
-      "sha256": "62f68a799ab67c009af5085dd7ebb45802953b39e0b6bf370bd0436df8ac5f34"
+      "sha256": "1f8c02b380f68809e40629bc81b48f3df3e22272f5d4634c87ef9e41f8ebcfb5"
     },
     {
       "path": "consiliency_spec/py.typed",
@@ -191,7 +195,7 @@
     },
     {
       "path": "spec-parity/SEMANTICS.md",
-      "sha256": "b3574b96e5de0145aeaba041122816197202fca1e73707bc9a778649a300a1a5"
+      "sha256": "1e585270ce56f1b31f949f53e568380975e6e009d0cdbeb993344c3837a1f53c"
     },
     {
       "path": "spec-parity/conformance/check.sh",
@@ -203,7 +207,7 @@
     },
     {
       "path": "spec-parity/kind-alignment.json",
-      "sha256": "cef3c6cbfd77d7b29ac46b400569d80b945bbec3022fae2b3d808b8a1d62baa1"
+      "sha256": "5615e693bffecc1c40f1dfe447f913982c746b89c4d6b3c21298f0419a7ebc3b"
     },
     {
       "path": "spec-parity/permitted-freedom-vocab.json",
@@ -211,7 +215,7 @@
     },
     {
       "path": "spec-parity/schemas/certificate.schema.json",
-      "sha256": "50359943f48f8b56f503e4fa915df58a31c791bd6593f7715da3f1a789f336e8"
+      "sha256": "27a05b3d712f5cf95953ffe63fcd9a4cc7d0e42acd5a2a9479f7d243d286833d"
     },
     {
       "path": "spec-parity/schemas/ec-reproducibility-attestation.schema.json",
@@ -231,11 +235,11 @@
     },
     {
       "path": "spec-parity/schemas/portal-payload.schema.json",
-      "sha256": "43120385221dbb8e2c26efd33d0ef5ea7463590bf24c559558703389eedf2fa2"
+      "sha256": "49ff60e3fe81e86fd6ff5685577bd414c593e652ac81aff1f5b32fee8badde58"
     },
     {
       "path": "spec-parity/schemas/result-state.schema.json",
-      "sha256": "97aec6a058abcb01f7a5fd73a46e0982f62a1b18efa67e148404fb13054b5517"
+      "sha256": "9058331454eedfe081fe646a5ec4bd81db72b2da9d19f6e3e82dbee4d7fec6b2"
     },
     {
       "path": "spec-parity/schemas/run-descriptor.schema.json",
@@ -308,7 +312,7 @@
   ],
   "schema_version": "consiliency.spec.public_canon_manifest.v1",
   "source": {
-    "authority_contract_version": "0.6.0",
+    "authority_contract_version": "0.6.5",
     "canon_version": "spec-canon:v2",
     "repo": "Consiliency/consiliency-spec"
   }

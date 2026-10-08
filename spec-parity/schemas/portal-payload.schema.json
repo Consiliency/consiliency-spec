@@ -40,7 +40,7 @@
     },
     "projection_algo_version": {
       "type": "string",
-      "description": "P/N projection+parity algorithm version, copied from the certificate (currently `spec-engine-projection:v3`). Pins reproducibility of the underlying result."
+      "description": "P/N projection+parity algorithm version, copied from the certificate (currently `spec-engine-projection:v4`). Pins reproducibility of the underlying result."
     },
     "canon_version": { "type": "string", "description": "canon contract version, copied from the certificate." },
     "idmodel_version": { "type": "string", "description": "idmodel contract version, copied from the certificate." },
@@ -64,6 +64,10 @@
       "type": "string",
       "pattern": "^[0-9a-f]{64}$",
       "description": "Optional ledger entry_digest of the cited ratify event, copied from the certificate iff present. A digest pointer, not fetchable."
+    },
+    "extraction_coverage": {
+      "$ref": "result-state.schema.json#/$defs/extraction_coverage_summary",
+      "description": "OPTIONAL coverage summary (additive; payload_schema_version stays \"0\"). Copied verbatim from the certificate's `extraction_coverage` iff present, which the certificate carries ONLY when E(C)'s extraction was not fully observed (`partial` or `unmeasured`, with the measured file counts). Absent when the extraction was measured full or the E(C) declares no coverage record. A portal MUST NOT present a payload carrying it as full coverage. Counts only: no paths, no source."
     },
     "advisory": {
       "type": "boolean",

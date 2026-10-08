@@ -6,7 +6,7 @@ Status: **NORMATIVE**, frozen for v1. Owned by `spec`
 This document, together with the schemas in `spec-parity/schemas/` and the data file
 `spec-parity/kind-alignment.json`, defines the parity semantics **completely enough that someone else can
 implement `P` and `N` with no further decisions except those explicitly marked `OPEN`.** It builds on
-**canon v1** (`../canon/SPEC.md`) and **idmodel v1** (`../idmodel/SPEC.md`) and does not restate their rules;
+**canon v2** (`../canon/SPEC.md`) and **idmodel v1** (`../idmodel/SPEC.md`) and does not restate their rules;
 it cites them.
 
 The functions being defined:
@@ -47,13 +47,13 @@ N(projection) -> finding_set + certificate   # the 5-dimension parity checker; d
   observe yields `unknown`, never a silent `pass`.
 - **Inputs are validated before they are graded.** Every engine entry (`projection.load_inputs` /
   `run_engine`, the MCP `parity`/`project` tools, the ingest packages) validates its inputs before
-  projecting them. `S` must pass `spec_graph.validate` under the engine subset: every rule except
-  decomposes_to level-adjacency and operation-requires-signature, which 8 committed graphs predate.
-  `E(C)` must match `schemas/ec.schema.json` with unique `boundary_id`s and no JSON floats. The minimal
-  ingest package, which does not ship spec-graph, checks only the structure of `S` (node and edge lists,
-  unique non-empty names, edge endpoints that resolve) instead of the full engine subset.
-  Independently of the entry point, `P` and `N` themselves refuse a structurally malformed input before
-  grading it: duplicate or empty `S` node names, dangling edges, a malformed `E(C)` (duplicate
+  projecting them. `S` must pass the **full** `spec_graph.validate` rule set (projection v4; the
+  0.4.0 engine subset, which relaxed level ordering and operation-requires-signature, is gone): among
+  others, every `decomposes_to` descends to a strictly lower level and every `operation` declares a
+  signature. `E(C)` must match `schemas/ec.schema.json` with unique `boundary_id`s and no JSON floats.
+  Independently of the entry point, `P` and `N` themselves refuse a malformed input before grading it:
+  their shared grading boundary runs the same full `spec_graph.validate` on `S` (projection v4), plus
+  the structural checks: duplicate or empty `S` node names, dangling edges, an `operation` without a signature, a malformed `E(C)` (duplicate
   `boundary_id`s, wrong types, floats), run, continuity map or correspondence container. So a driver
   that builds its inputs directly can never grade a malformed `S`. The run descriptor and the
   continuity map must be well formed. An invalid input is refused with an input error. It is never
@@ -99,7 +99,15 @@ in-scope if ANY yields true:
    decomposition edges.** Leaf `type`/`field` detail below the lowest declared node is NOT auto-in-scope (it
    is refinement-below-frontier, sec 3) unless explicitly named. Only this source filters by kind: a node
    of any other kind reached by the decomposition walk is left out of the default frontier. Sources 1 and 2
-   include every decomposition descendant (sec 1.3).
+   include every decomposition descendant (sec 1.3). **Under this source every prohibition declared in
+   `S` is either graded or reported; none drops out silently** (projection v4). A prohibition is graded
+   iff some in-scope node is `governed_by` it (sec 4). Every other prohibition in `S` yields one
+   `prohibition` check **`unknown`** with code `prohibition_outside_default_closure`, whatever the
+   reason no in-scope node is governed by it: every node it governs was filtered out by kind (e.g. a
+   `type`), is not reachable from any capability by decomposition (an orphan), or it governs no node
+   at all. It is not graded against anything, so it can never pass; naming the governed nodes in a
+   selector (source 1) or flagging them (source 2) grades it. The projection records these names in
+   `default_closure_dropped_prohibition_names` (empty under sources 1 and 2).
 
 The chosen source and the resolved node set are recorded in the projection so the run is auditable.
 
@@ -307,7 +315,7 @@ generated code out of the draft, but the code it removes was not extracted, so t
 (the committed `ingest-fixture` is partial for exactly this reason: `baml_client/client.ts`). Both
 walks are iterative and the `.proto` match is case-insensitive.
 
-**`.tsx` is always partial under tsc 5.0.1.** tsc maps `.tsx` to the plain `typescript` grammar, so
+**`.tsx` is always partial under tsc 5.2.0.** tsc maps `.tsx` to the plain `typescript` grammar, so
 any JSX yields `ERROR` nodes and the file is `syntax_error`. The measurement is honest — tsc really
 under-extracts these files — so a React/TSX repo's absence-based claims are `unknown` until tsc
 parses `.tsx` with the TSX grammar.
@@ -471,6 +479,13 @@ pins the handling rules.
   recorded `unmapped_desired_kind`.
 - **Ambiguous mapping** (e.g. greenfield `property` → `type` or `operation`): the desired graph's own declared
   kind, resolved via correspondence, wins; if undecidable → `unknown` + `ambiguous_kind_alignment`.
+- **BAML types** (decision D3, no matrix change). BAML has no realized source of its own: the BAML adapter
+  extracts the *generated* Python SDK with treesitter-chunker, so a BAML `class` reaches the engine through
+  the generic `treesitter-chunker` `class` → `component` row. A desired BAML data type is authored as a
+  desired `type`, and a desired `type` is graded by the **declared-kind member-set comparator** (sec 7.2:
+  the ambiguous-mapping rule above, where the declared kind wins), not by the row's `component`. So the
+  row does not mis-grade BAML types. Changing the generic row would regrade every class in every language;
+  a BAML-specific row would need a `baml` realized source (and a kind-alignment version bump).
 
 ### 5.1 Greenfield realized kinds — `OPEN-1` RESOLVED
 
@@ -615,11 +630,16 @@ Each matched pair is ONE soundness check, decided by the first rule that applies
    which aligns to `operation`). No signature comparison is made across kinds. An *unmapped* realized kind is
    not a mismatch; it is `unmapped_realized_kind` (**unsupported**, sec 5) and the comparison continues.
 3. **Signature** — `d` declares no signature → **pass**: `S` places no signature constraint, so there is
-   nothing to compare. **Exception — an `operation`:** spec-graph requires every operation to declare a
-   signature, but the engine-entry subset (sec 0) relaxes that rule until the committed graphs that
-   predate it are re-authored. An `operation` that declares none, matched to a realized fact that
-   carries one, is **unknown** `signature_undeclared`, never a pass over an `S` the authoring
-   validator rejects. (When neither side carries a signature there is nothing to compare: **pass**.)
+   nothing to compare. This covers the non-operation kinds only: an `operation` always declares a
+   signature, because `S` is validated with the full spec-graph rule set before grading (sec 0), and an
+   `operation` without one is refused as an input error. (Projection v3 graded such an operation, admitted
+   by the old engine-entry subset, as **unknown** `signature_undeclared`; projection v4 retires that
+   rule, and the code is never emitted.) The "no declared signature → pass" rule also holds when the
+   realized signature is **unparseable** (the adapter's give-up marker): the P1 decision that a desired
+   node declaring no signature places no signature constraint (D2) supersedes the earlier round-5
+   signature-parser ruling that an unparseable realized signature fails against every contract,
+   including a desired node with no signature. A *declared* signature is still never a pass against an
+   unparseable realized one (**fail** `structural_mismatch`).
    `d` declares one and the realized fact carries none → **unknown** `signature_unobservable`. Otherwise the normalized signatures are compared: equal → **pass**; a
    trailing extension under `open_interface` → **pass** (`permitted_freedom` finding); anything else →
    **fail** `structural_mismatch`.
@@ -746,8 +766,8 @@ A certificate MUST pin (union of the Storage `certificates` record shape and Pha
   cannot change them). A draft and its ratified `S` share this digest; `spec_authority` tells them
   apart.
   **Binding procedure for a verifier that holds a candidate `S'`** (the certified-projection gate
-  C1/C6 and any downstream verifier): (1) run the engine's structural check on `S'` and refuse it if
-  malformed; (2) recompute `spec_graph.graph_digest(S')` and require it to equal
+  C1/C6 and any downstream verifier): (1) run the engine's entry check on `S'` (the full spec-graph
+  rule set since projection v4) and refuse it if malformed; (2) recompute `spec_graph.graph_digest(S')` and require it to equal
   `desired_graph_digest`; (3) recompute `spec_revision_digest` from `S'`'s `spec_revision_id` (`""` when absent) and
   that digest, as defined above, and require equality; (4) require `is_authoritative(S') == (spec_authority == "grounded")`.
   Any one alone is insufficient: the graph digest excludes `spec_revision_id` and the draft markers. (Schema-1 certificates carried the canon digest of the
@@ -795,7 +815,7 @@ A certificate MUST pin (union of the Storage `certificates` record shape and Pha
   stays valid *as a v1 record*; a v1 digest is never compared against a v2 digest; a mixed-`canon_version`
   graph is rejected at the consumer (never silently re-hashed). See `canon/SPEC.md` §9. Downstream
   consumers cut over to v2 wholesale (metadata-only notification; OPEN-5). Separately,
-  **`projection_algo_version` is `spec-engine-projection:v3`** since the authority-in-certificate
+  **`projection_algo_version` is `spec-engine-projection:v4`** since the 0.5.0 engine-contract
   release (sec 9.2), under the same historical-cert policy.
 - **`overall_result_state`** + **`dimension_results`** (all five) — per sec 6. **Invariant:** these are
   byte-equal (after canon canonicalization) to the referenced `finding_set`'s `overall_result_state` /
@@ -827,6 +847,27 @@ inputs (same `E(C)`, `S`, correspondence, kind-alignment, vocab, waivers, run) c
 algo versions as if they were the same function, and must not re-hash or re-grade a stored certificate under
 a newer version: a v1 certificate stays a valid **v1** record.
 
+- **`spec-engine-projection:v4`** (the 0.5.0 engine-contract release; certificate `schema_version` stays
+  `"2"`, no certificate field changes). Every certificate digest changes (the version is in the
+  preimage). Grading changes:
+  - **Full validation at every entry** (sec 0): `S` passes the full spec-graph rule set at
+    `run_engine`/`load_inputs`, the MCP tools, the ingest packages and the render producers (the 0.4.0
+    engine subset is gone), and `P`/`N` themselves run the full rule set at their shared grading
+    boundary, so a driver that builds its inputs directly cannot grade an `S` the entries refuse. An `S`
+    that 0.4.0 graded is now refused if it decomposes same-level or upward, or carries an unsigned
+    `operation`.
+  - **`decomposes_to` is strictly descending** (spec-graph SPEC sec 4): a level may be skipped going
+    down (`contract` → `detailed`); same-level and upward stay invalid. This relaxes the old
+    adjacent-only authoring rule, so every graph the old subset admitted for its level skips stays
+    valid, and verifier step (1) above still accepts the `S` of an already-delivered certificate whose
+    `S` skips a level.
+  - **`signature_undeclared` is retired** (sec 7.2): an unsigned `operation` never reaches grading.
+  - **Default-closure prohibitions** (sec 1.2(3)): under the default closure every prohibition in `S`
+    that no in-scope node is `governed_by` (governed nodes filtered by kind, unreachable from a
+    capability, or none) is `unknown prohibition_outside_default_closure` (was silently out of scope).
+  - Not grading changes, in the same release: the portal payload carries the certificate's optional
+    `extraction_coverage` summary (sec 12.2); `kind-alignment.json` documents how BAML types are graded
+    (sec 5, no version bump).
 - **`spec-engine-projection:v3`** (the authority-in-certificate release, certificate `schema_version`
   `"2"`). Every certificate digest changes (the version and the new fields are in the preimage); no
   committed `result_state` or finding changed. The first five grading changes below (ENG-5,
@@ -887,6 +928,41 @@ a newer version: a v1 certificate stays a valid **v1** record.
   grounded-intent correspondence; ENG-1 measured `ec_reproducible` and ENG-2 waiver expiry/validation
   (certificate/annotation changes, no `result_state` change); ENG-3 (above, first versioned at v2). The canon v1→v2 move (NFCBOUNDARY) is versioned by `canon_version`,
   not here.
+
+### 9.3 Digest preimage sidecar (opt-in)
+
+A downstream verifier must not reconstruct a producer digest with its own encoder (canon sec 9:
+produce once, store verbatim). So the engine can hand back the exact bytes it hashed. With
+`parity(..., emit_preimages=True)` (CLI `run_engine.py --emit-preimages PATH`; the ingest package's
+`evaluate(..., config={"emit_preimages": True})`) the result gains a `preimages` sidecar next to the
+`finding_set` and `certificate`:
+
+```
+{"sidecar_version": "spec-engine-preimages:v1",
+ "entries": {"desired_graph":    {profile, canon_version, preimage_b64, digest},
+             "finding_set_core": {...},
+             "certificate_body": {...}}}
+```
+
+- **`desired_graph`**: the canonical bytes of `spec_graph.hashed_content(S)` (the graded view minus
+  `spec_revision_id`), profile `semantic-content`; `digest` equals the certificate's
+  `desired_graph_digest`.
+- **`finding_set_core`**: the canonical bytes of `{dimension_results, findings}`, profile
+  `semantic-content`; `digest` equals `finding_set_id` and the certificate's `findings_ref`.
+- **`certificate_body`**: the canonical bytes of the certificate without its top-level `digest` (the
+  canon sec 8 exclusion), profile `certificate`; `digest` equals the certificate's `digest`.
+
+`preimage_b64` is standard base64 of the canonical UTF-8 bytes. Each entry verifies from its own fields:
+`SHA-256("spec-canon:" + canon_version + ":" + profile + "\n" || preimage) == digest`. A verifier can
+then decode the preimage as JSON and compare it with the stored object, without re-encoding it. The
+producer refuses to emit an entry that does not re-hash this way.
+
+The sidecar is **opt-in and outside every digest**. With the flag off, `parity()` returns exactly
+`{finding_set, certificate}` and every byte is unchanged. With it on, `finding_set` and `certificate`
+are still byte-identical, and the CLI's stdout does not change (the sidecar goes only to `PATH`).
+`emit_preimages` must be a boolean. The sidecar holds `S` content and findings, so it is **not
+metadata-only**: never deliver it as, or inside, a portal payload (sec 12). It is versioned by
+`sidecar_version`, not by the certificate `schema_version` or `projection_algo_version`.
 
 ---
 
@@ -996,6 +1072,11 @@ The payload is built by **allowlist**: only known-safe fields are copied in. Not
   delivery **advisory** (the portal must not gate on it). Only an explicit `ec_reproducible: true` on the
   certificate is reproducible; an absent or non-boolean value delivers as `ec_reproducible: false`,
   `advisory: true` (fail-closed, ENG-1).
+- **`extraction_coverage?`** — the certificate's coverage summary (sec 4.2 / sec 9), copied verbatim iff
+  the certificate carries it, i.e. only when the `E(C)` extraction was measured-partial or unmeasured:
+  `status` plus the measured file counts, never a path. Additive and optional (projection v4;
+  `payload_schema_version` stays `"0"`). Its absence means measured-full or a declared (fixture)
+  `E(C)`; a payload carrying it must not be rendered as full coverage.
 - **`finding_summaries`** — one per finding, each carrying ONLY: `dimension`, `result_state`, `code`,
   `title` (**derived from `code`**, a stable machine label — NOT the finding `message`), a **location ref**
   (`subject.desired_logical_id` / `subject.realized_occurrence_id` — idmodel digests, SSRF-safe), the kinds
@@ -1101,6 +1182,28 @@ anything is appended: an unknown, revoked or expired key; a missing or bad signa
 confusion; a signer whose registry `approver` is not the core's `approver`; and a core outside its
 `validity` window. Ingress is also gated by a bearer token checked before any parsing (optionally mTLS).
 
+**Re-verification at delivery (MUST, ENG-12).** A ledger row is not trusted because it carries a `chain`
+(the chain is unkeyed, §13.3). Delivery re-runs the same vendored verifier ingress uses, against the
+vendored registry, under the ledger lock:
+
+- **before resolving**, every admitted row for the delivered event's resolution key — earlier ratifies,
+  the delivered row, and any `revoke`, `supersede` or later `ratify` that would refuse it — has its key
+  status, scheme, approver, cert binding and Ed25519 signature verified (`ingress.verify_key_rows_at_delivery`).
+  Each row is verified at its *signing instant* (the later of its key's and its core's `not_before`), not
+  at delivery time: a history row whose window has since lapsed is legitimate, but a lapsed window never
+  skips the signature check (the verifier checks windows before the signature). A row whose key and core
+  windows never overlap could never have verified and is refused. A resolution refusal (`revoked`,
+  `superseded`, `not_current`) is therefore only ever reached over verified rows.
+- **after resolving**, the delivered `ratify` (the stored ledger row) is verified in full, windows
+  included, bound to the delivered certificate's digest, at the delivery clock (`ingress.verify_delivered_at`).
+  The clock is sampled after the ledger lock is held and again after every directory lock is held,
+  immediately before publishing, so a lock wait cannot let an expired authority through.
+
+Any failure refuses the delivery with the verifier's own reason (`bad_signature`, `unknown_key_id`,
+`key_revoked`, `key_expired`, `core_validity_expired`, `algorithm_confusion`, `signer_approver_mismatch`,
+`missing_signature`, …). An authority that has left its validity window, or whose key was since revoked or
+expired in the registry, is no longer deliverable.
+
 The `core.custody_binding.phase_loop_driver_allowed` field is schema-fixed to `false`: the **phase-loop
 driver cannot mint authority**. The driver may verify and route authority events; the authority-conferral
 event originates from the Portal/org layer only.
@@ -1139,7 +1242,8 @@ cores carry no signing time, so a `ratify` appended after a `supersede` is effec
 earlier. Ingress admits every verified `ratify`/`revoke`/`supersede` (history is append-only); delivery
 requires the live ledger and refuses any event that is not a `ratify`, not a row of that ledger, or not the
 effective entry for its key. Delivery resolves the effective authority and publishes its artifacts while
-holding the ledger's exclusive lock, so no entry can be admitted between the check and the write. `decision_id` is the authority identity and is admitted
+holding the ledger's exclusive lock, so no entry can be admitted between the check and the write. Delivery
+also checks the ledger against its **head anchor** (below) under the same locks. `decision_id` is the authority identity and is admitted
 at most once: a byte-identical re-submission is an idempotent replay (accepted, not appended, and the stored
 row is returned), while a re-used `decision_id` with different signed content is a duplicate entry and is
 rejected.
@@ -1171,15 +1275,69 @@ dry run that reports the tail's kind. It verifies the intact prefix and then cla
 `python3 spec-engine/authority/ingress.py verify-ledger <ledger.jsonl>` verifies a ledger without
 changing it. Both tools refuse a missing path with `ledger_not_found`.
 
-**Limit: the chain does not defend against a writer.** The hash chain is an unkeyed, recomputable
-hash. It detects accidental corruption, torn writes and edits that do not recompute the chain. It does
-NOT detect a writer who deletes, reorders or truncates rows and recomputes the chain: for example,
-dropping a `revoke` so that the revoked `ratify` becomes deliverable again, or rolling back to a valid
-shorter prefix, which needs no recomputation at all. Write access to the ledger file is therefore a
-**trusted boundary**. The same applies to signatures: they are verified at ingress, and delivery does
-not re-check them (the consumer re-verifies the delivered event). Detecting such edits needs an anchor
-outside the file, such as signed checkpoints or an externally recorded head (a tracked
-follow-up).
+**Delivery head anchor (MUST).** The hash chain is an unkeyed, recomputable hash.
+On its own it detects accidental corruption, torn writes and edits that do not recompute the chain, but
+not a writer who deletes, reorders or truncates rows and recomputes it — for example dropping a `revoke`
+so that the revoked `ratify` becomes deliverable again — nor a rollback to a valid shorter prefix, which
+needs no recomputation at all. Delivery therefore keeps a **monotonic head anchor outside the ledger
+file**:
+
+- **Where and key.** One JSON file, `.spec-authority-ledger-anchor.json`, in the directory of the
+  delivery's decision log when one is used (an operator state directory shared by every delivery that
+  uses it), otherwise in the delivery's target directory. It maps `realpath(ledger)` to
+  `{rows, head_entry_digest, head_root_digest}` of the last physical row. `root_digest` is the chain's
+  running accumulator and so commits to the whole prefix; `entry_digest` alone hashes one core.
+- **Check.** Before publishing, the live ledger MUST hold at least `rows` rows (else `ledger_rollback`)
+  and its row `rows − 1` MUST carry the anchored root and entry digests (else `ledger_forked`: the
+  anchored chain is not a prefix of the live one). With no anchor for that ledger yet (first use), the
+  delivery proceeds. An unreadable or malformed anchor file is refused (`ledger_anchor_unreadable`), never
+  treated as first use.
+- **Update.** A delivery advances the anchor to the verified head it delivered against **after**
+  publishing. The final clock sample and verification (§13.2) come immediately before the publish, with no
+  anchor I/O in between, so an anchor write can never stall an expired authority into publication. A
+  delivery refused `revoked`, `superseded` or `not_current` — reached only after
+  the chain verified and every row for the key passed signature re-verification (§13.2) — MUST also
+  advance an **existing** anchor file to that verified head before the refusal is returned, so a `revoke`
+  is anchored as soon as anyone attempts the revoked delivery. An existing anchor file may thereby gain an
+  entry for a ledger it has not recorded before. A refusal MUST NOT create the anchor file, and every other
+  refusal (`ledger_rollback`, `ledger_forked`, a signature or window failure, `ledger_anchor_unreadable`,
+  a ledger-integrity failure) MUST leave it unchanged. The anchor never moves backward. Anchor writes are
+  atomic and durable when they succeed: the temp file is fsynced, renamed over the anchor, and the
+  directory fsynced.
+- **Anchor problems after publishing are never refusals.** After publishing, the delivery has happened:
+  nothing in the anchor advance may refuse or raise. A failed anchor re-read (an I/O error, a corrupt or
+  unreadable anchor), a failed rename, and even a rollback or fork found by the advance's re-check (it
+  cannot un-publish) all leave the anchor at its previous value (it lags, which only weakens rollback
+  detection); if only the directory fsync fails, the new verified head is in place but may not survive a
+  crash. In every case the delivery succeeds with a `ledger_anchor_warning` result field and a log line.
+- **Anchor write problems on the refusal path.** The **original** refusal reason is returned, with the
+  problem in the refusal's `anchor_warning` attribute and a log line: a failed rename leaves the anchor
+  unchanged, and a failed directory fsync leaves the verified head this refusal was allowed to advance
+  to. No refusal reason ever means "the anchor was changed". These problems are reported through the
+  result, the refusal and logging only, never the `warnings` module, so a caller's warnings filter cannot
+  turn them into an exception.
+- **Locks.** The anchor is read and written inside delivery's existing lock order — the ledger lock, then
+  the decision-log and target directories in sorted realpath order — and its directory is always one of
+  those locked directories, so concurrent deliveries neither deadlock nor lose an update.
+
+**Remaining limits.** A rollback or fork is *detected against the delivery anchor*: it is refused by every
+delivery whose anchor has seen a longer head. The anchor does not help against:
+
+- a party that controls both the ledger and the anchor file (it can roll both back together);
+- a rollback that happens before the first successful delivery through a given anchor (first use trusts
+  the ledger as it is, and refusals never create the anchor), including a fresh target directory when no
+  decision log is used;
+- rows admitted after the last delivery attempt that reached a verified head: if no delivery (successful,
+  or refused `revoked` / `superseded` / `not_current`) is attempted through the anchor after a `revoke`,
+  a rollback to just before that `revoke` is not detected;
+- a delivery pointed at a different ledger path (an operator input; that path starts at first use);
+- **ingress** extending a rolled-back ledger: ingress has no anchor, so it admits new rows onto the
+  rolled-back head. The next anchored delivery then sees a fork and refuses, but the ledger itself is not
+  repaired.
+
+Signatures are re-verified at delivery (§13.2), so a writer without the Portal key cannot forge an
+authority row; the consumer also re-verifies the delivered event. Closing the remaining gap needs
+checkpoints signed by a key the ledger writer does not hold (a tracked, cross-repo follow-up).
 
 ### 13.4 External freeze reference
 

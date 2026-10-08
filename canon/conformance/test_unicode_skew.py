@@ -7,8 +7,9 @@ now target `ingest`, not `canon`:
 
   1. The fail-closed version assertion ACTUALLY fails on a wrong Unicode version (a simulated
      mismatch must be loud, never silent) — the assertion lives in ingest.py now.
-  2. The shipped post-13 inputs are LIVE discriminators: their NFC under a Unicode-13 DB (stdlib
-     `unicodedata`) byte-differs from their NFC under the pinned Unicode-16 DB (unicodedata2). This
+  2. The shipped post-13 inputs are LIVE discriminators: their NFC under a DB that predates their
+     marks (simulated, so the proof holds on every host) byte-differs from their NFC under the
+     pinned Unicode-16 DB (unicodedata2). This
      is the concrete evidence that a DB skew would break ingest determinism — and it is the ONLY
      thing that proves the pin is load-bearing, because canon v2 passes bytes through verbatim and
      the cross-language gate stays green even if ingest NFC were missing entirely.
@@ -82,18 +83,52 @@ def test_assertion_fails_on_wrong_version() -> None:
         shutil.rmtree(stub_dir, ignore_errors=True)
 
 
-def test_post13_inputs_are_live_discriminators() -> None:
-    """Each post13 input must NFC-diverge between stdlib and the pinned DB *on hosts where the skew
-    exists for that input*.
+# CAN-6: the discriminator proof must not depend on the host. It used to compare the pinned DB with
+# the host's stdlib `unicodedata`, skipping every input whose marks the stdlib already knew: 1 of 3
+# inputs was live on a Unicode-15 CPython (3.12, the CI interpreter) and 0 of 3 on any Unicode-16
+# stdlib, where it passed with only a note. It now compares the pinned DB with a SIMULATED stale DB.
+#
+# The code points each post13 input relies on, with the Unicode version that assigned them. A DB that
+# predates a code point treats it as unassigned: canonical combining class 0 and no decomposition.
+POST13_MARKS = {
+    0x0C3C: "15.0",  # TELUGU SIGN NUKTA (ccc 7)
+    0x1715: "15.0",  # TAGALOG SIGN PAMUDPOD (ccc 9)
+    0x0897: "16.0",  # ARABIC PEPET (ccc 230)
+}
 
-    The inputs mix marks assigned in different Unicode versions (U+0C3C, U+1715 are U15.0; U+0897 is
-    U16.0). Whether a given input is a live discriminator depends on what THIS host's stdlib
-    `unicodedata` knows: a CPython shipping Unicode 15.x already classifies the U15 marks correctly,
-    so those inputs will NOT diverge there — and that is correct, not a failure. So per input we
-    require divergence IFF stdlib under-classifies (disagrees on ccc for) at least one of its marks
-    vs the pinned DB. That keeps the proof host-robust (works on 3.10..current) while still proving
-    the pin is load-bearing wherever a real skew is present. The production ingest path (ingest.py
-    always using unicodedata2) is host-independent regardless; this only validates the proof inputs.
+# NFC of each input under the pinned Unicode-16 DB, frozen as UTF-8 hex: the marks reorder by ccc.
+PINNED_NFC_HEX = {
+    "post13-telugu-nukta-verbatim": "e0b095e0b0bce0a591",   # KA, NUKTA(7), U+0951(230)
+    "post13-arabic-pepet-verbatim": "d8a8d99ce0a297",        # BEH, U+065C(220), PEPET(230)
+    "post13-two-new-marks-verbatim": "e0b0bce19c95",         # NUKTA(7), PAMUDPOD(9)
+}
+
+
+def _canonical_order(s: str, ccc) -> str:
+    """Unicode canonical ordering (UAX #15): stably sort each run of non-starters by ccc.
+
+    The post13 inputs hold no decomposable or composable characters (asserted below), so NFC of each
+    reduces to exactly this reordering, which makes the simulated stale DB exact rather than approximate.
+    """
+    out, run = [], []
+    for ch in s:
+        if ccc(ch) == 0:
+            out.extend(sorted(run, key=ccc))
+            run = []
+            out.append(ch)
+        else:
+            run.append(ch)
+    out.extend(sorted(run, key=ccc))
+    return "".join(out)
+
+
+def test_post13_inputs_are_live_discriminators() -> None:
+    """Every post13 input must NFC-differ between the pinned DB and a DB that predates its marks.
+
+    Host-independent: the stale side is SIMULATED from the pinned DB by treating POST13_MARKS as
+    unassigned (ccc 0), and the pinned side is held to a frozen literal as well as to the live
+    `unicodedata2` call. All three inputs are live discriminators on every host. The host stdlib
+    comparison is kept as an informational line only.
     """
     import unicodedata as stdlib_unicodedata  # host CPython DB (version varies by CPython build)
     pinned = ingest.unicodedata  # unicodedata2 16.0.0
@@ -102,54 +137,44 @@ def test_post13_inputs_are_live_discriminators() -> None:
     pinned_ver = ingest._unicode_major_minor(pinned.unidata_version)
     print("  stdlib unicodedata=%s  pinned(unicodedata2)=%s" % (stdlib_ver, pinned_ver))
 
+    def stale_ccc(ch):
+        return 0 if ord(ch) in POST13_MARKS else pinned.combining(ch)
+
     with open(VECTORS, encoding="utf-8") as f:
         vectors = json.load(f)
     post13 = [v for v in vectors if v["name"].startswith("post13-")]
-    assert post13, "no post13-* inputs found in canon-vectors.json"
+    assert sorted(v["name"] for v in post13) == sorted(PINNED_NFC_HEX), (
+        "post13-* inputs changed; update PINNED_NFC_HEX / POST13_MARKS")
 
     failures = []
-    exercised = 0
     for v in post13:
         s = canon.decode_input(v["input"])
         assert isinstance(s, str), "post13 input %r is not a string input" % v["name"]
-        # Does stdlib under-classify any codepoint in this input (ccc disagreement with pinned)?
-        stdlib_underclassifies = any(
-            stdlib_unicodedata.combining(ch) != pinned.combining(ch) for ch in s
-        )
-        nfc_stdlib = stdlib_unicodedata.normalize("NFC", s).encode("utf-8")
-        nfc_pinned = ingest.normalize_string(s).encode("utf-8")
-        diverges = nfc_stdlib != nfc_pinned
-
-        if stdlib_underclassifies:
-            exercised += 1
-            if diverges:
-                print(
-                    "  [ok] %s: NFC@%s=%s differs from ingest NFC@%s=%s (live discriminator)"
-                    % (v["name"], stdlib_ver, nfc_stdlib.hex(), pinned_ver, nfc_pinned.hex())
-                )
-            else:
-                failures.append(
-                    "%s: stdlib under-classifies a mark yet ingest NFC is IDENTICAL across DBs; "
-                    "input is not actually discriminating" % v["name"]
-                )
-        else:
-            # stdlib already knows every mark in this input -> no skew to exercise on this host.
-            print(
-                "  [skip] %s: stdlib(%s) already classifies all marks; no skew on this host"
-                % (v["name"], stdlib_ver)
-            )
+        assert any(ord(ch) in POST13_MARKS for ch in s), "%s uses no post-13 mark" % v["name"]
+        for ch in s:  # the reduction NFC == canonical ordering holds only for these characters
+            assert pinned.decomposition(ch) == "", (v["name"], hex(ord(ch)))
+        nfc_pinned = ingest.normalize_string(s)
+        nfc_stale = _canonical_order(s, stale_ccc)
+        if nfc_pinned.encode("utf-8").hex() != PINNED_NFC_HEX[v["name"]]:
+            failures.append("%s: pinned NFC %s != frozen %s" % (
+                v["name"], nfc_pinned.encode("utf-8").hex(), PINNED_NFC_HEX[v["name"]]))
+        if _canonical_order(s, pinned.combining) != nfc_pinned:
+            failures.append("%s: canonical ordering under the pinned ccc != pinned NFC; the "
+                            "simulation does not model this input" % v["name"])
+        if nfc_stale == nfc_pinned:
+            failures.append("%s: NFC is identical under a DB without its marks; the input is not "
+                            "a discriminator" % v["name"])
+            continue
+        print("  [ok] %s: stale-DB NFC=%s, pinned NFC@%s=%s (live discriminator)"
+              % (v["name"], nfc_stale.encode("utf-8").hex(), pinned_ver, nfc_pinned.encode("utf-8").hex()))
+        # Informational: does THIS host's stdlib already know the marks?
+        host = "differs from" if stdlib_unicodedata.normalize("NFC", s) != nfc_pinned else "matches"
+        print("       (info) host stdlib NFC@%s %s the pinned DB" % (stdlib_ver, host))
 
     if failures:
         for f in failures:
             print("  [FAIL] " + f)
-        raise AssertionError("post13 inputs are not live discriminators where a skew exists")
-    if exercised == 0:
-        # Every input's marks are known to this host's stdlib (e.g. CPython shipping Unicode >=16):
-        # there is genuinely no DB skew to discriminate here. Say so; do not silently "pass".
-        print(
-            "  [note] no post13 input exercised a skew on this host (stdlib=%s); the pin is still "
-            "enforced by the import-time assertion in ingest.py." % stdlib_ver
-        )
+        raise AssertionError("post13 inputs are not live discriminators")
 
 
 def main() -> int:

@@ -20,6 +20,9 @@ Usage:
     (run with the venv interpreter the orchestrator installed the wheel into.)
 
 Exit 0 = all assertions hold. Exit 1 = a divergence (bytes/digest/accept/reject/count) — gate fail.
+
+Only the engine's own error (``ValueError``, which PyO3 raises for every CanonError) counts as a
+rejection; any other exception is a real failure and propagates (CAN-15).
 """
 from __future__ import annotations
 
@@ -57,7 +60,7 @@ def main() -> int:
                 canon_core.canonical_bytes_from_json(tagged)
                 _fail(f"vector {v['name']}: expected rejection but the PUBLISHED wheel accepted it")
                 corpus_lines.append(f"{v['name']}\tACCEPTED-BUG\tACCEPTED-BUG")
-            except Exception:
+            except ValueError:
                 corpus_lines.append(f"{v['name']}\tERROR\tERROR")
             continue
         valid += 1
@@ -87,7 +90,7 @@ def main() -> int:
                 canon_core.canonical_bytes_from_json(tagged)
                 _fail(f"boundary {bv['name']}: expected rejection but the PUBLISHED wheel accepted it")
                 boundary_lines.append(f"{bv['name']}\tACCEPTED-BUG\t-\t-")
-            except Exception:
+            except ValueError:
                 boundary_lines.append(f"{bv['name']}\tERROR\t-\t-")
             continue
         # expect accept
@@ -97,7 +100,7 @@ def main() -> int:
             dig = canon_core.digest_from_json(tagged, "semantic-content")
             if isinstance(bv.get("bytes"), str) and out.decode("utf-8") != bv["bytes"]:
                 _fail(f"boundary {bv['name']}: canonical bytes {out.decode('utf-8')!r} != expected {bv['bytes']!r}")
-        except Exception as error:  # noqa: BLE001
+        except ValueError as error:
             _fail(f"boundary {bv['name']}: expected acceptance but the PUBLISHED wheel rejected it ({str(error)[:80]})")
             b64 = dig = "REJECTED-BUG"
         boundary_lines.append(f"{bv['name']}\tOK\t{b64}\t{dig}")

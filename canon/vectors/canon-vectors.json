@@ -732,5 +732,152 @@
     "input": [{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [[{"$obj": {"k": {"$arr": [{"$null": true}]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}]]}}}],
     "profile": "semantic-content",
     "expect_error": true
+  },
+  {
+    "name": "bare-int-safe-bounds",
+    "input": {
+      "$arr": [
+        9007199254740991,
+        -9007199254740991,
+        0
+      ]
+    },
+    "profile": "semantic-content",
+    "note": "+/-(2^53 - 1) is the widest bare integer every port reads exactly",
+    "expected_canonical_bytes_b64": "WzkwMDcxOTkyNTQ3NDA5OTEsLTkwMDcxOTkyNTQ3NDA5OTEsMF0=",
+    "expected_digest_hex": "e263e27db716c4e87e22167329dd1a5fc853efaebcdc863834a7a8d3d5784905"
+  },
+  {
+    "name": "reject-bare-int-2pow53",
+    "input": 9007199254740992,
+    "profile": "semantic-content",
+    "expect_error": true
+  },
+  {
+    "name": "reject-bare-int-neg-2pow53",
+    "input": -9007199254740992,
+    "profile": "semantic-content",
+    "expect_error": true
+  },
+  {
+    "name": "reject-bare-int-2pow53-plus-1",
+    "input": {
+      "n": 9007199254740993
+    },
+    "profile": "semantic-content",
+    "note": "JSON.parse rounds this to 9007199254740992: TypeScript used to emit {\"n\":9007199254740992}",
+    "expect_error": true
+  },
+  {
+    "name": "reject-bare-int-u64-max",
+    "input": 18446744073709551615,
+    "profile": "semantic-content",
+    "note": "Rust used to accept bare integers up to u64",
+    "expect_error": true
+  },
+  {
+    "name": "reject-bare-int-above-u64",
+    "input": 18446744073709551616,
+    "profile": "semantic-content",
+    "note": "Python used to accept bare integers of any size",
+    "expect_error": true
+  },
+  {
+    "name": "dollar-surrogate-key-is-ordinary",
+    "input": {
+      "$surrogate": "d800"
+    },
+    "profile": "semantic-content",
+    "expected_canonical_bytes_b64": "eyIkc3Vycm9nYXRlIjoiZDgwMCJ9",
+    "expected_digest_hex": "725f72bfeae0b9adf96a41611fe47fbf07a85d55c4a7034d6918ba7f61589ec1"
+  },
+  {
+    "name": "keys-prefix-order",
+    "input": {
+      "$obj": {
+        "ab": {
+          "$int": "3"
+        },
+        "a\u0000": {
+          "$int": "2"
+        },
+        "a": {
+          "$int": "1"
+        }
+      }
+    },
+    "profile": "semantic-content",
+    "note": "a key sorts before every key it prefixes: a < a\\u0000 < ab",
+    "expected_canonical_bytes_b64": "eyJhIjoxLCJhXHUwMDAwIjoyLCJhYiI6M30=",
+    "expected_digest_hex": "1fb2993057bee8db3e4879f800fae515d86182d47028cc6eebf9dfc80dafe8a4"
+  },
+  {
+    "name": "ls-ps-raw",
+    "input": {
+      "$str": "a\u2028b\u2029c"
+    },
+    "profile": "semantic-content",
+    "note": "U+2028/U+2029 are emitted raw (they are not <= U+001F controls)",
+    "expected_canonical_bytes_b64": "ImHigKhi4oCpYyI=",
+    "expected_digest_hex": "c38b56521f8092697c2e5663f599bf2d5e5bf90d4e26dd06cc89b903ec1993c6"
+  },
+  {
+    "name": "nested-empty",
+    "input": {
+      "$obj": {
+        "o": {
+          "$obj": {}
+        },
+        "a": {
+          "$arr": []
+        },
+        "n": {
+          "$arr": [
+            {
+              "$arr": []
+            },
+            {
+              "$obj": {}
+            }
+          ]
+        }
+      }
+    },
+    "profile": "semantic-content",
+    "expected_canonical_bytes_b64": "eyJhIjpbXSwibiI6W1tdLHt9XSwibyI6e319",
+    "expected_digest_hex": "3dce42b9f92a251070827378644002a89a9dfaf0cc2b38a62ef587b2a5772fbd"
+  },
+  {
+    "name": "proto-key-is-ordinary",
+    "input": {
+      "__proto__": {
+        "$int": "1"
+      }
+    },
+    "profile": "semantic-content",
+    "note": "TypeScript decoded this as {}",
+    "expected_canonical_bytes_b64": "eyJfX3Byb3RvX18iOjF9",
+    "expected_digest_hex": "65060306f10545ffc24d2d66a8dceb021041550f5eb023a94be80f41f54fd6b3"
+  },
+  {
+    "name": "proto-key-object-value",
+    "input": {
+      "$obj": {
+        "__proto__": {
+          "$obj": {
+            "a": {
+              "$int": "1"
+            }
+          }
+        },
+        "b": {
+          "$int": "2"
+        }
+      }
+    },
+    "profile": "semantic-content",
+    "note": "TypeScript replaced the decoded object's prototype and emitted {\"b\":2}",
+    "expected_canonical_bytes_b64": "eyJfX3Byb3RvX18iOnsiYSI6MX0sImIiOjJ9",
+    "expected_digest_hex": "fbecfb5a40536026f01c21c1e270885cb526115b5c592cddf2e87b69108e40ea"
   }
 ]

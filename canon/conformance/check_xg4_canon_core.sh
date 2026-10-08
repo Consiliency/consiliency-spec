@@ -53,21 +53,24 @@ spec.loader.exec_module(canon)
 
 failures = []
 for vector in json.loads(open(vectors_path, encoding="utf-8").read()):
-    value = canon.decode_input(vector["input"])
     if vector.get("expect_error"):
+        # decode_input is INSIDE the guard (as in canon_core_emit.rs): the $int payload-grammar,
+        # tag-payload, depth and bare-number rejections all raise at decode. It used to run first and
+        # crash this mode with an uncaught CanonError on the first such vector.
         try:
-            canon.canonical_bytes(value)
+            canon.canonical_bytes(canon.decode_input(vector["input"]))
         except canon.CanonError:
             continue
         failures.append(f"{vector['name']}: expected CanonError")
         continue
+    value = canon.decode_input(vector["input"])
     bytes_b64 = base64.b64encode(canon.canonical_bytes(value)).decode("ascii")
     digest = canon.digest(value, vector["profile"])
     if bytes_b64 != vector["expected_canonical_bytes_b64"] or digest != vector["expected_digest_hex"]:
         failures.append(vector["name"])
 if failures:
     raise SystemExit("FAIL: wheel-vendored canon diverged on " + ", ".join(failures))
-print("SPECPKGMIN VENDORED CANON GATE GREEN")
+print("SPECPKGMIN VENDORED CANON GATE GREEN (%s)" % canon_path)
 PY
   exit 0
 fi
@@ -99,15 +102,15 @@ echo "root: $ROOT"
 echo "target: $TARGET_DIR"
 echo
 
-echo "[1/8] Existing Python + TypeScript canon gate"
+echo "[1/9] Existing Python + TypeScript canon gate"
 bash "$ROOT/canon/conformance/check.sh"
 echo
 
-echo "[2/8] Rust canon-core tests"
+echo "[2/9] Rust canon-core tests"
 cargo test --manifest-path "$CORE"
 echo
 
-echo "[3/8] Python/TypeScript/Rust byte-identity on spec-local vectors"
+echo "[3/9] Python/TypeScript/Rust byte-identity on spec-local vectors"
 SPEC_CORPUS="$ROOT/canon/vectors/canon-vectors.json"
 python3 "$ROOT/canon/py/test_canon.py" --emit > "$TMP/python.txt"
 npx --yes "$TSX" "$ROOT/canon/ts/canon.test.ts" --emit > "$TMP/typescript.txt"
@@ -119,7 +122,7 @@ echo
 
 # --- BUILD + EXECUTE the shipped bindings (was: cargo check only) -------------------------------- #
 
-echo "[4/8] BUILD + EXECUTE the PyO3 binding, diff its emitted bytes+digests vs the Python reference"
+echo "[4/9] BUILD + EXECUTE the PyO3 binding, diff its emitted bytes+digests vs the Python reference"
 PYO3_PYTHON="$(command -v python3)" cargo build --manifest-path "$CORE" --features pyo3-binding --lib
 SO_SRC="$TARGET_DIR/debug/libcanon_core.so"
 [[ -f "$SO_SRC" ]] || { echo "FAIL: PyO3 cdylib not found at $SO_SRC"; exit 1; }
@@ -129,7 +132,7 @@ diff -u "$TMP/python.txt" "$TMP/pyo3.txt"
 echo "    BUILT PyO3 binding is byte-identical to the Python reference on all spec-local vectors."
 echo
 
-echo "[5/8] BUILD + EXECUTE the WASM binding, diff its emitted bytes+digests vs the TypeScript reference"
+echo "[5/9] BUILD + EXECUTE the WASM binding, diff its emitted bytes+digests vs the TypeScript reference"
 if command -v rustup >/dev/null 2>&1; then rustup target add wasm32-unknown-unknown >/dev/null; fi
 # wasm-bindgen-cli generates the Node glue that marshals the &str/Vec<u8>/Result surface; its version
 # MUST match the wasm-bindgen crate (Cargo.lock), or the schema check fails. Ensure it, like the target.
@@ -154,11 +157,31 @@ diff -u "$TMP/typescript.txt" "$TMP/wasm.txt"
 echo "    BUILT WASM binding is byte-identical to the TypeScript reference on all spec-local vectors."
 echo
 
-echo "[6/8] SPEC §5.0 lone-surrogate BOUNDARY finding (through the BUILT WASM binding)"
+echo "[6/9] SPEC §5.0 lone-surrogate BOUNDARY finding (through the BUILT WASM binding)"
 npx --yes "$TSX" "$CONF/wasm_surrogate_finding.mjs" "$GLUE" "$ROOT/canon/ts/canon.ts"
 echo
 
-echo "[7/8] REQUIRED cross-repo parity on the vendored downstream-consumer corpus (canon v2 5-way byte-identity)"
+echo "[7/9] Five-engine byte-identity on the engine BOUNDARY vectors (SPEC §12: razor, big integers, bare"
+echo "      numbers, nesting), every engine through its JSON-text entry point"
+# engine_boundary_vectors_next.json holds boundary vectors no published canon-core satisfies yet
+# (check_published_canon_core.sh runs only the first file against the published engines). It is empty
+# since the canon-core 0.4.0 repin.
+for BOUNDARY in "$CONF/engine_boundary_vectors.json" "$CONF/engine_boundary_vectors_next.json"; do
+  python3 "$ROOT/canon/py/test_canon.py" --emit-boundary "$BOUNDARY" > "$TMP/b_python.txt"
+  npx --yes "$TSX" "$ROOT/canon/ts/canon.test.ts" --emit-boundary "$BOUNDARY" > "$TMP/b_typescript.txt"
+  cargo run --quiet --manifest-path "$CORE" --bin canon_core_emit -- --boundary "$BOUNDARY" > "$TMP/b_rust.txt"
+  PYTHONPATH="$SO_DIR" python3 "$CONF/emit_pyo3.py" --boundary "$BOUNDARY" > "$TMP/b_pyo3.txt"
+  node "$CONF/emit_wasm.mjs" "$GLUE" --boundary "$BOUNDARY" > "$TMP/b_wasm.txt"
+  diff -u "$TMP/b_python.txt" "$TMP/b_typescript.txt"
+  diff -u "$TMP/b_python.txt" "$TMP/b_rust.txt"
+  diff -u "$TMP/b_python.txt" "$TMP/b_pyo3.txt"
+  diff -u "$TMP/b_python.txt" "$TMP/b_wasm.txt"
+  echo "    Python, TypeScript, Rust, BUILT-PyO3, BUILT-WASM agree on all"
+  echo "    $(grep -c . "$TMP/b_rust.txt" || true) vectors of $(basename "$BOUNDARY")."
+done
+echo
+
+echo "[8/9] REQUIRED cross-repo parity on the vendored downstream-consumer corpus (canon v2 5-way byte-identity)"
 if [[ ! -f "$GOV_CORPUS_VENDORED" ]]; then
   echo "FAIL: required vendored cross-repo corpus not found: $GOV_CORPUS_VENDORED"
   exit 1
@@ -191,7 +214,7 @@ else
 fi
 echo
 
-echo "[8/8] Deliberate-mutation negative check (a divergent binding output MUST fail the gate)"
+echo "[9/9] Deliberate-mutation negative check + the --target mode"
 # A one-byte mutation of any engine's emit must be caught by the byte-identity diffs above; assert the
 # gate has teeth rather than trusting the green above blindly.
 head -1 "$TMP/rust.txt" | sed 's/./X/1' > "$TMP/mutated.txt"
@@ -199,6 +222,17 @@ if diff -q "$TMP/python.txt" "$TMP/mutated.txt" >/dev/null 2>&1; then
   echo "FAIL: byte-identity diff did not distinguish a mutated emit"; exit 1
 fi
 echo "    Confirmed: a mutated binding emit is distinguishable (gate is byte-exact)."
+# --target is otherwise run only by check_specpkgmin.sh, which no workflow runs, so it crashed on main
+# unseen. Exercise it here against the in-tree ingest package (its src/ layout is the second candidate
+# path): it holds the BUNDLED canon.py to the corpus, so a forgotten sync_bundles.py run fails too.
+# The ingest package is not part of the public export, so the public tree (whose check_release.sh runs
+# this gate) has nothing to exercise; there the step says so instead of failing on a missing path.
+INGEST_PKG="$ROOT/packages/consiliency-spec-ingest"
+if [[ -d "$INGEST_PKG" ]]; then
+  bash "$0" --target "$INGEST_PKG"
+else
+  echo "    --target mode: no packages/consiliency-spec-ingest in this tree (public export); not exercised."
+fi
 echo
 
 echo "XG4 CANON-CORE GATE GREEN"

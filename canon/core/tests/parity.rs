@@ -1,9 +1,10 @@
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use canon_core::{
-    canonical_bytes, canonical_bytes_from_json, decode_input, digest, digest_from_json, parse_vector_corpus, CanonValue,
-    MAX_DEPTH,
+    canonical_bytes, canonical_bytes_from_json, decode_input, decode_vector_input, digest, digest_from_json,
+    parse_vector_corpus, CanonValue, MAX_DEPTH,
 };
+use num_bigint::BigInt;
 use serde_json::Value;
 use std::fs;
 use std::path::PathBuf;
@@ -24,12 +25,13 @@ fn rust_core_matches_pinned_vectors() {
     for vector in vectors {
         let name = vector["name"].as_str().expect("name");
         if vector.get("expect_error").and_then(Value::as_bool).unwrap_or(false) {
-            // decode_input is INSIDE the guard: a $int payload-grammar rejection is an Err at decode.
-            let rejected = decode_input(&vector["input"]).and_then(|value| canonical_bytes(&value)).is_err();
+            // decode is INSIDE the guard: a $int payload-grammar rejection is an Err at decode.
+            let rejected = decode_vector_input(&vector["input"]).and_then(|value| canonical_bytes(&value)).is_err();
             assert!(rejected, "{name}: expected decode_input/canonical_bytes to reject");
             continue;
         }
-        let value = decode_input(&vector["input"]).unwrap_or_else(|error| panic!("{name}: decode failed: {error}"));
+        let value =
+            decode_vector_input(&vector["input"]).unwrap_or_else(|error| panic!("{name}: decode failed: {error}"));
         let profile = vector["profile"].as_str().expect("profile");
         let bytes = canonical_bytes(&value).unwrap_or_else(|error| panic!("{name}: encode failed: {error}"));
         let bytes_b64 = STANDARD.encode(bytes);
@@ -76,9 +78,23 @@ fn rust_json_api_matches_pinned_vectors() {
 /// (check_published_canon_core.sh), so a regression in this tree was invisible to the source gates.
 #[test]
 fn rust_core_matches_engine_boundary_vectors() {
-    let raw = fs::read_to_string(boundary_path()).expect("read boundary vectors");
+    check_boundary_file(boundary_path(), 26);
+}
+
+/// Boundary vectors for behaviour no published canon-core has yet (run against in-tree engines only).
+/// Empty since the canon-core 0.4.0 repin folded duplicate-key-f1..f6 into the main file.
+#[test]
+fn rust_core_matches_next_engine_boundary_vectors() {
+    check_boundary_file(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../conformance/engine_boundary_vectors_next.json"),
+        0,
+    );
+}
+
+fn check_boundary_file(path: PathBuf, minimum: usize) {
+    let raw = fs::read_to_string(&path).expect("read boundary vectors");
     let vectors: Vec<Value> = serde_json::from_str(&raw).expect("parse boundary vectors");
-    assert!(vectors.len() >= 8, "boundary corpus looks truncated");
+    assert!(vectors.len() >= minimum, "{path:?} looks truncated");
     for vector in vectors {
         let name = vector["name"].as_str().expect("name");
         let tagged = match vector.get("raw") {
@@ -137,4 +153,60 @@ fn native_encoder_enforces_max_depth() {
     // serde parses it, so its recursion is bounded even though serde's own limit is lifted.
     let text = format!("{}{}", "[".repeat(1_000_000), "]".repeat(1_000_000));
     assert!(canonical_bytes_from_json(&text).is_err());
+}
+
+/// CAN-11: `$surrogate` is an ordinary key on the production API (it used to be a tag that only this
+/// port honoured, rejecting what Python and TypeScript encode). The corpus loader's marker key is
+/// ordinary on the production API too; only `decode_vector_input` reads it.
+#[test]
+fn surrogate_keys_are_ordinary_on_the_production_api() {
+    for (input, expected) in [
+        (r#"{"$surrogate":"d800"}"#, r#"{"$surrogate":"d800"}"#),
+        (r#"{"$canon-vector:lone-surrogate":"d800"}"#, r#"{"$canon-vector:lone-surrogate":"d800"}"#),
+    ] {
+        let bytes = canonical_bytes_from_json(input).unwrap_or_else(|error| panic!("{input}: {error}"));
+        assert_eq!(String::from_utf8(bytes).unwrap(), expected);
+    }
+    let marker: Value = serde_json::from_str(r#"{"$canon-vector:lone-surrogate":"d800"}"#).unwrap();
+    assert_eq!(decode_vector_input(&marker).unwrap(), CanonValue::SurrogateMarker);
+    assert!(matches!(decode_input(&marker).unwrap(), CanonValue::Object(_)));
+    // A real lone-surrogate escape never reaches the decoder: serde_json rejects it at tokenising.
+    assert!(canonical_bytes_from_json(r#"{"$str":"\ud800"}"#).is_err());
+}
+
+/// D6: a bare JSON number is an integer only inside +/-(2^53 - 1); every other bare number (past the
+/// range, a fraction or exponent spelling, `-0`) is rejected, as in Python and TypeScript.
+#[test]
+fn bare_numbers_follow_the_safe_integer_rule() {
+    for ok in ["0", "9007199254740991", "-9007199254740991", "[1,-2]"] {
+        assert!(canonical_bytes_from_json(ok).is_ok(), "{ok}: expected acceptance");
+    }
+    for reject in [
+        "9007199254740992",
+        "-9007199254740992",
+        "9007199254740993",
+        "18446744073709551615",
+        "18446744073709551616",
+        "-0",
+        "1.0",
+        "1e3",
+        "10e-1",
+        "1E400",
+        r#"{"n":9007199254740992}"#,
+    ] {
+        assert!(canonical_bytes_from_json(reject).is_err(), "{reject}: expected rejection");
+    }
+    let message = canonical_bytes_from_json("18446744073709551616").unwrap_err().to_string();
+    assert!(message.contains("$int"), "{message}");
+}
+
+/// CAN-17: a native caller can build an Object with a repeated key; it is rejected, never emitted twice.
+#[test]
+fn native_duplicate_object_keys_are_rejected() {
+    let one = CanonValue::Int(BigInt::from(1));
+    let dup = CanonValue::Object(vec![("a".to_string(), one.clone()), ("a".to_string(), one.clone())]);
+    assert!(canonical_bytes(&dup).is_err());
+    assert!(digest(&dup, "run").is_err());
+    let ok = CanonValue::Object(vec![("b".to_string(), one.clone()), ("a".to_string(), one)]);
+    assert_eq!(canonical_bytes(&ok).unwrap(), br#"{"a":1,"b":1}"#.to_vec());
 }

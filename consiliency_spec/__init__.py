@@ -9,7 +9,7 @@ from typing import Any
 
 SPEC_PACKAGE = "consiliency-spec"
 SPEC_NPM_PACKAGE = "@consiliency/spec"
-SPEC_VERSION = "0.4.0"
+SPEC_VERSION = "0.5.0"
 __version__ = SPEC_VERSION
 
 _MANIFEST = "consiliency-spec.public-manifest.json"
