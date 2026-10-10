@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "consiliency-spec"
-version = "0.5.0"
+version = "0.5.1"
 description = "Public Consiliency canon-core v2 package: Rust core, dep-free TypeScript/Python canon ports, vectors, and public schemas."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -15,6 +15,9 @@ keywords = ["consiliency", "spec", "canon", "canonicalization", "schema"]
 [project.optional-dependencies]
 ingest = ["unicodedata2==16.0.0"]
 outside-agent = ["jsonschema>=4.18"]
+# consiliency_spec.verify_certificate(): the pinned Unicode DB that binding a desired graph needs
+# (spec_graph.graph_digest applies NFC at canon's ingest boundary), plus full JSON Schema checks.
+verify = ["unicodedata2==16.0.0", "jsonschema>=4.18"]
 
 [project.urls]
 Homepage = "https://github.com/Consiliency/consiliency-spec"
@@ -75,6 +78,7 @@ packages = ["consiliency_spec"]
 "idmodel/correspondence/schema.json" = "consiliency_spec/_data/idmodel/correspondence/schema.json"
 "schemas/outside-agent-route-verdict.schema.json" = "consiliency_spec/_data/schemas/outside-agent-route-verdict.schema.json"
 "schemas/outside-agent-submission.schema.json" = "consiliency_spec/_data/schemas/outside-agent-submission.schema.json"
+"scripts/check_certificate_vectors.sh" = "consiliency_spec/_data/scripts/check_certificate_vectors.sh"
 "scripts/check_outside_agent_vectors.sh" = "consiliency_spec/_data/scripts/check_outside_agent_vectors.sh"
 "spec-engine/authority/authority-event.schema.json" = "consiliency_spec/_data/spec-engine/authority/authority-event.schema.json"
 "spec-graph/schema/spec-graph.schema.json" = "consiliency_spec/_data/spec-graph/schema/spec-graph.schema.json"
@@ -92,6 +96,14 @@ packages = ["consiliency_spec"]
 "spec-parity/schemas/result-state.schema.json" = "consiliency_spec/_data/spec-parity/schemas/result-state.schema.json"
 "spec-parity/schemas/run-descriptor.schema.json" = "consiliency_spec/_data/spec-parity/schemas/run-descriptor.schema.json"
 "spec-parity/schemas/waiver.schema.json" = "consiliency_spec/_data/spec-parity/schemas/waiver.schema.json"
+"test-vectors/certificate/manifest.json" = "consiliency_spec/_data/test-vectors/certificate/manifest.json"
+"test-vectors/certificate/pass-demo/certificate.json" = "consiliency_spec/_data/test-vectors/certificate/pass-demo/certificate.json"
+"test-vectors/certificate/pass-demo/certificate.tampered-verdict.json" = "consiliency_spec/_data/test-vectors/certificate/pass-demo/certificate.tampered-verdict.json"
+"test-vectors/certificate/pass-demo/desired-graph.json" = "consiliency_spec/_data/test-vectors/certificate/pass-demo/desired-graph.json"
+"test-vectors/certificate/pass-demo/ec.json" = "consiliency_spec/_data/test-vectors/certificate/pass-demo/ec.json"
+"test-vectors/certificate/pass-demo/finding-set.json" = "consiliency_spec/_data/test-vectors/certificate/pass-demo/finding-set.json"
+"test-vectors/certificate/pass-demo/payload.json" = "consiliency_spec/_data/test-vectors/certificate/pass-demo/payload.json"
+"test-vectors/certificate/pass-demo/payload.tampered-summary.json" = "consiliency_spec/_data/test-vectors/certificate/pass-demo/payload.tampered-summary.json"
 "test-vectors/outside-agent/invalid-empty-evidence-refs.json" = "consiliency_spec/_data/test-vectors/outside-agent/invalid-empty-evidence-refs.json"
 "test-vectors/outside-agent/invalid-git-object-id-length.json" = "consiliency_spec/_data/test-vectors/outside-agent/invalid-git-object-id-length.json"
 "test-vectors/outside-agent/invalid-missing-digest.json" = "consiliency_spec/_data/test-vectors/outside-agent/invalid-missing-digest.json"
@@ -104,6 +116,7 @@ packages = ["consiliency_spec"]
 "test-vectors/outside-agent/valid-ambiguity-report.json" = "consiliency_spec/_data/test-vectors/outside-agent/valid-ambiguity-report.json"
 "test-vectors/outside-agent/valid-implementation-submission.json" = "consiliency_spec/_data/test-vectors/outside-agent/valid-implementation-submission.json"
 "test-vectors/outside-agent/valid-work-request.json" = "consiliency_spec/_data/test-vectors/outside-agent/valid-work-request.json"
+"tests/test_certificate_vectors.py" = "consiliency_spec/_data/tests/test_certificate_vectors.py"
 "tests/test_outside_agent_route_verdict_schema.py" = "consiliency_spec/_data/tests/test_outside_agent_route_verdict_schema.py"
 "tests/test_outside_agent_submission_schema.py" = "consiliency_spec/_data/tests/test_outside_agent_submission_schema.py"
 "tests/test_outside_agent_vectors.py" = "consiliency_spec/_data/tests/test_outside_agent_vectors.py"
@@ -161,6 +174,7 @@ only-include = [
 "idmodel/correspondence/schema.json" = "idmodel/correspondence/schema.json"
 "schemas/outside-agent-route-verdict.schema.json" = "schemas/outside-agent-route-verdict.schema.json"
 "schemas/outside-agent-submission.schema.json" = "schemas/outside-agent-submission.schema.json"
+"scripts/check_certificate_vectors.sh" = "scripts/check_certificate_vectors.sh"
 "scripts/check_outside_agent_vectors.sh" = "scripts/check_outside_agent_vectors.sh"
 "spec-engine/authority/authority-event.schema.json" = "spec-engine/authority/authority-event.schema.json"
 "spec-graph/schema/spec-graph.schema.json" = "spec-graph/schema/spec-graph.schema.json"
@@ -178,6 +192,14 @@ only-include = [
 "spec-parity/schemas/result-state.schema.json" = "spec-parity/schemas/result-state.schema.json"
 "spec-parity/schemas/run-descriptor.schema.json" = "spec-parity/schemas/run-descriptor.schema.json"
 "spec-parity/schemas/waiver.schema.json" = "spec-parity/schemas/waiver.schema.json"
+"test-vectors/certificate/manifest.json" = "test-vectors/certificate/manifest.json"
+"test-vectors/certificate/pass-demo/certificate.json" = "test-vectors/certificate/pass-demo/certificate.json"
+"test-vectors/certificate/pass-demo/certificate.tampered-verdict.json" = "test-vectors/certificate/pass-demo/certificate.tampered-verdict.json"
+"test-vectors/certificate/pass-demo/desired-graph.json" = "test-vectors/certificate/pass-demo/desired-graph.json"
+"test-vectors/certificate/pass-demo/ec.json" = "test-vectors/certificate/pass-demo/ec.json"
+"test-vectors/certificate/pass-demo/finding-set.json" = "test-vectors/certificate/pass-demo/finding-set.json"
+"test-vectors/certificate/pass-demo/payload.json" = "test-vectors/certificate/pass-demo/payload.json"
+"test-vectors/certificate/pass-demo/payload.tampered-summary.json" = "test-vectors/certificate/pass-demo/payload.tampered-summary.json"
 "test-vectors/outside-agent/invalid-empty-evidence-refs.json" = "test-vectors/outside-agent/invalid-empty-evidence-refs.json"
 "test-vectors/outside-agent/invalid-git-object-id-length.json" = "test-vectors/outside-agent/invalid-git-object-id-length.json"
 "test-vectors/outside-agent/invalid-missing-digest.json" = "test-vectors/outside-agent/invalid-missing-digest.json"
@@ -190,6 +212,7 @@ only-include = [
 "test-vectors/outside-agent/valid-ambiguity-report.json" = "test-vectors/outside-agent/valid-ambiguity-report.json"
 "test-vectors/outside-agent/valid-implementation-submission.json" = "test-vectors/outside-agent/valid-implementation-submission.json"
 "test-vectors/outside-agent/valid-work-request.json" = "test-vectors/outside-agent/valid-work-request.json"
+"tests/test_certificate_vectors.py" = "tests/test_certificate_vectors.py"
 "tests/test_outside_agent_route_verdict_schema.py" = "tests/test_outside_agent_route_verdict_schema.py"
 "tests/test_outside_agent_submission_schema.py" = "tests/test_outside_agent_submission_schema.py"
 "tests/test_outside_agent_vectors.py" = "tests/test_outside_agent_vectors.py"

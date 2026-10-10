@@ -1,0 +1,101 @@
+{
+  "doc": "Reference certificate vectors for consiliency_spec.verify_certificate (SEMANTICS.md sec 9). Each case names the files passed to the verifier (paths relative to this directory) and the outcome it must produce. pass-demo is a grounded certificate over a fixture E(C) that was not measured reproducible, so it binds but is advisory, never authoritative. `bound` reports the desired-graph binding on its own: the tampered copy still pins the same graph, so it is bound but not valid. The tampered-summary payload is the genuine payload with its one (pass) finding summary rewritten as a prohibition failure and re-hashed: with the finding set it is not the SEMANTICS sec 12 projection (payload_projection); without it, its summaries do not roll up to the certificate's dimension state (payload_binding).",
+  "vector_set_version": "1",
+  "cases": [
+    {
+      "id": "pass-demo-bound",
+      "certificate": "pass-demo/certificate.json",
+      "desired_graph": "pass-demo/desired-graph.json",
+      "ec": "pass-demo/ec.json",
+      "finding_set": "pass-demo/finding-set.json",
+      "payload": "pass-demo/payload.json",
+      "require_authoritative": false,
+      "expect": {
+        "valid": true,
+        "bound": true,
+        "authoritative": false,
+        "advisory": true,
+        "spec_authority": "grounded",
+        "overall_result_state": "pass",
+        "failed_checks": []
+      }
+    },
+    {
+      "id": "pass-demo-not-authoritative",
+      "certificate": "pass-demo/certificate.json",
+      "desired_graph": "pass-demo/desired-graph.json",
+      "ec": "pass-demo/ec.json",
+      "require_authoritative": true,
+      "expect": {
+        "valid": false,
+        "bound": true,
+        "authoritative": false,
+        "advisory": true,
+        "spec_authority": "grounded",
+        "overall_result_state": "pass",
+        "failed_checks": [
+          "authoritative"
+        ]
+      }
+    },
+    {
+      "id": "pass-demo-tampered-verdict",
+      "certificate": "pass-demo/certificate.tampered-verdict.json",
+      "desired_graph": "pass-demo/desired-graph.json",
+      "ec": "pass-demo/ec.json",
+      "finding_set": "pass-demo/finding-set.json",
+      "payload": "pass-demo/payload.json",
+      "require_authoritative": false,
+      "expect": {
+        "valid": false,
+        "bound": true,
+        "authoritative": false,
+        "advisory": true,
+        "spec_authority": "grounded",
+        "overall_result_state": "fail",
+        "failed_checks": [
+          "aggregation",
+          "certificate_digest",
+          "finding_set_copy",
+          "payload_binding",
+          "payload_projection"
+        ]
+      }
+    },
+    {
+      "id": "pass-demo-tampered-summary",
+      "certificate": "pass-demo/certificate.json",
+      "finding_set": "pass-demo/finding-set.json",
+      "payload": "pass-demo/payload.tampered-summary.json",
+      "require_authoritative": false,
+      "expect": {
+        "valid": false,
+        "bound": false,
+        "authoritative": false,
+        "advisory": true,
+        "spec_authority": "grounded",
+        "overall_result_state": "pass",
+        "failed_checks": [
+          "payload_projection"
+        ]
+      }
+    },
+    {
+      "id": "pass-demo-tampered-summary-no-finding-set",
+      "certificate": "pass-demo/certificate.json",
+      "payload": "pass-demo/payload.tampered-summary.json",
+      "require_authoritative": false,
+      "expect": {
+        "valid": false,
+        "bound": false,
+        "authoritative": false,
+        "advisory": true,
+        "spec_authority": "grounded",
+        "overall_result_state": "pass",
+        "failed_checks": [
+          "payload_binding"
+        ]
+      }
+    }
+  ]
+}

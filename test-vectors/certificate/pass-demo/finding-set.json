@@ -1,0 +1,53 @@
+{
+  "dimension_results": [
+    {
+      "checks_evaluated": 2,
+      "dimension": "completeness",
+      "finding_ids": [],
+      "result_state": "pass"
+    },
+    {
+      "checks_evaluated": 2,
+      "dimension": "soundness",
+      "finding_ids": [
+        "a106507bfad328783fa0e3d3bc9a2fc913753a8c1c7a40c434052786edbbf08c"
+      ],
+      "result_state": "pass"
+    },
+    {
+      "checks_evaluated": 2,
+      "dimension": "closure",
+      "finding_ids": [],
+      "result_state": "pass"
+    },
+    {
+      "checks_evaluated": 0,
+      "dimension": "prohibition",
+      "finding_ids": [],
+      "result_state": "not_applicable"
+    },
+    {
+      "checks_evaluated": 0,
+      "dimension": "revision_alignment",
+      "finding_ids": [],
+      "result_state": "not_applicable"
+    }
+  ],
+  "finding_set_id": "5e4298f5514ae6566304939529dffb664fdc7ba8393d46959b0fc1ee53e07192",
+  "findings": [
+    {
+      "code": "permitted_freedom",
+      "dimension": "soundness",
+      "finding_id": "a106507bfad328783fa0e3d3bc9a2fc913753a8c1c7a40c434052786edbbf08c",
+      "message": "realized signature extends the declared one (trailing params); permitted by token rule_kind allow_signature_superset",
+      "result_state": "pass",
+      "subject": {
+        "desired_kind": "interface",
+        "desired_logical_id": "f19715d315eeda770a839cfbedbd8655f8e30ab52f2d59c04d94cbaac6047086",
+        "realized_kind": "interface",
+        "realized_occurrence_id": "75ddf9f3fdefc03aa3bbde9be81a988f2fdc08d788ad0747d02164d6633c7958"
+      }
+    }
+  ],
+  "overall_result_state": "pass"
+}

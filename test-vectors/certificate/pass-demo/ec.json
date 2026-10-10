@@ -1,0 +1,63 @@
+{
+  "code_head_sha": "0000000000000000000000000000000000000002",
+  "edges": [],
+  "modeled_domains": {
+    "full_coverage": [
+      "node_kind_set",
+      "edge_set",
+      "signature_facts"
+    ],
+    "partial_coverage": [
+      "capability_registration",
+      "external"
+    ]
+  },
+  "nodes": [
+    {
+      "boundary_id": "b-comp",
+      "file": "src/demo.py",
+      "kind": "class",
+      "line_span": [
+        1,
+        50
+      ],
+      "name": "Comp",
+      "parent_boundary_id": null,
+      "provenance": {
+        "boundary_digest": "bd-comp"
+      },
+      "qualified_name": "demo.comp",
+      "signature": null
+    },
+    {
+      "boundary_id": "b-iface",
+      "file": "src/demo.py",
+      "kind": "interface",
+      "line_span": [
+        5,
+        20
+      ],
+      "name": "DemoPort",
+      "parent_boundary_id": "b-comp",
+      "provenance": {
+        "boundary_digest": "bd-iface"
+      },
+      "qualified_name": "demo.DemoPort",
+      "signature": {
+        "params": [
+          {
+            "name": "x",
+            "type": "string"
+          },
+          {
+            "name": "y",
+            "type": "int"
+          }
+        ],
+        "return_type": "R"
+      }
+    }
+  ],
+  "revision": "ec-rev-pf",
+  "source": "greenfield"
+}

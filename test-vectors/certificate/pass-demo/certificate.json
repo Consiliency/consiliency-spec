@@ -1,0 +1,52 @@
+{
+  "canon_version": "v2",
+  "code_head_sha": "0000000000000000000000000000000000000002",
+  "desired_graph_digest": "b283d27e873f30c1d98053b8ef5f6ac7c785e3225c05e4d63501f6abead30a56",
+  "digest": "5accd3b6257affee0d9a6f108c1160fb535c7f16d6b81de8e11d08ddf7c057a8",
+  "dimension_results": [
+    {
+      "checks_evaluated": 2,
+      "dimension": "completeness",
+      "finding_ids": [],
+      "result_state": "pass"
+    },
+    {
+      "checks_evaluated": 2,
+      "dimension": "soundness",
+      "finding_ids": [
+        "a106507bfad328783fa0e3d3bc9a2fc913753a8c1c7a40c434052786edbbf08c"
+      ],
+      "result_state": "pass"
+    },
+    {
+      "checks_evaluated": 2,
+      "dimension": "closure",
+      "finding_ids": [],
+      "result_state": "pass"
+    },
+    {
+      "checks_evaluated": 0,
+      "dimension": "prohibition",
+      "finding_ids": [],
+      "result_state": "not_applicable"
+    },
+    {
+      "checks_evaluated": 0,
+      "dimension": "revision_alignment",
+      "finding_ids": [],
+      "result_state": "not_applicable"
+    }
+  ],
+  "ec_digest": "5ee7532ba449deee08f285692887de2e190170625d981f4c51100057b74c64fa",
+  "ec_reproducible": false,
+  "ec_revision_id": "ec-rev-pf",
+  "findings_ref": "5e4298f5514ae6566304939529dffb664fdc7ba8393d46959b0fc1ee53e07192",
+  "idmodel_version": "v1",
+  "kind_alignment_version": "1",
+  "overall_result_state": "pass",
+  "permitted_freedom_vocab_version": "1",
+  "projection_algo_version": "spec-engine-projection:v4",
+  "schema_version": "2",
+  "spec_authority": "grounded",
+  "spec_revision_digest": "affd015069e9a420f3ff3b2e31631c410954fed10c3a534b50b8ef5ec73e4359"
+}

@@ -2,7 +2,7 @@
   "package": {
     "npm": "@consiliency/spec",
     "pypi": "consiliency-spec",
-    "version": "0.5.0"
+    "version": "0.5.1"
   },
   "public_files": [
     {
@@ -155,7 +155,19 @@
     },
     {
       "path": "consiliency_spec/__init__.py",
-      "sha256": "2a1c87313b23950aa069b0fa247bb05daeca25c6b5f18ff51a536e865dcfb5bb"
+      "sha256": "8ab3cd291b0e172a1d4d1b60438cf75e7d339689834fd06e0832f5b3a8f5bed9"
+    },
+    {
+      "path": "consiliency_spec/_bundle/idmodel/py/idmodel.py",
+      "sha256": "0358a5bc6bb8106c696667f92dcc236a0a6a1b2d0bf1fe969e4b94aee22602f4"
+    },
+    {
+      "path": "consiliency_spec/_bundle/spec-graph/py/spec_graph.py",
+      "sha256": "962a896fe766892510d0872d7c38f5a4c012c16eee717873a20f4fcf22a1c886"
+    },
+    {
+      "path": "consiliency_spec/certificate_verifier.py",
+      "sha256": "a62d41742dd018e6e5f8fcc20e92dd6ca03a7ed495557b80f3d89cdba2ce216d"
     },
     {
       "path": "consiliency_spec/outside_agent_router.py",
@@ -180,6 +192,10 @@
     {
       "path": "schemas/outside-agent-submission.schema.json",
       "sha256": "db4d81e758b134312fd6ea39d6627c9dd70cc1d0406fea0cb6717a2ad44ed227"
+    },
+    {
+      "path": "scripts/check_certificate_vectors.sh",
+      "sha256": "781ec3fb02625cd7eb5c7a2d653f150757e543ba2e7f267d6932cf9148350c99"
     },
     {
       "path": "scripts/check_outside_agent_vectors.sh",
@@ -250,6 +266,38 @@
       "sha256": "179a0ecf81b20d8a31f44dd1b21c8778fa2cd32bb2c3aa04949ee03cc7631ac4"
     },
     {
+      "path": "test-vectors/certificate/manifest.json",
+      "sha256": "333690a9575f26fc1e6cf64ae58627c807b9ea6b795baf8af905c905e638b92c"
+    },
+    {
+      "path": "test-vectors/certificate/pass-demo/certificate.json",
+      "sha256": "f89020548c7b89542dea004177df6587d13ec1bdbb33dafb68b87e205b8c5ad3"
+    },
+    {
+      "path": "test-vectors/certificate/pass-demo/certificate.tampered-verdict.json",
+      "sha256": "c2e28c8ad122bfcdea4aaa18779668c948642eda45fae4b94a6d71a3d9aaf92f"
+    },
+    {
+      "path": "test-vectors/certificate/pass-demo/desired-graph.json",
+      "sha256": "c8e978a8b176d23303e8ee580b53f37702848c3f47da90234b381b78f041d857"
+    },
+    {
+      "path": "test-vectors/certificate/pass-demo/ec.json",
+      "sha256": "fabb164423ddc6d71c48abf135b8f53d54d9bd97423907167961ecdca83b6075"
+    },
+    {
+      "path": "test-vectors/certificate/pass-demo/finding-set.json",
+      "sha256": "074e9de336448605eaacff758f3fcbaf22b4a32d58703258c63065e768461264"
+    },
+    {
+      "path": "test-vectors/certificate/pass-demo/payload.json",
+      "sha256": "d1baca45c14d815b038f172129bbb5a60f3b7278a7071c6ed39cf8320cb1c980"
+    },
+    {
+      "path": "test-vectors/certificate/pass-demo/payload.tampered-summary.json",
+      "sha256": "84873de0d285db4c7b0dcf45035eea3d01c8aebcd6822561ddccb2ff2e25ba6d"
+    },
+    {
       "path": "test-vectors/outside-agent/invalid-empty-evidence-refs.json",
       "sha256": "0dbdf1593bc5909900adb64967bd22a88d230265a251fde991e11317118a48f9"
     },
@@ -296,6 +344,10 @@
     {
       "path": "test-vectors/outside-agent/valid-work-request.json",
       "sha256": "d332483663431017ac5ecb825c9c8d6767f752927af9ceb637619b30f9687327"
+    },
+    {
+      "path": "tests/test_certificate_vectors.py",
+      "sha256": "d59c8be90ba6cb4aa17a5596e38915b20948f024b84c2df02d6cadb2fcf03f9d"
     },
     {
       "path": "tests/test_outside_agent_route_verdict_schema.py",
