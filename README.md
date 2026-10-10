@@ -32,6 +32,12 @@ Every software project has two things: a **blueprint** (what it's *supposed* to 
 
 The five parity dimensions: **completeness**, **soundness**, **closure**, **prohibition**, **revision-alignment**.
 
+### Reference certificate verifier (0.5.1) — additive
+
+`0.5.1` adds `consiliency_spec.verify_certificate` (see "Verify a certificate" below), its `verify`
+extra and a public certificate test vector. Nothing else changes: every certificate, payload and
+`ec_digest` from `0.5.0` keeps its bytes and verifies unchanged.
+
 ### Projection v4 (0.5.0) — breaking
 
 Since `0.5.0` the certificate is still `schema_version` `"2"`, but the projection algorithm is
@@ -82,7 +88,7 @@ The `consiliency_spec` module is a thin reader over the digest-pinned public fil
 import hashlib
 import consiliency_spec
 
-consiliency_spec.__version__                  # the package version, e.g. "0.5.0"
+consiliency_spec.__version__                  # the package version, e.g. "0.5.1"
 
 # The manifest: {"schema_version", "package", "source", "public_files": [{"path", "sha256"}, ...]}
 manifest = consiliency_spec.load_manifest()
@@ -103,12 +109,88 @@ spec_graph_schema = consiliency_spec.load_schema("spec-graph")     # spec-graph/
 `read_public_text(path)` and `load_json(path)` are the text and parsed-JSON forms of
 `read_public_bytes(path)`. To validate a certificate, feed `load_schema("certificate")` to any JSON
 Schema 2020-12 validator (for example `jsonschema`); to bind it to a desired-state graph, follow the
-verifier procedure in `SEMANTICS.md` §9.
+verifier procedure in `SEMANTICS.md` §9, or call `verify_certificate` (below), which implements it.
 
 npm: `npm install @consiliency/spec` ships the same public files. Import them through the package's
 `exports` map, for example `@consiliency/spec/manifest.json` (the manifest),
 `@consiliency/spec/schemas/certificate.schema.json` (any `spec-parity/schemas/*` file) and
 `@consiliency/spec/canon/ts/canon.ts` (the TypeScript canon port).
+
+### Verify a certificate
+
+`consiliency_spec.verify_certificate` (new in 0.5.1) is the reference verifier for a parity certificate
+(`SEMANTICS.md` §9). It re-derives everything the certificate pins that you can recompute, using only
+what this package ships: the bundled canon v2 port, the spec-graph and idmodel reference modules
+(`consiliency_spec/_bundle/`) and the public schemas. It never re-grades.
+
+```bash
+pip install "consiliency-spec[verify]"   # jsonschema (always required) and unicodedata2==16.0.0 (to bind S)
+```
+
+```python
+from pathlib import Path
+from consiliency_spec import verify_certificate
+
+result = verify_certificate(
+    Path("spec-certificate.json").read_bytes(),               # JSON text or bytes: parsed strictly
+    desired_graph=Path("spec.graph.json").read_bytes(),      # S': the binding procedure of §9
+    ec=Path("ec.json").read_bytes(),                         # E(C): ec_digest
+    payload=Path("spec-portal-payload.json").read_bytes(),   # optional: the portal payload
+    # finding_set=...                                        # optional: the finding set at findings_ref
+    # require_authoritative=True                             # also fail unless the certificate may gate
+)
+result.valid            # no check failed
+result.bound            # S' is valid and binds: desired_graph_digest, spec_revision_digest, spec_authority
+                        #   (reported on its own, whatever the other checks say)
+result.authoritative    # valid, bound, E(C) supplied and matching ec_digest, spec_authority ==
+                        #   "grounded" and ec_reproducible is True
+result.advisory         # ec_reproducible is not true: the certificate must not gate
+for check in result.checks:
+    print(check.name, check.status, check.reason)   # status: "pass" | "fail"
+```
+
+What it checks:
+
+- **The record.** The certificate decodes under canon's strict number rules, its field set matches
+  `certificate.schema.json` (`schema_version` `"2"`, `spec_authority` and `ec_reproducible` present and
+  well-typed), `canon_version` is `v2`, and the canon `certificate`-profile digest recomputes (the
+  non-hashed `locator` envelope is excluded). Its `overall_result_state` must be the §6.4 aggregation
+  of its own `dimension_results`, and a dimension is `not_applicable` exactly when it evaluated no
+  check (§6.3), so a re-hashed `pass` over failing dimensions is refused.
+- **The binding pair.** Given `desired_graph=S'`, it runs the four steps of §9: `S'` passes the full
+  spec-graph rule set; `spec_graph.graph_digest(S')` equals `desired_graph_digest`;
+  `spec_revision_digest` recomputes from `S'`'s `spec_revision_id` (`""` when absent) and that digest;
+  and `is_authoritative(S')` agrees with `spec_authority`. A draft graph never binds to its ratified
+  twin's certificate, and changing only `spec_revision_id` is caught.
+- **Everything else you supply.** `ec_digest` from `E(C)`; from the finding set, its JSON Schema
+  (`result-state.schema.json`), `finding_set_id`,
+  `findings_ref`, the copied `overall_result_state` / `dimension_results`, every `finding_id`, and each
+  dimension's state against the rollup of its findings; the payload's digest and every field it copies
+  from the certificate, after validating it against `portal-payload.schema.json`. With the finding
+  set, the payload must be exactly the §12 projection of (certificate, finding set); without it, its
+  `finding_summaries` must be one per finding the certificate lists, titled by code, and roll up to
+  each dimension's state.
+  `require_authoritative=True` needs both `desired_graph` and `ec`.
+
+What `valid` does not prove is origin. Anyone can edit a certificate and re-hash it, which yields a
+different certificate that is consistent with itself. The digest is the certificate's identity (§9):
+compare `result.digest` with a digest you obtained from a channel you trust, or resolve `authority_ref`
+against the authority ledger (§13), which this verifier does not do. A re-hash cannot defeat the
+bindings to inputs you hold yourself: `S'`, `E(C)`, the finding set and the payload.
+
+Numbers are never trusted. A fraction or exponent spelling (`2.0`, `2e0`), a bare `-0`, `NaN`/`Infinity`
+and an integer beyond ±(2^53 − 1) are rejected exactly as canon-core 0.4.0 rejects them, and so is a
+duplicated key. Pass inputs as text or bytes: a parsed `dict` can no longer show that `2` was spelled
+`2.0`. Bad input never raises; it is a failed check with a reason. Only misuse raises: `TypeError` for an
+argument of the wrong type, and `VerifierUnavailable` when the environment cannot run a check
+(`jsonschema` missing; `unicodedata2` missing or not Unicode 16.0 when `desired_graph` is given; or a
+bundled module, schema or vocabulary file whose bytes do not match the package manifest). The verdict never depends on what is installed: every
+check you asked for runs, or the call raises. The verifier is Python only; the npm package does not
+ship one.
+
+A worked example ships in [`test-vectors/certificate/`](test-vectors/certificate/): a certificate with
+the desired graph, `E(C)`, finding set and portal payload it binds to, plus tampered copies (a flipped verdict, a forged finding
+summary) that must fail. `scripts/check_certificate_vectors.sh` (part of the release gate) runs the verifier over it.
 
 ### canon-core relationship
 
@@ -118,13 +200,20 @@ Runtime consumers that need a compiled core use the separately published `@consi
 
 ## Conformance
 
-Every push and PR runs the canon byte-identity, XG4 canon-core parity, and authority-vector gates in CI. Run the local release gate with:
+Every push and PR to `main` runs one gate in CI, `scripts/consiliency-spec/check_release.sh`, and the publish workflow runs the same gate before any upload. Run it locally with:
 
 ```bash
 bash scripts/consiliency-spec/check_release.sh
 ```
 
-This runs the self-contained conformance gates: Python <-> TypeScript canon v2 byte-identity, and the Rust core + BUILT PyO3/WASM bindings byte-identity (XG4), including the vendored cross-repo consumer corpus.
+It runs four self-contained gates:
+
+- `canon/conformance/check.sh`: Python and TypeScript canon v2 conformance against the pinned vectors, ingest-boundary NFC under the pinned Unicode 16.0 DB, the vector corpus regenerated by `gen_vectors.py --check`, and Python <-> TypeScript byte-identity.
+- `canon/conformance/check_xg4_canon_core.sh` (XG4): the Rust core tests, then the BUILT PyO3 and WASM bindings checked byte-identical to the reference ports, including the engine boundary vectors and the vendored cross-repo consumer corpus.
+- `scripts/check_outside_agent_vectors.sh`: the outside-agent schemas, conformance vectors and reference router.
+- `scripts/check_certificate_vectors.sh` (since `0.5.1`): the reference certificate verifier over `test-vectors/certificate/`. It needs the `verify` extra's dependencies; `check.sh` installs `unicodedata2==16.0.0` first.
+
+The authority-event contract vectors are not run here. They are checked in the private source repository, which vendors the authority contract; this repository ships only `spec-engine/authority/authority-event.schema.json`.
 
 ---
 

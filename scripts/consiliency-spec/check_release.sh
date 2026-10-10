@@ -13,6 +13,9 @@
 #   - scripts/check_outside_agent_vectors.sh : outside-agent contract — schemas, the
 #                                           conformance vectors, and the reference
 #                                           router that derives every vector's verdict.
+#   - scripts/check_certificate_vectors.sh : the reference certificate verifier
+#                                           (consiliency_spec.verify_certificate) over the
+#                                           public certificate vectors, incl. a tampered copy.
 #
 # The publish workflow (.github/workflows/publish.yml) runs this same gate before
 # any Trusted-Publishing upload.
@@ -25,4 +28,5 @@ echo "== consiliency-spec public release gate =="
 bash canon/conformance/check.sh
 bash canon/conformance/check_xg4_canon_core.sh
 bash scripts/check_outside_agent_vectors.sh
+bash scripts/check_certificate_vectors.sh
 echo "== consiliency-spec public release gate GREEN =="

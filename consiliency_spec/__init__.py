@@ -7,9 +7,16 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
+from .certificate_verifier import (
+    CertificateVerification,
+    VerificationCheck,
+    VerifierUnavailable,
+    verify_certificate,
+)
+
 SPEC_PACKAGE = "consiliency-spec"
 SPEC_NPM_PACKAGE = "@consiliency/spec"
-SPEC_VERSION = "0.5.0"
+SPEC_VERSION = "0.5.1"
 __version__ = SPEC_VERSION
 
 _MANIFEST = "consiliency-spec.public-manifest.json"
@@ -65,6 +72,7 @@ def load_schema(name: str) -> dict[str, Any]:
 
 
 __all__ = [
+    "CertificateVerification",
     "SPEC_PACKAGE",
     "SPEC_NPM_PACKAGE",
     "SPEC_VERSION",
@@ -75,4 +83,7 @@ __all__ = [
     "load_schema",
     "read_public_bytes",
     "read_public_text",
+    "VerificationCheck",
+    "VerifierUnavailable",
+    "verify_certificate",
 ]

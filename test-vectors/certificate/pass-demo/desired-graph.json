@@ -1,0 +1,60 @@
+{
+  "edges": [
+    {
+      "kind": "decomposes_to",
+      "source": {
+        "endpoint_kind": "node",
+        "id": "demo.cap"
+      },
+      "target": {
+        "endpoint_kind": "node",
+        "id": "demo.comp"
+      }
+    },
+    {
+      "kind": "decomposes_to",
+      "source": {
+        "endpoint_kind": "node",
+        "id": "demo.comp"
+      },
+      "target": {
+        "endpoint_kind": "node",
+        "id": "demo.DemoPort"
+      }
+    }
+  ],
+  "graph_id": "pf-demo",
+  "nodes": [
+    {
+      "frontier": true,
+      "kind": "capability",
+      "level": "contract",
+      "name": "demo.cap"
+    },
+    {
+      "kind": "component",
+      "level": "architecture",
+      "name": "demo.comp"
+    },
+    {
+      "kind": "interface",
+      "level": "detailed",
+      "name": "demo.DemoPort",
+      "permitted_freedom": [
+        "open_interface"
+      ],
+      "signature": {
+        "params": [
+          {
+            "name": "x",
+            "type": "string"
+          }
+        ],
+        "return_type": "R"
+      }
+    }
+  ],
+  "registry_version": "1",
+  "spec_graph_version": "1",
+  "spec_revision_id": "spec-rev-pf"
+}

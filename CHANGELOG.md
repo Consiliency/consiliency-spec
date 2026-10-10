@@ -3,6 +3,59 @@
 All notable changes to `@consiliency/spec` / `consiliency-spec` are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## 0.5.1 — reference certificate verifier
+
+Additive only: no certificate, payload, `ec_digest`, schema, canon vector or outside-agent file changes,
+and no existing API changes. A `0.5.0` certificate verifies unchanged under `0.5.1`.
+
+### Added
+
+- **`consiliency_spec.verify_certificate()`**, a reference certificate verifier (`SEMANTICS.md` §9),
+  exported with `CertificateVerification`, `VerificationCheck` and `VerifierUnavailable`. It never
+  re-grades: it recomputes the certificate digest (the non-hashed `locator` envelope excluded),
+  `finding_set_id`, `ec_digest`, the portal-payload digest and the normalized `desired_graph_digest`,
+  and checks the field set against `certificate.schema.json` (`schema_version` `"2"`, `canon_version`
+  `v2`). It also requires `overall_result_state` to be the §6.4 aggregation of the certificate's own
+  `dimension_results`, so a re-hashed `pass` over failing dimensions is refused; and, given the finding
+  set, its schema to validate, every `finding_id` to recompute and each dimension's state to be the
+  §6.3 rollup of its findings. Given a candidate desired graph `S'`, it runs the four binding steps of
+  §9: full spec-graph validation, the `desired_graph_digest` / `spec_revision_digest` pair, and
+  `spec_authority` against the graph's authority markers. A supplied portal payload must be exactly the
+  §12 projection of the certificate and finding set (one summary per finding); without the finding set,
+  its summaries must match the findings the certificate lists.
+- **What the result means.** Each check reports `pass` or `fail` with a reason.
+  - `valid`: no check failed. It proves consistency with the digest the certificate carries, not its
+    origin: compare `digest` with one from a trusted channel. A `draft` or `ec_reproducible: false`
+    certificate can be valid; it is then a true record of a draft or advisory run.
+  - `bound`: a supplied `S'` passed validation and bound (both digests and `spec_authority`). It is
+    reported on its own, whatever the other checks say, and is false when no `S'` was supplied.
+  - `authoritative`: `valid` and `bound`, a supplied `E(C)` matched `ec_digest`, `spec_authority` is
+    `"grounded"` and `ec_reproducible` is `true`. Only an authoritative certificate may gate.
+    `require_authoritative=True` adds a failing check when it is not.
+  - `advisory`: `ec_reproducible` is not `true`.
+- **Strict input.** Inputs are decoded with canon's number rules (canon-core `0.4.0`): `2.0`, `2e0`,
+  `-0`, `NaN`, integers beyond ±(2^53 − 1) and duplicate keys are rejected, never coerced. Untrusted
+  input is a failed check, never an exception; only misuse raises (`TypeError` for an argument of the
+  wrong type, `VerifierUnavailable` for an environment that cannot run a requested check). Pass JSON
+  text or bytes where you can: a parsed `dict` cannot show how a number was spelled.
+- **The `verify` extra**: `pip install "consiliency-spec[verify]"` adds `jsonschema>=4.18` and
+  `unicodedata2==16.0.0`. `jsonschema` is always required (full schema validation). `unicodedata2` is
+  required only to bind a desired graph, which applies NFC under the pinned Unicode 16.0 database. A
+  missing dependency, a Unicode database other than 16.0, or a bundled module, schema or data file
+  whose bytes do not match the package manifest raises `VerifierUnavailable`. The verifier never
+  returns a verdict with a check skipped. The npm package has no verifier (there is no TypeScript
+  spec-graph port).
+- The spec-graph and idmodel reference modules ship under `consiliency_spec/_bundle/`, digest-pinned in
+  the manifest. The verifier loads them, with the bundled canon port, only after their sha256 matches
+  the manifest, and computes the normalized desired-graph digest with them.
+- `test-vectors/certificate/pass-demo/`: a certificate with the desired graph, `E(C)`, finding set and
+  portal payload it binds to, plus a copy with a flipped verdict and a payload with a rewritten summary;
+  `test-vectors/certificate/manifest.json` states the expected outcome of each case.
+  `tests/test_certificate_vectors.py`, run by `scripts/check_certificate_vectors.sh`, checks them, and
+  `scripts/consiliency-spec/check_release.sh` (the release gate) now runs it.
+- The public manifest lists 89 files (`0.5.0`: 76): the verifier, the two bundled modules, the eight
+  certificate vector files, their runner and their test. See "Verify a certificate" in the README.
+
 ## 0.5.0 — projection v4, full spec-graph validation at every entry, canon-core 0.4.0 ports
 
 The certificate stays `schema_version` `"2"`, but `projection_algo_version` is
