@@ -32,6 +32,17 @@ Every software project has two things: a **blueprint** (what it's *supposed* to 
 
 The five parity dimensions: **completeness**, **soundness**, **closure**, **prohibition**, **revision-alignment**.
 
+### Realized extraction 0.6.0 — breaking for realized digests
+
+`0.6.0` keeps certificate `schema_version` `"2"`, projection `spec-engine-projection:v4`, canon-core
+`0.4.0` and the reference verifier unchanged. The realized side moves: `E(C)` is extracted with
+treesitter-chunker `5.3.0` (`.tsx` parsed with the `tsx` grammar; `jsx_element` / `jsx_fragment` align
+as wrappers in `kind-alignment.json`), an edge may carry its raw call token (`edges[].to_token` in
+`ec.schema.json`), and an extracted `E(C)` without an `extraction_coverage` record is refused at entry
+(`SEMANTICS.md` §0, §4.2). So every realized `ec_digest`, and every certificate and payload over a
+realized `E(C)`, differs from `0.5.x`; certificates over hand-authored `E(C)`s, including the public
+certificate test vectors, keep their bytes. See [`CHANGELOG.md`](CHANGELOG.md).
+
 ### Reference certificate verifier (0.5.1) — additive
 
 `0.5.1` adds `consiliency_spec.verify_certificate` (see "Verify a certificate" below), its `verify`
@@ -88,7 +99,7 @@ The `consiliency_spec` module is a thin reader over the digest-pinned public fil
 import hashlib
 import consiliency_spec
 
-consiliency_spec.__version__                  # the package version, e.g. "0.5.1"
+consiliency_spec.__version__                  # the package version, e.g. "0.6.0"
 
 # The manifest: {"schema_version", "package", "source", "public_files": [{"path", "sha256"}, ...]}
 manifest = consiliency_spec.load_manifest()

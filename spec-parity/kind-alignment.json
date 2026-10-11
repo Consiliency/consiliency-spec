@@ -21,7 +21,7 @@
     "greenfield": {
       "source_ref": "internal design note (interface_boundary.py + interface-boundary-spec.md:70-139)",
       "kind_values_status": "CONFIRMED",
-      "kind_values_note": "OPEN-1 RESOLVED (via IF-0-PUBKINDS-1). The greenfield node `kind` values are now reconciled against the published closed set in greenfield/interface_boundary.py:27-29: SYMBOL_NODE_KINDS = frozenset({module, class, interface, struct, trait, function, method}). The node-kind rows below cover EXACTLY that set. Versus the prior core-graph NodeKind proxy this added `struct` (greenfield emits it for Go/Rust record types) and dropped the dead `field`/`property` rows (greenfield never emits them; their tsc-source `field_declaration`/`property_declaration` and protobuf `field` spellings remain under their own realized_source keys). The IR SHAPE is unchanged (nodes[]{boundary_id,kind,name,qualified_name,file,line-span,signature,parent_boundary_id,provenance} + edges[]{from/to boundary_id, type imports|calls|dependencies, resolution resolved|ambiguous|unresolved, is_internal}). A greenfield kind outside this closed set still uses the unmapped_realized_kind fallback rule below.",
+      "kind_values_note": "OPEN-1 RESOLVED (via IF-0-PUBKINDS-1). The greenfield node `kind` values are now reconciled against the published closed set in the greenfield producer's interface_boundary.py: SYMBOL_NODE_KINDS = frozenset({module, class, interface, struct, trait, function, method}). The node-kind rows below cover EXACTLY that set. Versus the prior NodeKind proxy this added `struct` (greenfield emits it for Go/Rust record types) and dropped the dead `field`/`property` rows (greenfield never emits them; their tsc-source `field_declaration`/`property_declaration` and protobuf `field` spellings remain under their own realized_source keys). The IR SHAPE is unchanged (nodes[]{boundary_id,kind,name,qualified_name,file,line-span,signature,parent_boundary_id,provenance} + edges[]{from/to boundary_id, type imports|calls|dependencies, resolution resolved|ambiguous|unresolved, is_internal}). A greenfield kind outside this closed set still uses the unmapped_realized_kind fallback rule below.",
       "edge_types": ["imports", "calls", "dependencies"],
       "edge_resolution_states": ["resolved", "ambiguous", "unresolved"]
     },
@@ -201,6 +201,20 @@
       "alignment": "wrapper",
       "coalesce": "inner_by_semantic_path",
       "note": "OPEN-2 wrapper. JavaScript tsc emits an `export_statement` boundary wrapping an exported declaration (e.g. `export function formatResult`). Same wrapper category and same coalesce rule (inner_by_semantic_path). NOTE the asymmetry with decorated_definition: in tsc 3.0.0 the export_statement node carries NO own symbol/qualified_name and sits at the FILE-level semantic path (`util.js`), NOT the exported function's path (`util.js::formatResult`), so the coincident-inner test does NOT fire and the wrapper FALLS BACK to unmapped_realized_kind -> unsupported. That is the safe direction (it is never silently dropped), and in the realized sample export_statement is out-of-frontier so it never enters an in-scope check. It is recorded here as a wrapper so the matrix documents the category; the single coalesce rule plus its fallback covers both cases without a special export-only rule."
+    },
+    {
+      "realized_source": "treesitter-chunker",
+      "realized_kind": "jsx_element",
+      "alignment": "wrapper",
+      "coalesce": "inner_by_semantic_path",
+      "note": "OPEN-2 wrapper (treesitter-chunker 5.3.0, which parses `.tsx` with the `tsx` grammar). tsc emits a `jsx_element` boundary for a JSX-valued declaration ALONGSIDE the declaration itself, at the SAME semantic path: a component `function App() { return <main/> }` or `const Arrow = () => <div/>` yields a `jsx_element` at `App.tsx::App` next to the `function` node (and, for a const, its `variable_declarator`). The JSX node carries no identity of its own: the function already carries identity, kind and signature. It is therefore a wrapper that COALESCES to that inner node (coalesce=inner_by_semantic_path). Class chosen from data (P3 0.6.0 lane L0): over the brownfield GE2E subject (a 68-file Next.js/TSX application) re-extracted at 5.3.0 with coverage full, all 348 jsx_element nodes share their semantic path with a mapped `function` node, so all 348 coalesce, while only 7 have a function/method parent (the `structural: body_local` condition would leave 341 unmapped). A JSX node with no coincident mapped inner (e.g. a JSX value bound to a body-local `const`, whose only coincident node is the structural `variable_declarator`) is NOT coalesced: it falls back to unmapped_realized_kind -> unsupported, the safe direction. Only `tsx`-labelled nodes carry this kind."
+    },
+    {
+      "realized_source": "treesitter-chunker",
+      "realized_kind": "jsx_fragment",
+      "alignment": "wrapper",
+      "coalesce": "inner_by_semantic_path",
+      "note": "OPEN-2 wrapper, the JSX fragment (`<>...</>`) counterpart of `jsx_element`, with the same class and coalesce rule (coalesce=inner_by_semantic_path, falling back to unmapped_realized_kind -> unsupported when no coincident mapped inner exists). Declared for the tsx grammar's fragment node; measured at treesitter-chunker 5.3.0, a fragment-valued component is emitted as `jsx_element` (the 68-file GE2E subject: 0 `jsx_fragment` nodes; a fragment probe: 0), so this row documents the category and keeps a future fragment boundary from silently changing class."
     },
     {
       "realized_source": "treesitter-chunker",

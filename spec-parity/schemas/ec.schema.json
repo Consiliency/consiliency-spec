@@ -75,7 +75,8 @@
         "type": { "type": "string" },
         "resolution": { "type": "string" },
         "is_internal": { "type": "boolean" },
-        "to_resolved_boundary": { "type": "boolean" }
+        "to_resolved_boundary": { "type": "boolean" },
+        "to_token": { "description": "Optional (treesitter-chunker E(C)s from 0.6.0). The raw call-site token as written in the source (the Boundary IR edge `reference`), a string or null. Unlike `to`, it does not depend on cross-file resolution. Documented, not shape-checked: no projection v4 rule reads it." }
       }
     }
   }

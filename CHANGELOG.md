@@ -3,6 +3,50 @@
 All notable changes to `@consiliency/spec` / `consiliency-spec` are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## 0.6.0 — realized extraction with treesitter-chunker 5.3.0, the coverage-record requirement
+
+Certificate `schema_version` `"2"`, projection `spec-engine-projection:v4`, canon-core `0.4.0`, the
+outside-agent files and the `verify_certificate` API are unchanged. The realized side changes, so every
+realized `ec_digest`, and every certificate and payload over a realized `E(C)`, differs from `0.5.x`.
+Certificates over hand-authored `E(C)`s keep their bytes: the `test-vectors/certificate/` vectors are
+byte-identical, and a `0.5.1` verifier verifies `0.6.0` certificates unchanged.
+
+### Changed
+
+- **Realized extraction: treesitter-chunker `5.3.0`** (was `5.2.0`; `tree-sitter` `0.26.0` and
+  `tree-sitter-language-pack` `1.20.0` unchanged). `.tsx` files are parsed with the `tsx` grammar and
+  labelled `tsx`, so a JSX file without a real syntax error is fully extracted (`SEMANTICS.md` §4.2).
+  Go, C++, Java, C#, Kotlin, Swift, PHP and Ruby methods carry signatures, and Go and Rust return types
+  are surfaced, so an operation that graded `unknown signature_unobservable` can now grade `pass` or
+  `fail`.
+- **`kind-alignment.json`**: `jsx_element` and `jsx_fragment` align as `wrapper` (coalesce
+  `inner_by_semantic_path`); one with no coincident mapped node stays `unmapped_realized_kind`.
+  `kind_alignment_version` stays `"1"`.
+- **`ec.schema.json`**: an edge may carry `to_token`, the raw call-site token as written in the source
+  (a string or null). It does not depend on cross-file resolution. Documented, not shape-checked.
+- Parents are same-file only: a realized node no longer hangs under a same-named declaration in
+  another file.
+
+### Breaking (input)
+
+- **An extracted `E(C)` must carry `extraction_coverage`** (`SEMANTICS.md` §0, §4.2). An `E(C)` is
+  extracted if it has any one marker: a string `provenance.tsc_version`, `source:
+  "treesitter-chunker"`, or any `provenance.tsc_*` key. Without the record it is refused at entry
+  instead of being graded on the hand-authored `declared` basis; re-extract it. An `E(C)` with no marker
+  keeps `declared`, and an explicit `null`, malformed or `unmeasured` record keeps the `unmeasured`
+  grading. A hand-built `E(C)` that sets `source: "treesitter-chunker"` only to select those
+  kind-alignment rows needs a record too: a measured `full` one grades exactly like `declared`.
+
+### Migration
+
+- Re-extract with treesitter-chunker `5.3.0` and store the new `ec_digest` and certificate values; do
+  not compare them with `0.5.x` values. Certificates over hand-authored `E(C)`s need nothing.
+- Select `tsx` as well as `typescript` where you filter nodes by language, and re-read any
+  correspondence entry that names a `.tsx` handler or a Kotlin method from the re-extracted `E(C)`:
+  their semantic paths change.
+- Declare real source signatures (including return types) for operations in the newly signed
+  languages.
+
 ## 0.5.1 — reference certificate verifier
 
 Additive only: no certificate, payload, `ec_digest`, schema, canon vector or outside-agent file changes,
