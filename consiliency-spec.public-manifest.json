@@ -2,7 +2,7 @@
   "package": {
     "npm": "@consiliency/spec",
     "pypi": "consiliency-spec",
-    "version": "0.5.1"
+    "version": "0.6.0"
   },
   "public_files": [
     {
@@ -155,7 +155,7 @@
     },
     {
       "path": "consiliency_spec/__init__.py",
-      "sha256": "8ab3cd291b0e172a1d4d1b60438cf75e7d339689834fd06e0832f5b3a8f5bed9"
+      "sha256": "7d101e6bb8e3cf051d99568d3cf17c22747c0c9a074640b981b9f74123ab5396"
     },
     {
       "path": "consiliency_spec/_bundle/idmodel/py/idmodel.py",
@@ -211,7 +211,7 @@
     },
     {
       "path": "spec-parity/SEMANTICS.md",
-      "sha256": "1e585270ce56f1b31f949f53e568380975e6e009d0cdbeb993344c3837a1f53c"
+      "sha256": "24126b047689d471c09d959935cac55adbaa2dee81cf040cd056748680510b25"
     },
     {
       "path": "spec-parity/conformance/check.sh",
@@ -223,7 +223,7 @@
     },
     {
       "path": "spec-parity/kind-alignment.json",
-      "sha256": "5615e693bffecc1c40f1dfe447f913982c746b89c4d6b3c21298f0419a7ebc3b"
+      "sha256": "01f6477fb73d2368cd1a74c78315a4ff16d327f226ad3682e9ae36673c352f14"
     },
     {
       "path": "spec-parity/permitted-freedom-vocab.json",
@@ -239,7 +239,7 @@
     },
     {
       "path": "spec-parity/schemas/ec.schema.json",
-      "sha256": "769e22ceac130a10dc0e39099ef7a7aa07b6e354afe1f9e0771cfa2117501a4b"
+      "sha256": "9b4de9932605adef97fb4a523e7f860527b55755998d852be5cdb3240f37fe02"
     },
     {
       "path": "spec-parity/schemas/kind-alignment.schema.json",

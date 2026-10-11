@@ -50,7 +50,11 @@ N(projection) -> finding_set + certificate   # the 5-dimension parity checker; d
   projecting them. `S` must pass the **full** `spec_graph.validate` rule set (projection v4; the
   0.4.0 engine subset, which relaxed level ordering and operation-requires-signature, is gone): among
   others, every `decomposes_to` descends to a strictly lower level and every `operation` declares a
-  signature. `E(C)` must match `schemas/ec.schema.json` with unique `boundary_id`s and no JSON floats.
+  signature. `E(C)` must match `schemas/ec.schema.json` with unique `boundary_id`s and no JSON floats,
+  and an **extracted** `E(C)` (a string `provenance.tsc_version`, `source: "treesitter-chunker"`, or any
+  `provenance.tsc_*` key) must carry `extraction_coverage` (consiliency-spec 0.6.0,
+  `projection.validate_ec`; sec 4.2: the `declared` basis is for hand-authored `E(C)`s only, so a legacy
+  or stripped capture is refused and the fix is to re-extract).
   Independently of the entry point, `P` and `N` themselves refuse a malformed input before grading it:
   their shared grading boundary runs the same full `spec_graph.validate` on `S` (projection v4), plus
   the structural checks: duplicate or empty `S` node names, dangling edges, an `operation` without a signature, a malformed `E(C)` (duplicate
@@ -315,10 +319,10 @@ generated code out of the draft, but the code it removes was not extracted, so t
 (the committed `ingest-fixture` is partial for exactly this reason: `baml_client/client.ts`). Both
 walks are iterative and the `.proto` match is case-insensitive.
 
-**`.tsx` is always partial under tsc 5.2.0.** tsc maps `.tsx` to the plain `typescript` grammar, so
-any JSX yields `ERROR` nodes and the file is `syntax_error`. The measurement is honest — tsc really
-under-extracts these files — so a React/TSX repo's absence-based claims are `unknown` until tsc
-parses `.tsx` with the TSX grammar.
+**`.tsx` is parsed with the `tsx` grammar since tsc 5.3.0.** Under tsc 5.2.0, `.tsx` mapped to the
+plain `typescript` grammar, so any JSX yielded `ERROR` nodes and the file was an honest `syntax_error`
+partial (a React/TSX repo's absence-based claims were `unknown`). tsc 5.3.0 routes `.tsx` to `tsx` and
+labels it `tsx`, so a JSX file with no real syntax error is fully extracted.
 
 Data / documentation / configuration formats tsc also parses (`.md`, `.json`, `.yaml`, `.toml`, `.xml`,
 `.html`, `.css`, ... — `NON_SOURCE_EXTENSIONS`) carry no interface boundary and are not coverage subjects:
@@ -332,9 +336,18 @@ lists is a source file, including languages outside the on-disk catalog that tsc
   was handed an IR carrying no coverage record). Graded exactly like **partial**: an unmeasured extraction
   never claims full coverage, so a producer that forgets to measure surfaces as non-`pass`.
 - **declared** — `E(C)` carries **no** `extraction_coverage` at all: a hand-authored / greenfield fixture
-  `E(C)`, or a frozen pre-v2 capture (e.g. the brownfield `ga_author`/`ga_e2e` fixtures, trimmed captures of a
-  source that is not available to re-measure). Its producer's `modeled_domains` declaration stands alone (the v1
-  rule). The adapters always emit the field, so a live extraction is never `declared`.
+  `E(C)` (no extraction marker: no `provenance.tsc_*` key and `source` other than `treesitter-chunker`).
+  Its producer's `modeled_domains` declaration stands alone (the v1 rule). The adapters always emit the
+  field, so a live extraction is never `declared`. An **extracted** `E(C)` (any one marker: a string
+  `provenance.tsc_version`, `source: "treesitter-chunker"`, or any `provenance.tsc_*` key) with no
+  `extraction_coverage` key, such as a frozen pre-v2 capture or a hand-stripped one, is **refused at
+  entry** since consiliency-spec 0.6.0 (sec 0); it is no longer graded on the `declared` basis. Removing
+  one marker does not change that: each marker refuses on its own. The fix is to re-extract. A
+  hand-built `E(C)` that declares `source: "treesitter-chunker"` to select the tsc kind-alignment rows
+  must carry a coverage record (a measured `full` record grades exactly like `declared`). (The
+  brownfield `ga_author`/`ga_e2e` fixtures were such captures until 0.6.0 re-extracted them with
+  measured coverage.) An explicit `null`, malformed or `unmeasured` record is not refused: it keeps the
+  `unmeasured` grading below.
 
 **What a partial (or unmeasured) extraction changes.** Absence is not evidence over unobserved source, so every
 *universal* (absence-based) claim degrades, while observed facts keep their verdicts:
@@ -357,7 +370,14 @@ lists is a source file, including languages outside the on-disk catalog that tsc
 
 Scope note: the rule is deliberately global — one unextracted file anywhere makes every universal claim
 `unknown`. A finer, per-domain rule (e.g. an `edge_set` scan is unaffected when every *governed* boundary's
-file was extracted) is sound and a possible refinement; it is not v2.
+file was extracted) is sound **only under adapter preconditions the shipped extractor does not meet**: an
+edge's existence and call token must be a function of its call-site file's bytes alone, parents must be
+same-file, semantic paths must be file-qualified, and unextracted paths must share the node files' path
+space. The 0.6.0 board review rejected such a rule (projection v5) on executed
+counterexamples: under treesitter-chunker 5.3.0 a same-stem file can steal an edge's anchor, edges are
+deduplicated and self-resolved edges dropped across files, so another file can decide whether a governed
+forbidden call exists; a forbidden token may also match the boundary-id grammar. The global rule therefore
+stays (projection v4), and a partial or unmeasured extraction never yields a prohibition `pass`.
 
 ### 4.3 Prohibitions the extractor cannot observe
 
@@ -490,9 +510,9 @@ pins the handling rules.
 ### 5.1 Greenfield realized kinds — `OPEN-1` RESOLVED
 
 Greenfield's node-`kind` values are now reconciled against the **published closed set** in
-`greenfield/interface_boundary.py:27-29` (`SYMBOL_NODE_KINDS = frozenset({module, class, interface, struct,
+the greenfield producer's `interface_boundary.py` (`SYMBOL_NODE_KINDS = frozenset({module, class, interface, struct,
 trait, function, method})`), confirmed via `IF-0-PUBKINDS-1`. The greenfield rows in `kind-alignment.json` are
-flagged `CONFIRMED` and cover **exactly** that set. Versus the prior core-graph NodeKind proxy this **added
+flagged `CONFIRMED` and cover **exactly** that set. Versus the prior NodeKind proxy this **added
 `struct`** (greenfield emits it for Go/Rust record types — `struct → type`, mirroring the tsc-source `struct →
 type` and protobuf `message → type` rows) and **dropped the dead `field`/`property` rows** (greenfield never
 emits them; the `field_declaration`/`property_declaration` tsc-source and protobuf `field` spellings remain
@@ -1023,7 +1043,7 @@ both resolve with only the rules in this document.
 
 - `OPEN-1` (greenfield exact node-`kind` value list) — **RESOLVED**. Greenfield published its closed kind set
   `frozenset({module, class, interface, struct, trait, function, method})` at
-  `greenfield/interface_boundary.py:27-29` (`IF-0-PUBKINDS-1`); the greenfield rows in `kind-alignment.json`
+  the greenfield producer's `interface_boundary.py` (`IF-0-PUBKINDS-1`); the greenfield rows in `kind-alignment.json`
   are reconciled to it and flagged `CONFIRMED` (struct added → `type`; dead `field`/`property` rows dropped).
   See sec 5.1.
 
