@@ -26,7 +26,7 @@
       "edge_resolution_states": ["resolved", "ambiguous", "unresolved"]
     },
     "treesitter-chunker": {
-      "source_ref": "internal schema inventory sec 1.1 + internal design note",
+      "source_ref": "internal design notes",
       "kind_values_status": "OPEN_SET",
       "kind_values_note": "OPEN-2. Chunker boundary/chunk kinds are PER-GRAMMAR across 47 languages and are therefore NOT a closed enumerable set. The table below lists only the cross-language anchor kinds that recur in the documented grammars; every other per-grammar kind is handled by the fallback rule (unmapped_realized_kind). Resolution states resolved|unresolved|ambiguous mirror greenfield.",
       "resolution_states": ["resolved", "unresolved", "ambiguous"]
@@ -275,7 +275,7 @@
     "per_kind_path": {
       "capability": "Observed via decomposition edges (idmodel correspondence) to its constituent components/operations, not a realized `capability` kind. Completeness is checked over the decomposition closure.",
       "prohibition": "Observed via its closed-world fact domain (SEMANTICS.md sec 4), never by kind-matching.",
-      "acceptance_criterion": "Observed via evidence refs to test/conformance artifacts; if E(C) carries no such evidence -> `unknown`.",
+      "acceptance_criterion": "Not a direct completeness subject. Observed by the acceptance dimension via E(C).acceptance_evidence command results, with mode, pipeline engagement and authority (SEMANTICS sec 7.6); no record -> `unknown`. The earlier `unknown` wording meant absent acceptance observations, not an unsupported completeness kind-match.",
       "state": "unsupported in v1 unless the realized side exposes a state machine the extractor models; default `unsupported`.",
       "invariant": "unsupported in v1 (no realized observation path for arbitrary invariants); default `unsupported`.",
       "error": "May be observed via operation signature error/throw facts when the extractor supplies them; else `unsupported`.",

@@ -22,20 +22,25 @@ if [[ "${1:-}" == "--target" ]]; then
   [[ -n "$TARGET" && -d "$TARGET" ]] || { echo "usage: $0 --target <installed-wheel-or-unpacked-root>" >&2; exit 2; }
   [[ $# -eq 2 ]] || { echo "usage: $0 --target <installed-wheel-or-unpacked-root>" >&2; exit 2; }
 
+  # The bundled canon is the spec_core subpackage's canon.py (_bundle/spec_core/canon/canon.py);
+  # a wheel built before that layout vendored it at _bundle/canon/py/canon.py.
   CANON_TARGET=""
-  for candidate in \
-    "$TARGET/consiliency_spec_ingest/_bundle/canon/py/canon.py" \
-    "$TARGET/src/consiliency_spec_ingest/_bundle/canon/py/canon.py"; do
-    if [[ -f "$candidate" ]]; then
-      CANON_TARGET="$candidate"
-      break
-    fi
+  for rel in spec_core/canon/canon.py canon/py/canon.py; do
+    for candidate in \
+      "$TARGET/consiliency_spec_ingest/_bundle/$rel" \
+      "$TARGET/src/consiliency_spec_ingest/_bundle/$rel"; do
+      if [[ -f "$candidate" ]]; then
+        CANON_TARGET="$candidate"
+        break 2
+      fi
+    done
   done
-  if [[ -z "$CANON_TARGET" ]]; then
-    CANON_TARGET="$(find "$TARGET" -path '*/consiliency_spec_ingest/_bundle/canon/py/canon.py' -type f -print -quit)"
-  fi
+  for rel in spec_core/canon/canon.py canon/py/canon.py; do
+    [[ -z "$CANON_TARGET" ]] || break
+    CANON_TARGET="$(find "$TARGET" -path "*/consiliency_spec_ingest/_bundle/$rel" -type f -print -quit)"
+  done
   [[ -n "$CANON_TARGET" && -f "$CANON_TARGET" ]] || {
-    echo "FAIL: target does not contain consiliency_spec_ingest/_bundle/canon/py/canon.py" >&2
+    echo "FAIL: target does not contain consiliency_spec_ingest/_bundle/spec_core/canon/canon.py" >&2
     exit 1
   }
 

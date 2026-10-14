@@ -1,7 +1,7 @@
 """spec-graph v1 — Python reference implementation (desired-state semantic metamodel).
 
-Normative contract: ../SPEC.md. Builds on canon v1 (../../canon/py/canon.py) and
-idmodel v1 (../../idmodel/py/idmodel.py).
+Normative contract: spec-graph/SPEC.md. Builds on canon v1 (../canon/canon.py) and
+idmodel v1 (../idmodel/idmodel.py).
 
 The model is a typed node/edge desired-state graph (the ``S`` in ``N(S) = N(P(E(C),S))``). It owns
 an OPEN, VERSIONED ``kind`` registry spanning architecture AND code-level semantics (an earlier
@@ -35,14 +35,11 @@ from __future__ import annotations
 import json
 import os
 import re
-import sys
 from typing import Any, Dict, List, Optional, FrozenSet
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "canon", "py"))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "idmodel", "py"))
-import canon  # noqa: E402
-import canon_ingest as ingest  # noqa: E402  (canon v2: NFC at the ingestion boundary, not in canon)
-import idmodel  # noqa: E402
+from ..canon import canon
+from ..canon import canon_ingest as ingest  # canon v2: NFC at the ingestion boundary, not in canon
+from ..idmodel import idmodel
 
 SPEC_GRAPH_VERSION = "1"
 REGISTRY_VERSION = "1"
@@ -96,9 +93,12 @@ _KIND_REQUIRED_FIELDS = {
 # spec-parity/permitted-freedom-vocab.json is the SINGLE SOURCE OF TRUTH for the closed/versioned
 # token set; validate() rejects any declared token not in it (unknown token = validation error in
 # v1, additive by design). Loaded lazily + cached so the registry value list is never duplicated here.
-_PF_VOCAB_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "..",
-    "spec-parity", "permitted-freedom-vocab.json")
+# The vocabulary sits at the root of the tree this copy lives in: the repo (this file is
+# src/spec_core/graph/spec_graph.py) or a vendored bundle (<bundle>/spec_core/graph/spec_graph.py).
+_TREE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if os.path.basename(_TREE) == "src":
+    _TREE = os.path.dirname(_TREE)
+_PF_VOCAB_PATH = os.path.join(_TREE, "spec-parity", "permitted-freedom-vocab.json")
 _PF_VOCAB_TOKENS_CACHE: Optional[FrozenSet[str]] = None
 
 

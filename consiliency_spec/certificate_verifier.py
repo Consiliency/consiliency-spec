@@ -1,9 +1,9 @@
 """Reference verifier for spec-parity certificates (SEMANTICS.md section 9).
 
 ``verify_certificate()`` re-derives everything a certificate pins that a consumer can recompute,
-using only what this package ships: the bundled canon v2 port (``canon/py``), the spec-graph and
-idmodel reference modules (``consiliency_spec/_bundle/``, the engine's own ``spec_graph.py`` and
-``idmodel.py``) and the public schemas. It never re-grades: it checks that the certificate is
+using only what this package ships: the bundled canon v2 port, idmodel and spec-graph reference
+modules (``consiliency_spec/_bundle/spec_core/``, the engine's own ``canon.py``, ``idmodel.py`` and
+``spec_graph.py``) and the public schemas. It never re-grades: it checks that the certificate is
 well-formed, consistent with the ``digest`` it carries and with itself, and that the inputs a caller
 holds are the inputs it certifies.
 
@@ -23,7 +23,7 @@ Checks (each is reported, with a reason, in ``CertificateVerification.checks``):
 * ``schema``                the certificate's field set against ``certificate.schema.json``
                             (required fields, no unknown field, ``schema_version`` ``"2"``,
                             ``spec_authority`` / ``ec_reproducible`` / ``authority_ref`` shapes,
-                            five dimension results).
+                            six dimension results under ``spec-engine-projection:v5``, five before).
 * ``json_schema``           full JSON Schema 2020-12 validation (``jsonschema`` is required).
 * ``canon_version``         ``"v2"``: a canon-v1 digest is never recomputed under v2.
 * ``aggregation``           ``overall_result_state`` is the SEMANTICS section 6.4 aggregation of the
@@ -44,6 +44,17 @@ Checks (each is reported, with a reason, in ``CertificateVerification.checks``):
                             section 6.3 rollup of its findings, and the finding set's own
                             ``overall_result_state`` is the section 6.4 aggregation.
 * ``ec_digest``             (``ec=``) canon ``semantic-content`` digest of E(C).
+* ``acceptance_evidence``   (``ec=``, a certificate with an ``acceptance`` dimension) each
+                            ``acceptance_results`` row is the copy of the E(C) record it names
+                            (SEMANTICS section 7.6): ``record_digest`` is the canon
+                            ``semantic-content`` digest of that record, ``authority``,
+                            ``authority_id`` (present exactly when the record has one),
+                            ``pipeline_mode`` and ``pipeline_engaged`` equal it, ``verdict_role``
+                            follows ``authority``, and ``result_state`` is ``unknown`` for a
+                            ``pipeline_required`` record whose pipeline did not engage, otherwise
+                            ``pass`` exactly for exit 0; a row with no record is
+                            ``unknown``/``unobserved`` and E(C) holds no record for it. Which criteria have rows is scope, which needs
+                            re-grading, so it is not checked.
 * ``desired_graph_valid`` / ``desired_graph_digest`` / ``spec_revision_digest`` / ``spec_authority``
                             (``desired_graph=``) the binding procedure of SEMANTICS section 9 for a
                             candidate S': S' passes the full spec-graph rule set, its normalized
@@ -195,18 +206,32 @@ class CertificateVerification:
 # --------------------------------------------------------------------------------------------- #
 # Loading the bundled reference modules
 #
-# canon.py, canon_ingest.py (public data files) and idmodel.py, spec_graph.py (consiliency_spec/_bundle)
-# are manifest-pinned but not importable modules, and they import one another by bare top-level name. Each is loaded by absolute
-# path and injected into sys.modules under its bare name only for the duration of the load, so a
-# foreign same-named module in the host process can never stand in for the bundled encoder, and the
-# host's sys.modules and sys.path are restored afterwards, all under the process-wide lock below.
+# canon.py, canon_ingest.py, idmodel.py and spec_graph.py ship as the spec_core subpackage of
+# consiliency_spec/_bundle and import one another RELATIVELY. Every file is manifest-pinned and
+# executed from the exact bytes whose sha256 was checked, never through the import system: each runs
+# as `consiliency_spec._bundle.spec_core.<...>`, its package registered first, so a relative import
+# such as `from ..canon import canon` binds the checked module. Every name is in sys.modules only for
+# the duration of the load; the host's sys.modules and sys.path are restored afterwards, all under
+# the process-wide lock below. No bare name is ever bound, so a foreign same-named module can never
+# stand in for the bundled encoder.
 # --------------------------------------------------------------------------------------------- #
 
-_CANON_FILES = (("canon", "canon/py/canon.py"),)
+_BUNDLE = "consiliency_spec/_bundle"
+_CORE = "consiliency_spec._bundle.spec_core"
+_CANON = _CORE + ".canon.canon"
+# (module name, manifest path), packages before their modules.
+_CANON_FILES = (
+    (_CORE, _BUNDLE + "/spec_core/__init__.py"),
+    (_CORE + ".canon", _BUNDLE + "/spec_core/canon/__init__.py"),
+    (_CANON, _BUNDLE + "/spec_core/canon/canon.py"),
+)
+_SPEC_GRAPH = _CORE + ".graph.spec_graph"
 _GRAPH_FILES = (
-    ("canon_ingest", "canon/py/canon_ingest.py"),
-    ("idmodel", "consiliency_spec/_bundle/idmodel/py/idmodel.py"),
-    ("spec_graph", "consiliency_spec/_bundle/spec-graph/py/spec_graph.py"),
+    (_CORE + ".canon.canon_ingest", _BUNDLE + "/spec_core/canon/canon_ingest.py"),
+    (_CORE + ".idmodel", _BUNDLE + "/spec_core/idmodel/__init__.py"),
+    (_CORE + ".idmodel.idmodel", _BUNDLE + "/spec_core/idmodel/idmodel.py"),
+    (_CORE + ".graph", _BUNDLE + "/spec_core/graph/__init__.py"),
+    (_SPEC_GRAPH, _BUNDLE + "/spec_core/graph/spec_graph.py"),
 )
 #: The permitted_freedom vocabulary spec_graph.validate reads (a public data file).
 _PF_VOCAB = "spec-parity/permitted-freedom-vocab.json"
@@ -276,9 +301,17 @@ def _load(files: Tuple[Tuple[str, str], ...]) -> None:
             # Execute exactly the bytes whose sha256 was checked, never a second read of the file.
             module = types.ModuleType(name)
             module.__file__ = str(path)
+            parent, _, leaf = name.rpartition(".")
+            if path.name == "__init__.py":
+                module.__path__ = [str(path.parent)]  # type: ignore[attr-defined]
+                module.__package__ = name
+            else:
+                module.__package__ = parent
+            if parent in sys.modules and name != _CORE:
+                setattr(sys.modules[parent], leaf, module)
             sys.modules[name] = module  # before exec, so dependents bind to it
             exec(compile(data, str(path), "exec"), module.__dict__)
-            if name == "spec_graph":
+            if name == _SPEC_GRAPH:
                 # spec_graph reads the permitted_freedom vocabulary from its own repo layout. Hand it
                 # the manifest-checked public copy instead: prime its cache from verified bytes (and
                 # point its path at the public file).
@@ -299,14 +332,14 @@ def _load(files: Tuple[Tuple[str, str], ...]) -> None:
 
 def _canon() -> Any:
     with _LOCK:
-        if "canon" not in _LOADED:
+        if _CANON not in _LOADED:
             _load(_CANON_FILES)
-        return _LOADED["canon"]
+        return _LOADED[_CANON]
 
 
 def _spec_graph() -> Any:
     with _LOCK:
-        if "spec_graph" not in _LOADED:
+        if _SPEC_GRAPH not in _LOADED:
             _canon()
             try:
                 _load(_GRAPH_FILES)
@@ -318,7 +351,7 @@ def _spec_graph() -> Any:
                 raise VerifierUnavailable(
                     "binding a desired graph needs the pinned Unicode 16.0 database for NFC: "
                     'install "consiliency-spec[verify]" (unicodedata2==16.0.0): %s' % e) from e
-        return _LOADED["spec_graph"]
+        return _LOADED[_SPEC_GRAPH]
 
 
 # --------------------------------------------------------------------------------------------- #
@@ -503,8 +536,19 @@ def _is_count(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
+#: SEMANTICS sec 9.2: the projection versions this verifier knows. Any other version is refused by
+#: name, never checked under another version's dimension rules.
+_KNOWN_PROJECTIONS = frozenset("spec-engine-projection:v%d" % n for n in range(1, 6))
+
+
 def _dimension_problems(record: Mapping[str, Any]) -> List[str]:
     states, dimensions = _result_state_enums()
+    version = record.get("projection_algo_version")
+    if not _is_member(version, _KNOWN_PROJECTIONS):
+        return ["projection_algo_version %r is unknown to this verifier (known: v1-v5); it is "
+                "refused by name, not read under another version's rules" % (version,)]
+    if version != "spec-engine-projection:v5":
+        dimensions = dimensions - {"acceptance"}
     problems: List[str] = []
     overall = record.get("overall_result_state")
     if "overall_result_state" in record and not _is_member(overall, states):
@@ -609,6 +653,12 @@ def _finding_set_problems(canon: Any, fs: Mapping[str, Any]) -> List[str]:
             problems.append("finding %d: finding_id does not recompute over {dimension, "
                             "result_state, code, subject}%s" % (i, (": " + why) if why else ""))
         by_dimension.setdefault(f["dimension"], []).append(f)
+        if f["dimension"] == "acceptance":
+            row = f.get("acceptance_result")
+            if (not isinstance(row, Mapping) or not isinstance(f["subject"], Mapping)
+                    or row.get("criterion_logical_id") != f["subject"].get("desired_logical_id")
+                    or row.get("result_state") != f["result_state"]):
+                problems.append("acceptance finding %d disagrees with its acceptance_result" % i)
     dims = _well_formed_dimensions(fs.get("dimension_results"))
     if dims is None:
         return problems + ["dimension_results are malformed"]
@@ -616,6 +666,12 @@ def _finding_set_problems(canon: Any, fs: Mapping[str, Any]) -> List[str]:
         mine = by_dimension.pop(d["dimension"], [])
         ids = d.get("finding_ids")
         mine_ids = sorted(str(f["finding_id"]) for f in mine)
+        if d["dimension"] == "acceptance":
+            rows = [f.get("acceptance_result") for f in mine]
+            if (not all(isinstance(r, Mapping) and isinstance(r.get("criterion_logical_id"), str)
+                        for r in rows) or d.get("acceptance_results") != sorted(
+                            rows, key=lambda r: r["criterion_logical_id"])):
+                problems.append("acceptance_results are not exactly the acceptance findings")
         if ids is not None and (not isinstance(ids, list) or ids != mine_ids):
             problems.append("%s finding_ids are not exactly its findings" % d["dimension"])
         worst = [s for s in _SEVERITY if any(f["result_state"] == s for f in mine)]
@@ -797,6 +853,11 @@ def verify_certificate(
                        "ec_digest recomputes" if got == cert.get("ec_digest") else
                        "canon digest of E(C) %s != certificate ec_digest %r"
                        % (got, cert.get("ec_digest")))
+            problems = _acceptance_evidence_problems(canon, cert, ec_value)
+            if problems is not None:
+                checks.add("acceptance_evidence", not problems,
+                           "; ".join(problems[:5]) if problems else
+                           "acceptance_results copy the E(C) acceptance_evidence records")
 
     # -- the desired graph: the binding procedure ------------------------------------------------
     bound = False
@@ -892,6 +953,61 @@ def _check_finding_set(checks: _Checks, recomputed: Dict[str, str], canon: Any,
                "; ".join(problems[:5]) if problems else
                "every finding_id recomputes and each dimension state is the rollup of its findings")
     return fs
+
+
+def _acceptance_evidence_problems(canon: Any, cert: Mapping[str, Any],
+                                  ec: Any) -> Optional[List[str]]:
+    """SEMANTICS sec 7.6: acceptance_results copy E(C)'s acceptance_evidence records. None when the
+    certificate has no acceptance dimension (historical v1-v4); every other fault is a problem."""
+    dims = cert.get("dimension_results")
+    acc = [d for d in dims if isinstance(d, Mapping) and d.get("dimension") == "acceptance"] \
+        if isinstance(dims, list) else []
+    if not acc:
+        return None
+    rows = acc[0].get("acceptance_results")
+    evidence = ec.get("acceptance_evidence", []) if isinstance(ec, dict) else None
+    if not isinstance(rows, list) or not isinstance(evidence, list):
+        return ["acceptance_results or E(C) acceptance_evidence is not a list"]
+    records: Dict[Any, Any] = {}
+    for rec in evidence:
+        cid = rec.get("criterion_logical_id") if isinstance(rec, dict) else None
+        if not isinstance(cid, str) or cid in records:
+            return ["E(C) acceptance_evidence is malformed or names a criterion twice"]
+        records[cid] = rec
+    problems: List[str] = []
+    # The engine emits one row per criterion, sorted by criterion_logical_id (SEMANTICS sec 7.6).
+    cids = [row.get("criterion_logical_id") if isinstance(row, Mapping) else None for row in rows]
+    if not all(isinstance(a, str) and isinstance(b, str) and a < b for a, b in zip(cids, cids[1:])):
+        problems.append("acceptance rows are not strictly increasing by criterion_logical_id")
+    for row in rows:
+        cid = row.get("criterion_logical_id") if isinstance(row, Mapping) else None
+        rec = records.get(cid) if isinstance(cid, str) else None
+        if rec is None:
+            if (not isinstance(row, Mapping) or row.get("result_state") != "unknown"
+                    or row.get("authority") is not None or "record_digest" in row
+                    or "authority_id" in row):
+                problems.append("acceptance row %r is observed but E(C) carries no record for it"
+                                % (cid,))
+            continue
+        got, why = _digest_or_reason(lambda: canon.digest(rec, "semantic-content"))
+        code = rec.get("exit_code")
+        if rec.get("pipeline_mode") == "pipeline_required" and rec.get("pipeline_engaged") is False:
+            state = "unknown"  # the required pipeline never engaged, so it never ruled (sec 7.6)
+        else:
+            state = "pass" if type(code) is int and code == 0 else "fail"
+        role = "pipeline_input" if rec.get("authority") == "pipeline" else "run_verdict"
+        expected = {"record_digest": got, "result_state": state, "authority": rec.get("authority"),
+                    "verdict_role": role, "pipeline_mode": rec.get("pipeline_mode"),
+                    "pipeline_engaged": rec.get("pipeline_engaged")}
+        wrong = sorted(k for k, v in expected.items() if k not in row or row[k] != v)
+        # authority_id is carried, never interpreted: present in the row exactly when in the record.
+        if ("authority_id" in rec) != ("authority_id" in row) or \
+                row.get("authority_id") != rec.get("authority_id"):
+            wrong.append("authority_id")
+        if got is None or wrong:
+            problems.append("acceptance row %s differs from its E(C) record in %s"
+                            % (cid, ", ".join(wrong) or "record_digest (%s)" % why))
+    return problems
 
 
 def _bind_desired_graph(checks: _Checks, recomputed: Dict[str, str], canon: Any, spec_graph: Any,
@@ -1040,6 +1156,11 @@ def _dimension_result(dr: dict) -> dict:
     out = {"dimension": dr["dimension"], "result_state": dr["result_state"]}
     if "checks_evaluated" in dr:
         out["checks_evaluated"] = dr["checks_evaluated"]
+    if "acceptance_results" in dr:
+        fields = ("criterion_logical_id", "result_state", "authority", "authority_id",
+                  "verdict_role", "pipeline_mode", "pipeline_engaged", "record_digest")
+        out["acceptance_results"] = [{k: r[k] for k in fields if k in r}
+                                     for r in dr["acceptance_results"]]
     return out
 
 
@@ -1191,7 +1312,8 @@ def _check_payload(checks: _Checks, recomputed: Dict[str, str], canon: Any,
     pdims = pl.get("dimension_results")
     if not (isinstance(dims, list) and isinstance(pdims, list) and len(dims) == len(pdims) and all(
             isinstance(a, Mapping) and isinstance(b, Mapping)
-            and _same(canon, {k: a[k] for k in ("dimension", "result_state", "checks_evaluated")
+            and _same(canon, {k: a[k] for k in ("dimension", "result_state", "checks_evaluated",
+                                               "acceptance_results")
                               if k in a}, dict(b))
             for a, b in zip(dims, pdims))):
         problems.append("dimension_results disagree with the certificate")

@@ -27,14 +27,30 @@ Every software project has two things: a **blueprint** (what it's *supposed* to 
 | [`canon/`](canon/) | Canonical serialization + content-addressing (SHA-256; **canon v2** — NFC at the ingestion boundary, not in the hash). Includes the Rust core (`canon/core/`) and the dependency-free TypeScript and Python ports. | Python and TypeScript produce **byte-identical** bytes + digests. |
 | [`idmodel/`](idmodel/correspondence/schema.json) | Two-tier identity (logical key + occurrence) + the correspondence map schema. | Logical identity tracked across rename/move/split/merge. |
 | [`spec-graph/`](spec-graph/schema/) | The desired-state semantic metamodel schema (the blueprint format). | Open versioned `kind` system; per-node content-addressed. |
-| [`spec-parity/`](spec-parity/) | The formal parity contract: `SEMANTICS.md` + schemas (kind-alignment, result-state, waiver, run-descriptor, `E(C)`, reproducibility attestation, **certificate** (schema `"2"`), **portal-payload**, permitted-freedom). | A reviewer can implement `P`/`N` from it directly; result states + closed-world prohibitions + waiver lifecycle are pinned; projection algorithm `spec-engine-projection:v4`. |
+| [`spec-parity/`](spec-parity/) | The formal parity contract: `SEMANTICS.md` + schemas (kind-alignment, result-state, waiver, run-descriptor, `E(C)`, reproducibility attestation, **certificate** (schema `"2"`), **portal-payload**, permitted-freedom). | A reviewer can implement `P`/`N` from it directly; result states + closed-world prohibitions + waiver lifecycle are pinned; projection algorithm `spec-engine-projection:v5` (stored v1-v4 certificates stay readable). |
 | [`spec-engine/authority/`](spec-engine/authority/authority-event.schema.json) | The authority-event schema for the deterministic projection/checker boundary. | Certificate byte-reproducible. |
 
-The five parity dimensions: **completeness**, **soundness**, **closure**, **prohibition**, **revision-alignment**.
+The six parity dimensions: **completeness**, **soundness**, **closure**, **prohibition**, **revision-alignment**, **acceptance** (`spec-engine-projection:v5`; certificates from before 0.7.0 carry the first five).
+
+### Acceptance evidence 0.7.0 — breaking
+
+`0.7.0` moves the projection to `spec-engine-projection:v5`: certificates gain a sixth dimension,
+`acceptance`, whose `acceptance_results` carry each criterion's command result with its authority and
+verdict role (`SEMANTICS.md` §7.6), so every certificate, finding-set and payload digest moves once.
+Verifiers `0.6.0` and earlier refuse v5 certificates; the `0.7.0` verifier reads v1-v5 and refuses
+any other version by name. Upgrade verifiers and consumers before producers, and require v5 where
+acceptance matters. An evidence record's `authority` is a generic role (`producer` or `pipeline`);
+an optional `authority_id` names the concrete owner and is never interpreted.
+
+`0.7.0` also requires Python 3.12 or later, bundles the verifier's reference modules under
+`consiliency_spec/_bundle/spec_core/` (they moved into the `spec_core` package; `src/spec_core/canon/`
+is now public too), and changes the extracted-`E(C)` markers that are refused without an
+`extraction_coverage` record (`SEMANTICS.md` §4.2). Certificate `schema_version` stays `"2"` and
+canon-core stays `0.4.0`. See [`CHANGELOG.md`](CHANGELOG.md).
 
 ### Realized extraction 0.6.0 — breaking for realized digests
 
-`0.6.0` keeps certificate `schema_version` `"2"`, projection `spec-engine-projection:v4`, canon-core
+`0.6.0` kept certificate `schema_version` `"2"`, projection `spec-engine-projection:v4`, canon-core
 `0.4.0` and the reference verifier unchanged. The realized side moves: `E(C)` is extracted with
 treesitter-chunker `5.3.0` (`.tsx` parsed with the `tsx` grammar; `jsx_element` / `jsx_fragment` align
 as wrappers in `kind-alignment.json`), an edge may carry its raw call token (`edges[].to_token` in
@@ -51,7 +67,7 @@ extra and a public certificate test vector. Nothing else changes: every certific
 
 ### Projection v4 (0.5.0) — breaking
 
-Since `0.5.0` the certificate is still `schema_version` `"2"`, but the projection algorithm is
+From `0.5.0` through `0.6.x` the certificate was still `schema_version` `"2"`, but the projection algorithm was
 `spec-engine-projection:v4` (`SEMANTICS.md` §9.2), so every certificate and payload digest differs from
 `0.4.0`. The reference engine validates the desired graph `S` with the full spec-graph rule set at every
 entry (§0): every `operation` declares a signature, and a `decomposes_to` edge descends to a strictly
@@ -87,7 +103,7 @@ The enforcing JavaScript surface is the pure TypeScript v2 port in [`canon/ts/ca
 
 ### Use it
 
-Python (`consiliency-spec` has no runtime dependencies; it needs Python 3.10 or later):
+Python (`consiliency-spec` has no runtime dependencies; it needs Python 3.12 or later):
 
 ```bash
 pip install consiliency-spec
@@ -99,7 +115,7 @@ The `consiliency_spec` module is a thin reader over the digest-pinned public fil
 import hashlib
 import consiliency_spec
 
-consiliency_spec.__version__                  # the package version, e.g. "0.6.0"
+consiliency_spec.__version__                  # the package version, e.g. "0.7.0"
 
 # The manifest: {"schema_version", "package", "source", "public_files": [{"path", "sha256"}, ...]}
 manifest = consiliency_spec.load_manifest()
@@ -166,8 +182,9 @@ What it checks:
   `certificate.schema.json` (`schema_version` `"2"`, `spec_authority` and `ec_reproducible` present and
   well-typed), `canon_version` is `v2`, and the canon `certificate`-profile digest recomputes (the
   non-hashed `locator` envelope is excluded). Its `overall_result_state` must be the §6.4 aggregation
-  of its own `dimension_results`, and a dimension is `not_applicable` exactly when it evaluated no
-  check (§6.3), so a re-hashed `pass` over failing dimensions is refused.
+  of its own `dimension_results`, so a re-hashed `pass` over failing dimensions is refused. Where a
+  dimension records `checks_evaluated`, it must be `not_applicable` exactly when it evaluated no check
+  (§6.3); a dimension without that field is not held to the rule.
 - **The binding pair.** Given `desired_graph=S'`, it runs the four steps of §9: `S'` passes the full
   spec-graph rule set; `spec_graph.graph_digest(S')` equals `desired_graph_digest`;
   `spec_revision_digest` recomputes from `S'`'s `spec_revision_id` (`""` when absent) and that digest;
@@ -193,11 +210,14 @@ Numbers are never trusted. A fraction or exponent spelling (`2.0`, `2e0`), a bar
 and an integer beyond ±(2^53 − 1) are rejected exactly as canon-core 0.4.0 rejects them, and so is a
 duplicated key. Pass inputs as text or bytes: a parsed `dict` can no longer show that `2` was spelled
 `2.0`. Bad input never raises; it is a failed check with a reason. Only misuse raises: `TypeError` for an
-argument of the wrong type, and `VerifierUnavailable` when the environment cannot run a check
-(`jsonschema` missing; `unicodedata2` missing or not Unicode 16.0 when `desired_graph` is given; or a
-bundled module, schema or vocabulary file whose bytes do not match the package manifest). The verdict never depends on what is installed: every
-check you asked for runs, or the call raises. The verifier is Python only; the npm package does not
-ship one.
+argument of the wrong type, and `VerifierUnavailable` when the environment cannot run a check you
+asked for: `jsonschema` is missing (always required); a bundled module, schema or vocabulary file's
+bytes do not match the package manifest; or, **only when `desired_graph` is given**, `unicodedata2` is
+missing or its database is not Unicode 16.0 (binding `S'` applies NFC; without `desired_graph` the
+Unicode database is never consulted). The verdict never depends on what is installed: every check you
+asked for runs, or the call raises. The verifier is Python only. The npm tarball carries its Python
+source (`consiliency_spec/certificate_verifier.py`, a manifest-pinned public file) like every other
+public file, but there is no JavaScript or TypeScript verifier.
 
 A worked example ships in [`test-vectors/certificate/`](test-vectors/certificate/): a certificate with
 the desired graph, `E(C)`, finding set and portal payload it binds to, plus tampered copies (a flipped verdict, a forged finding
@@ -223,6 +243,8 @@ It runs four self-contained gates:
 - `canon/conformance/check_xg4_canon_core.sh` (XG4): the Rust core tests, then the BUILT PyO3 and WASM bindings checked byte-identical to the reference ports, including the engine boundary vectors and the vendored cross-repo consumer corpus.
 - `scripts/check_outside_agent_vectors.sh`: the outside-agent schemas, conformance vectors and reference router.
 - `scripts/check_certificate_vectors.sh` (since `0.5.1`): the reference certificate verifier over `test-vectors/certificate/`. It needs the `verify` extra's dependencies; `check.sh` installs `unicodedata2==16.0.0` first.
+
+It then runs a publish dry run: `python -m build` builds the wheel and sdist and checks their version against `pyproject.toml`, and npm's dry-run mode packs the npm tarball. Nothing is uploaded.
 
 The authority-event contract vectors are not run here. They are checked in the private source repository, which vendors the authority contract; this repository ships only `spec-engine/authority/authority-event.schema.json`.
 

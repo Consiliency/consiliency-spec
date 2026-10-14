@@ -14,6 +14,11 @@
     "provenance": { "type": "object" },
     "collapsed_boundary_ids": { "type": "array", "description": "Records of lossless duplicate-boundary collapses (evidence; not graded)." },
     "extraction_coverage": { "description": "Graded, not shape-checked (SEMANTICS sec 4.2): any value that is not a well-formed measurement is `unmeasured`." },
+    "acceptance_evidence": {
+      "type": "array",
+      "description": "At most one command result per criterion logical_id in S. validate_ec enforces uniqueness and, at engine entry, that each id names an acceptance_criterion. Producer assertions, not authenticated pipeline verdicts (SEMANTICS sec 7.6).",
+      "items": { "$ref": "#/$defs/acceptance_evidence" }
+    },
     "nodes": {
       "type": "array",
       "items": { "$ref": "#/$defs/node" }
@@ -24,6 +29,25 @@
     }
   },
   "$defs": {
+    "acceptance_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["criterion_logical_id", "argv", "exit_code", "log_sha256", "pipeline_mode", "pipeline_engaged", "authority"],
+      "properties": {
+        "criterion_logical_id": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "argv": { "type": "array", "minItems": 1, "prefixItems": [{ "type": "string", "minLength": 1 }], "items": { "type": "string" } },
+        "exit_code": { "type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991 },
+        "log_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "SHA-256 of the command log bytes; no log payload is carried." },
+        "pipeline_mode": { "enum": ["standalone", "pipeline_optional", "pipeline_required"] },
+        "pipeline_engaged": { "type": "boolean", "description": "Whether the pipeline actually engaged on this run, including pipeline_optional." },
+        "authority": { "enum": ["producer", "pipeline"], "description": "Who owns acceptance truth for this run (SEMANTICS sec 7.6): `producer`, the run that executed the command, owns its own result; `pipeline`, an external acceptance authority owns the truth and this result is input to it. Fixed by pipeline_mode and pipeline_engaged. Not a claim that any pipeline issued a verdict." },
+        "authority_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]{0,127}$", "description": "Optional producer-declared name of the concrete owner (for example `agent-harness` or a CI system's name). Copied into the acceptance result and bound by record_digest; spec never interprets it." }
+      },
+      "allOf": [
+        { "if": { "properties": { "pipeline_mode": { "const": "standalone" } } }, "then": { "properties": { "pipeline_engaged": { "const": false } } } },
+        { "if": { "anyOf": [{ "properties": { "pipeline_mode": { "const": "pipeline_required" } } }, { "properties": { "pipeline_engaged": { "const": true } } }] }, "then": { "properties": { "authority": { "const": "pipeline" } } }, "else": { "properties": { "authority": { "const": "producer" } } } }
+      ]
+    },
     "node": {
       "type": "object",
       "required": ["boundary_id", "kind"],

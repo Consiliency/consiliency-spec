@@ -1,10 +1,12 @@
 # Outside-Agent Contract
 
-The outside-agent contract is a claims only intake surface. Outside agents may submit `work_request`, `implementation_submission`, or `ambiguity_report` records, but they never own acceptance truth. The acceptance authority (`governed_pipeline` in the schema) keeps acceptance truth, agent-harness may run the same contract as advisory conformance, and Portal consumes only downstream digest-bound projections.
+The outside-agent contract is a claims only intake surface for pipeline-mode runs. Outside agents may submit `work_request`, `implementation_submission`, or `ambiguity_report` records. When the pipeline engages, the external acceptance pipeline owns acceptance truth (the schemas name it with the frozen v0.1 token `governed_pipeline`): producer evidence is input to its verdict, never that verdict. Projection consumers see only downstream digest-bound projections.
+
+For `standalone`, or `pipeline_optional` with no pipeline engaged, the producer (the run that executed the command, for example a CI job or an agent harness) owns acceptance truth for its own run. For `pipeline_required`, or `pipeline_optional` with the pipeline actually engaged, an external acceptance pipeline owns it. Declared mode alone cannot resolve `pipeline_optional`: E(C) acceptance evidence records actual `pipeline_engaged` alongside mode and the generic `authority` role (`producer` or `pipeline`), with an optional `authority_id` naming the concrete owner (SEMANTICS sec 7.6). A standalone command pass never implies pipeline certification. This scopes the schema's existing constant to pipeline intake; it does not widen the intake route vocabulary.
 
 ## Submission Schema
 
-`outside_agent_submission.v0.1` is the canonical JSON Schema 2020-12 envelope for outside-agent submissions. The discriminator is limited to `work_request`, `implementation_submission`, and `ambiguity_report`. Every submission carries `claim_posture=claims_only` and `acceptance_truth_owner=governed_pipeline` so the schema itself states the authority boundary.
+`outside_agent_submission.v0.1` is the canonical JSON Schema 2020-12 envelope for outside-agent submissions. The discriminator is limited to `work_request`, `implementation_submission`, and `ambiguity_report`. Every submission carries `claim_posture=claims_only` and `acceptance_truth_owner=governed_pipeline` (a frozen v0.1 token naming the external acceptance pipeline) so the schema itself states the authority boundary.
 
 ## Evidence References
 
@@ -14,29 +16,29 @@ The outside-agent contract is a claims only intake surface. Outside agents may s
 
 `outside_agent_route_verdict.v0.1` is an intake-only verdict schema. The route vocabulary is exactly `reject`, `needs_clarification`, `roadmap_intake`, and `review_candidate`. `accepted_for_merge` is intentionally absent because merge acceptance belongs to the acceptance authority's review, not to outside-agent intake.
 
-The verdict schema allows a narrow, non-secret blocker object so intake can explain why a submission needs clarification or rejection. It does not allow merge-acceptance fields or Portal projection state claims.
+The verdict schema allows a narrow, non-secret blocker object so intake can explain why a submission needs clarification or rejection. It does not allow merge-acceptance fields or projection state claims.
 
 ## Downstream Ownership
 
-- The acceptance authority (`governed_pipeline`) owns acceptance truth and any `accepted_for_merge` decision.
-- Agent-harness may consume these schemas for advisory or mirrored conformance runs.
-- Portal must stay downstream of digest-bound projections and must not consume raw outside-agent evidence payloads.
+- For pipeline-mode runs, the external acceptance pipeline (the frozen v0.1 token `governed_pipeline`) owns acceptance truth and any `accepted_for_merge` decision.
+- Any other consumer (for example, an agent harness) may consume these schemas for advisory or mirrored conformance runs; a producer owns its own run verdict only when no pipeline engaged.
+- Projection consumers must stay downstream of digest-bound projections and must not consume raw outside-agent evidence payloads.
 
 ## Package Consumption
 
-OAPACK makes the contract package-available for downstream pinning through `@consiliency/spec` and
-`consiliency-spec`. Consumers should read `docs/outside-agent-contract.md`, the two
+The contract ships in the published `@consiliency/spec` (npm) and `consiliency-spec` (PyPI) packages
+for downstream pinning; it has been part of them since 0.2.4. Consumers should read `docs/outside-agent-contract.md`, the two
 `schemas/outside-agent-*.schema.json` files, `test-vectors/outside-agent/manifest.json`, the vector
 corpus, and `scripts/check_outside_agent_vectors.sh` from the package surface.
 
-- Both consumers pin the **annotated release tag** recorded in `plans/oapack/RELEASE-ANCHOR.md`,
-  never a branch commit. That file is the single source of truth for the version and the anchor.
+- Consumers pin a **release tag** (`v<version>`, matching the package version) or a published
+  package version, never a branch commit.
 - **Per-artifact digests are part of the published surface.**
   `consiliency-spec.public-manifest.json` carries a `sha256` for every public file, so a consumer
   can verify each schema and vector independently. Pinning only the manifest hash leaves a byte
   change that preserves that hash undetectable; verify per file.
-- This phase proves contract availability only. It does not mean the package is published, does not
-  claim downstream enforcement is live, and does not add Portal projection behavior.
+- Publication makes the contract available. It does not claim that any downstream consumer enforces
+  it, and it adds no projection behavior.
 
 ## Reference Router
 

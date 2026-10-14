@@ -11,7 +11,7 @@
     },
     "parity_dimension": {
       "title": "parity_dimension",
-      "enum": ["completeness", "soundness", "closure", "prohibition", "revision_alignment"]
+      "enum": ["completeness", "soundness", "closure", "prohibition", "revision_alignment", "acceptance"]
     },
     "string_decimal": {
       "title": "string_decimal",
@@ -28,9 +28,10 @@
         "finding_id": { "type": "string", "description": "Stable id of this finding: canon semantic-content digest over the explicit content subset {dimension, result_state, code, subject} (NOT the whole record -- message/evidence_refs/confidence/waiver_ref are excluded so a re-worded message or an added waiver does not mint a new finding identity). Named-subset preimage, like waiver_id, to avoid relying on canon sec 8 for a nested id." },
         "dimension": { "$ref": "#/$defs/parity_dimension" },
         "result_state": { "$ref": "#/$defs/result_state" },
+        "acceptance_result": { "$ref": "#/$defs/acceptance_result", "description": "Acceptance command result with its authority, including pass observations." },
         "code": {
           "type": "string",
-          "description": "A stable machine code for the finding class, e.g. missing_desired_element, structural_mismatch, kind_mismatch, signature_unobservable, prohibition_violated, prohibition_unobservable, prohibition_outside_default_closure, unmapped_realized_kind, unmapped_desired_kind, ambiguous_kind_alignment, refinement_below_frontier, permitted_freedom, correspondence_ambiguous, capability_missing. Retired codes (never emitted by the current projection_algo_version, kept readable in older records): signature_undeclared (retired in spec-engine-projection:v4)."
+          "description": "A stable machine code for the finding class, e.g. missing_desired_element, structural_mismatch, kind_mismatch, signature_unobservable, prohibition_violated, prohibition_unobservable, prohibition_outside_default_closure, acceptance_command_pass, acceptance_command_fail, acceptance_unobserved, acceptance_pipeline_unengaged, unmapped_realized_kind, unmapped_desired_kind, ambiguous_kind_alignment, refinement_below_frontier, permitted_freedom, correspondence_ambiguous, capability_missing. Retired codes (never emitted by the current projection_algo_version, kept readable in older records): signature_undeclared (retired in spec-engine-projection:v4)."
         },
         "subject": {
           "type": "object",
@@ -52,7 +53,8 @@
         },
         "confidence": { "$ref": "#/$defs/string_decimal", "description": "Optional. STRING decimal only; never a JSON float." },
         "waiver_ref": { "type": "string", "description": "If this finding is currently suppressed by a waiver, the waiver_id. A waiver does NOT change result_state to pass; it only records suppression (SEMANTICS.md sec 8)." }
-      }
+      },
+      "allOf": [{ "if": { "properties": { "dimension": { "const": "acceptance" } } }, "then": { "required": ["acceptance_result"] }, "else": { "not": { "required": ["acceptance_result"] } } }]
     },
     "dimension_result": {
       "title": "dimension_result",
@@ -63,8 +65,31 @@
         "dimension": { "$ref": "#/$defs/parity_dimension" },
         "result_state": { "$ref": "#/$defs/result_state" },
         "checks_evaluated": { "type": "integer", "minimum": 0, "description": "Count of in-scope checks evaluated for this dimension. A real JSON integer (canon sec 6 supports arbitrary-precision integers as JSON integers; the `$int`-tag is the test-vector encoding only, never the data model). Only FLOATS are forbidden, not integers." },
-        "finding_ids": { "type": "array", "items": { "type": "string" }, "description": "finding_ids contributing to this dimension's state." }
-      }
+        "finding_ids": { "type": "array", "items": { "type": "string" }, "description": "finding_ids contributing to this dimension's state." },
+        "acceptance_results": { "type": "array", "items": { "$ref": "#/$defs/acceptance_result" }, "description": "For acceptance: one per in-scope criterion, sorted by criterion_logical_id. Authority is pinned beside every state, including passes." }
+      },
+      "allOf": [{ "if": { "properties": { "dimension": { "const": "acceptance" } } }, "then": { "required": ["acceptance_results"] }, "else": { "not": { "required": ["acceptance_results"] } } }]
+    },
+    "acceptance_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["criterion_logical_id", "result_state", "authority", "verdict_role"],
+      "properties": {
+        "criterion_logical_id": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "result_state": { "enum": ["pass", "fail", "unknown"] },
+        "authority": { "enum": ["producer", "pipeline", null], "description": "producer: the run that executed the command owns its result; pipeline: an external acceptance authority owns the truth and this result is input to it; null: no record (SEMANTICS sec 7.6)." },
+        "authority_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]{0,127}$", "description": "Copied unchanged from the evidence record when it carries one; never interpreted." },
+        "verdict_role": { "enum": ["run_verdict", "pipeline_input", "unobserved"] },
+        "pipeline_mode": { "enum": ["standalone", "pipeline_optional", "pipeline_required"] },
+        "pipeline_engaged": { "type": "boolean" },
+        "record_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "canon semantic-content digest of the exact E(C) evidence record." }
+      },
+      "oneOf": [
+        { "properties": { "result_state": { "const": "unknown" }, "authority": { "const": null }, "verdict_role": { "const": "unobserved" } }, "not": { "anyOf": [{ "required": ["pipeline_mode"] }, { "required": ["pipeline_engaged"] }, { "required": ["record_digest"] }, { "required": ["authority_id"] }] } },
+        { "required": ["pipeline_mode", "pipeline_engaged", "record_digest"], "properties": { "result_state": { "enum": ["pass", "fail"] }, "authority": { "const": "producer" }, "verdict_role": { "const": "run_verdict" }, "pipeline_mode": { "enum": ["standalone", "pipeline_optional"] }, "pipeline_engaged": { "const": false } } },
+        { "required": ["pipeline_mode", "pipeline_engaged", "record_digest"], "properties": { "result_state": { "enum": ["pass", "fail"] }, "authority": { "const": "pipeline" }, "verdict_role": { "const": "pipeline_input" }, "pipeline_mode": { "enum": ["pipeline_optional", "pipeline_required"] }, "pipeline_engaged": { "const": true } } },
+        { "required": ["pipeline_mode", "pipeline_engaged", "record_digest"], "description": "A pipeline_required record whose pipeline did not engage: the pipeline never ruled, so the state is unknown whatever the command exited (SEMANTICS sec 7.6, finding code acceptance_pipeline_unengaged). Authority and role stay pipeline / pipeline_input.", "properties": { "result_state": { "const": "unknown" }, "authority": { "const": "pipeline" }, "verdict_role": { "const": "pipeline_input" }, "pipeline_mode": { "const": "pipeline_required" }, "pipeline_engaged": { "const": false } } }
+      ]
     },
     "extraction_coverage_summary": {
       "title": "extraction_coverage_summary",
@@ -96,8 +121,8 @@
       "type": "array",
       "items": { "$ref": "#/$defs/dimension_result" },
       "minItems": 5,
-      "maxItems": 5,
-      "description": "Exactly one entry per parity_dimension (all five always present; a dimension with no subject reports not_applicable)."
+      "maxItems": 6,
+      "description": "Exactly one entry per parity_dimension: six in projection v5, five in historical v1-v4 records. A dimension with no subject reports not_applicable."
     },
     "findings": {
       "type": "array",

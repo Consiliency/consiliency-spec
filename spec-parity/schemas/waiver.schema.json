@@ -11,7 +11,7 @@
       "minProperties": 1,
       "properties": {
         "dimension": {
-          "enum": ["completeness", "soundness", "closure", "prohibition", "revision_alignment"],
+          "enum": ["completeness", "soundness", "closure", "prohibition", "revision_alignment", "acceptance"],
           "description": "Restrict to one parity dimension."
         },
         "finding_code": { "type": "string", "description": "Restrict to one finding code (e.g. prohibition_unobservable)." },

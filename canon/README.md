@@ -76,7 +76,7 @@ digests on every vector. Exit 0 = green; any divergence prints a diff and exits 
 `vectors/canon-vectors.json` is generated (never hand-authored) from the Python reference impl:
 
 ```bash
-python3 canon/vectors/gen_vectors.py
+PYTHONPATH=src python3 canon/vectors/gen_vectors.py
 ```
 
 Expected bytes (base64) and digests (hex) are pinned in the file; the TypeScript impl must
