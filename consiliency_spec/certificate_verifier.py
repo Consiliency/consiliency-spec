@@ -503,9 +503,67 @@ def _result_state_enums() -> Tuple[frozenset, frozenset]:
     return frozenset(defs["result_state"]["enum"]), frozenset(defs["parity_dimension"]["enum"])
 
 
+def _ecma_pattern(pattern: str) -> str:
+    """`pattern` with ECMA-262 `$` semantics in Python `re`: outside a character class, an unescaped `$`
+    matches only at the very end of the string (Python's `$` also matches before a final newline, which
+    is how `"<hex>\\n"` used to pass a `^[0-9a-f]{64}$` pattern). JSON Schema defines `pattern` by
+    ECMA-262, and the public schemas use only the portable subset (no lookaround, no backreference), so
+    rewriting `$` to `\\Z` is the one difference this verifier needs."""
+    out: List[str] = []
+    in_class = False
+    i = 0
+    while i < len(pattern):
+        ch = pattern[i]
+        if ch == "\\" and i + 1 < len(pattern):
+            out.append(pattern[i:i + 2])
+            i += 2
+            continue
+        if in_class:
+            if ch == "]":
+                in_class = False
+        elif ch == "[":
+            in_class = True
+            # A `]` right after `[` or `[^` is a literal member, not the end of the class.
+            j = i + 1
+            if j < len(pattern) and pattern[j] == "^":
+                j += 1
+            if j < len(pattern) and pattern[j] == "]":
+                out.append(pattern[i:j + 1])
+                i = j + 1
+                continue
+        elif ch == "$":
+            out.append(r"\Z")
+            i += 1
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def _matches(pattern: Any, value: str) -> bool:
+    """JSON Schema `pattern`: an unanchored ECMA-262 search. A non-string pattern never matches."""
+    return isinstance(pattern, str) and re.search(_ecma_pattern(pattern), value) is not None
+
+
+def _refused_by_not(rule: Mapping[str, Any], value: str) -> bool:
+    """The `not` forms the public schemas pair with a pattern: `{"pattern": p}` and
+    `{"anyOf": [{"pattern": p}, ...]}`. The value is refused when the inner schema matches it."""
+    inner = rule.get("not")
+    if not isinstance(inner, Mapping):
+        return False
+    if "pattern" in inner:
+        return _matches(inner["pattern"], value)
+    alternatives = inner.get("anyOf")
+    if isinstance(alternatives, list):
+        return any(isinstance(a, Mapping) and "pattern" in a and _matches(a["pattern"], value)
+                   for a in alternatives)
+    return False
+
+
 def _schema_problems(record: Mapping[str, Any], schema: Mapping[str, Any]) -> List[str]:
     """The load-bearing subset of a record schema, checked without jsonschema: required fields, no
-    unknown field, top-level const / enum / string / boolean / pattern constraints."""
+    unknown field, top-level const / enum / string / boolean / pattern / not.pattern constraints.
+    Patterns are read with ECMA-262 `$` semantics (_ecma_pattern), as JSON Schema defines them."""
     problems: List[str] = []
     props = schema["properties"]
     missing = [k for k in schema["required"] if k not in record]
@@ -526,8 +584,10 @@ def _schema_problems(record: Mapping[str, Any], schema: Mapping[str, Any]) -> Li
             problems.append("%s must be a string" % key)
         if rule.get("type") == "boolean" and not isinstance(value, bool):
             problems.append("%s must be a boolean" % key)
-        if "pattern" in rule and not (isinstance(value, str) and re.search(rule["pattern"], value)):
+        if "pattern" in rule and not (isinstance(value, str) and _matches(rule["pattern"], value)):
             problems.append("%s does not match %s" % (key, rule["pattern"]))
+        if isinstance(value, str) and _refused_by_not(rule, value):
+            problems.append("%s matches a pattern its schema refuses (not)" % key)
     return problems
 
 

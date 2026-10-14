@@ -166,16 +166,19 @@
     },
     "sha256_hex": {
       "type": "string",
-      "pattern": "^[a-f0-9]{64}$"
+      "pattern": "^[a-f0-9]{64}$",
+      "not": {"pattern": "\\n"}
     },
     "repo_relative_path": {
       "type": "string",
-      "pattern": "^(?!/)(?![A-Za-z]:[\\\\/])(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$"
+      "pattern": "^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$",
+      "not": {"anyOf": [{"pattern": "\\n"}, {"pattern": "(^|/)\\.\\.(/|$)"}]}
     },
     "git_sha": {
       "type": "string",
       "description": "Git object id: exactly 40 hex (SHA-1) or exactly 64 hex (SHA-256). Intermediate lengths are not representable and are rejected.",
-      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$",
+      "not": {"pattern": "\\n"}
     },
     "source_bundle_ref": {
       "type": "object",
@@ -234,11 +237,13 @@
         },
         "repo_owner": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_.-]+$"
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "not": {"pattern": "\\n"}
         },
         "repo_name": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_.-]+$"
+          "pattern": "^[A-Za-z0-9_.-]+$",
+          "not": {"pattern": "\\n"}
         },
         "immutable_git_ref": {
           "$ref": "#/$defs/git_sha"

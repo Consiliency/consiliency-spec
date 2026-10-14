@@ -59,14 +59,14 @@ EDGE_KINDS = (
     "emits", "transitions_to", "governed_by", "verified_by",
 )
 
-# Closed-world prohibition domain types (Phase-3a SEMANTICS.md section 4.1, verbatim v1 set).
+# Closed-world prohibition domain types (SEMANTICS.md section 4.1, verbatim v1 set).
 # `external` always yields `unknown` (the extractor does not model that domain). Extensible.
 PROHIBITION_DOMAIN_TYPES = (
     "edge_set", "node_kind_set", "signature_facts", "capability_registration", "external",
 )
 
 # Per-kind formal fields beyond the common set (SPEC.md section 3).
-# `domain` is a prohibition's closed-world domain descriptor (Phase-3a parity hook, section 4.1):
+# `domain` is a prohibition's closed-world domain descriptor (parity hook, section 4.1):
 # it bounds the fact set the prohibition is decided over. WITHOUT it a prohibition is `unsupported`.
 _KIND_FORMAL_FIELDS = {
     "interface": ("signature",),
@@ -89,7 +89,7 @@ _KIND_REQUIRED_FIELDS = {
     "acceptance_criterion": ("then",),
 }
 
-# permitted_freedom token vocabulary (Phase-3a SEMANTICS.md sec 3). The vocabulary file
+# permitted_freedom token vocabulary (SEMANTICS.md sec 3). The vocabulary file
 # spec-parity/permitted-freedom-vocab.json is the SINGLE SOURCE OF TRUTH for the closed/versioned
 # token set; validate() rejects any declared token not in it (unknown token = validation error in
 # v1, additive by design). Loaded lazily + cached so the registry value list is never duplicated here.
@@ -113,13 +113,13 @@ def permitted_freedom_tokens() -> FrozenSet[str]:
     return _PF_VOCAB_TOKENS_CACHE
 
 
-# Common FORMAL (hashed) parity-hook fields valid on ANY node (Phase-3a SEMANTICS.md), handled
+# Common FORMAL (hashed) parity-hook fields valid on ANY node (SEMANTICS.md), handled
 # inline in _node_hashed_content / validate:
 #   frontier          - bool, default False; declares node in-scope for a parity run (section 1.2.2).
 #   permitted_freedom - order-insensitive string-token set; what realized code may vary below the
 #                       frontier without a soundness violation (section 3). Sorted in Normalize.
 # Both are FORMAL: P/N read them to compute the parity result, so they MUST be inside the
-# desired_graph_digest (Phase-3a SEMANTICS.md section 9 — every result-affecting input is pinned).
+# desired_graph_digest (SEMANTICS.md section 9 — every result-affecting input is pinned).
 FRONTIER_DEFAULT = False
 
 # Fields that are ENVELOPE (never hashed) — canon content/envelope split (SPEC.md sections 2-3).
@@ -559,7 +559,7 @@ def validate(graph: Dict[str, Any]) -> None:
             if node.get(field) is None:
                 raise SpecGraphError("node %r (kind %r) requires field %r" % (name, kind, field))
 
-        # Common parity-hook field types (Phase-3a hooks).
+        # Common parity-hook field types (parity hooks).
         if "frontier" in node and not isinstance(node["frontier"], bool):
             raise SpecGraphError("node %r: frontier must be a boolean" % name)
         if "permitted_freedom" in node:
@@ -608,7 +608,7 @@ def validate(graph: Dict[str, Any]) -> None:
                     "node %r: unratified is true-or-absent — omit it for a ratified node "
                     "(an explicit `false` would break the DSL round-trip)" % name)
 
-        # Prohibition closed-world domain (Phase-3a SEMANTICS.md section 4.1): required object {type}
+        # Prohibition closed-world domain (SEMANTICS.md section 4.1): required object {type}
         # whose type is one of the v1 domain types. A prohibition without one is `unsupported`.
         if kind == "prohibition":
             _check_domain(node.get("domain"), "prohibition %r" % name)

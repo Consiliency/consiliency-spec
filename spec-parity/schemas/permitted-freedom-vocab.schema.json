@@ -45,6 +45,7 @@
             "type": "string",
             "minLength": 1,
             "pattern": "^[a-z][a-z0-9_]*$",
+            "not": {"pattern": "\\n"},
             "description": "The token string a desired-graph node declares in permitted_freedom."
           },
           "rule_kind": {

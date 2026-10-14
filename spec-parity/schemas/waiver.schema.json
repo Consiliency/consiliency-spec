@@ -1,7 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://spec.consiliency/spec-parity/waiver.schema.json",
-  "title": "Parity waiver / suppression (Phase 3a)",
   "description": "A waiver records ACCEPTED drift. CORE RULE (SEMANTICS.md sec 8): a waiver NEVER flips a dimension/finding to `pass`. The underlying result_state stays fail/unknown; the certificate records the finding as `waived`. Suppression only changes how the result is PRESENTED/gated, never the measured truth. An expired waiver stops suppressing. Volatile fields (created_at, approver timestamps) live in the non-hashed `locator` envelope (canon sec 10); semantic fields (scope, expiry, reason) are hashed content.",
   "$defs": {
     "waiver_scope": {
@@ -40,7 +39,8 @@
     "expiry": {
       "type": "string",
       "description": "Expiry as an ISO-8601 calendar DATE (YYYY-MM-DD), interpreted as end-of-day UTC. Required and bounded -- NO open-ended waivers in v1. After expiry the waiver lifecycle becomes `expired` and it stops suppressing: the engine treats a waiver with expiry < the run descriptor's deterministic `as_of` date (run-descriptor.schema.json) as expired, and refuses to evaluate waivers for a run with no `as_of`. This is a semantic (hashed) field; it is a fixed date string, NOT a wall-clock timestamp, so it is deterministic across runs.",
-      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "not": {"pattern": "\\n"}
     },
     "approver_ref": {
       "type": "string",

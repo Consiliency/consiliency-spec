@@ -15,14 +15,14 @@ jobs:
     name: release gate before publish
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
       # The canon gate asserts, fail-closed, that Node's Unicode DB == 16.0. A bare
       # "24" floats to 24.16+, whose bundled ICU is Unicode 17.0 and trips that
       # assertion. Pin to 24.13.0 (Unicode 16.0) and check it explicitly.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24.13.0"
       - name: Confirm Node Unicode DB == 16.0
@@ -56,14 +56,14 @@ jobs:
     permissions:
       id-token: write  # OIDC token for Trusted Publishing
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
       - run: python -m pip install "pip==26.2.1" "build==1.6.1"
       - run: python -m build
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2 (release/v1)
 
   publish-npm:
     name: publish to npm (Trusted Publishing / provenance)
@@ -75,8 +75,8 @@ jobs:
     permissions:
       id-token: write  # OIDC provenance
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24.13.0"
           registry-url: "https://registry.npmjs.org"

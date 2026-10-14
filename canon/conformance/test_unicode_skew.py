@@ -42,8 +42,11 @@ def test_assertion_fails_on_wrong_version() -> None:
     not a re-implemented copy. A clean exit here would mean the divergence guard is dead — the exact
     silent-failure mode this whole change exists to prevent.
     """
-    stub_dir = os.path.join(HERE, "_skew_stub")
-    os.makedirs(stub_dir, exist_ok=True)
+    import tempfile
+
+    # A fresh directory per call, outside the source tree: a fixed path shared by parallel runs raced
+    # (one run's cleanup removed the stub another was about to import).
+    stub_dir = tempfile.mkdtemp(prefix="skew-stub-")
     stub_path = os.path.join(stub_dir, "unicodedata2.py")
     try:
         with open(stub_path, "w", encoding="utf-8") as f:
@@ -61,7 +64,10 @@ def test_assertion_fails_on_wrong_version() -> None:
         # sys.path[0], AHEAD of the stub), and only absolute inherited PYTHONPATH entries are kept: an
         # empty or relative entry (such as ".") also resolves against the working directory. So no file
         # in whatever directory the test runs from (a unicodedata2.py, a sitecustomize.py) can stand in
-        # for the stub.
+        # for the stub through the working directory. An inherited ABSOLUTE entry is kept as given, by
+        # design, even when it names the working directory or a symlink to it: the caller chose that
+        # path. Such an entry sits behind the stub and src, but a sitecustomize.py in it still runs at
+        # child startup and can pre-seed unicodedata2 ahead of the stub, so it bypasses this test.
         env = dict(os.environ)
         inherited = [p for p in env.get("PYTHONPATH", "").split(os.pathsep) if os.path.isabs(p)]
         env["PYTHONPATH"] = os.pathsep.join([stub_dir, SRC] + inherited)

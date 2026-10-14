@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "spec-engine/authority/authority-event.schema.json",
-  "title": "XG2 Authority Event",
+  "title": "Authority Event",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -38,19 +38,20 @@
         "decision_id"
       ],
       "properties": {
-        "repo": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$" },
-        "env": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$" },
-        "lineage": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$" },
-        "policy_epoch": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$" },
-        "canon_version": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$" },
-        "decision_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$" }
+        "repo": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$", "not": {"pattern": "\\n"} },
+        "env": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$", "not": {"pattern": "\\n"} },
+        "lineage": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$", "not": {"pattern": "\\n"} },
+        "policy_epoch": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$", "not": {"pattern": "\\n"} },
+        "canon_version": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$", "not": {"pattern": "\\n"} },
+        "decision_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$", "not": {"pattern": "\\n"} }
       }
     },
     "approver": {
       "type": "string",
       "minLength": 1,
       "maxLength": 128,
-      "pattern": "^[A-Za-z0-9_.:-]+$"
+      "pattern": "^[A-Za-z0-9_.:-]+$",
+      "not": {"pattern": "\\n"}
     },
     "validity": {
       "type": "object",
@@ -62,11 +63,13 @@
       "properties": {
         "not_before": {
           "type": "string",
-          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+          "not": {"pattern": "\\n"}
         },
         "not_after": {
           "type": "string",
-          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+          "not": {"pattern": "\\n"}
         }
       }
     },
@@ -74,7 +77,8 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 128,
-      "pattern": "^[A-Za-z0-9_.:-]+$"
+      "pattern": "^[A-Za-z0-9_.:-]+$",
+      "not": {"pattern": "\\n"}
     },
     "custody_binding": {
       "type": "object",
@@ -87,8 +91,8 @@
       ],
       "properties": {
         "binding_version": { "const": "1" },
-        "origin": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$" },
-        "owner": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$" },
+        "origin": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$", "not": {"pattern": "\\n"} },
+        "owner": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$", "not": {"pattern": "\\n"} },
         "phase_loop_driver_allowed": { "type": "boolean" }
       }
     },
@@ -107,7 +111,8 @@
         "reason": {
           "type": ["string", "null"],
           "maxLength": 128,
-          "pattern": "^[A-Za-z0-9_.:-]+$"
+          "pattern": "^[A-Za-z0-9_.:-]+$",
+          "not": {"type": "string", "pattern": "\\n"}
         }
       }
     },
@@ -125,17 +130,20 @@
         },
         "supersedes_entry_digest": {
           "type": ["string", "null"],
-          "pattern": "^[0-9a-f]{64}$"
+          "pattern": "^[0-9a-f]{64}$",
+          "not": {"type": "string", "pattern": "\\n"}
         }
       }
     },
     "previous_entry_digest": {
       "type": ["string", "null"],
-      "pattern": "^[0-9a-f]{64}$"
+      "pattern": "^[0-9a-f]{64}$",
+      "not": {"type": "string", "pattern": "\\n"}
     },
     "entry_digest": {
       "type": "string",
-      "pattern": "^[0-9a-f]{64}$"
+      "pattern": "^[0-9a-f]{64}$",
+      "not": {"pattern": "\\n"}
     },
     "signature": {
       "type": "object",
@@ -147,10 +155,11 @@
       ],
       "properties": {
         "signature_version": { "const": "1" },
-        "signer": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$" },
+        "signer": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$", "not": {"pattern": "\\n"} },
         "signature_digest": {
           "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
+          "pattern": "^[0-9a-f]{64}$",
+          "not": {"pattern": "\\n"}
         }
       }
     },
@@ -167,15 +176,18 @@
         "proof_version": { "const": "1" },
         "entry_digest": {
           "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
+          "pattern": "^[0-9a-f]{64}$",
+          "not": {"pattern": "\\n"}
         },
         "previous_entry_digest": {
           "type": ["string", "null"],
-          "pattern": "^[0-9a-f]{64}$"
+          "pattern": "^[0-9a-f]{64}$",
+          "not": {"type": "string", "pattern": "\\n"}
         },
         "root_digest": {
           "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
+          "pattern": "^[0-9a-f]{64}$",
+          "not": {"pattern": "\\n"}
         }
       }
     }

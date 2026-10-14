@@ -490,9 +490,9 @@ runs its `--target` mode against the in-tree ingest package, holding the bundled
 corpus. Consumers must dual-run against this corpus before
 removing a vendored implementation.
 
-## Open items (0A follow-ups, tracked)
+## Open items (follow-ups, tracked)
 - **In-hash Unicode-version coupling. — RESOLVED by canon v2 / NFCBOUNDARY (2026-06).** Even after the
-  0A pin below, canon v1's `canonical_bytes` *itself* still depended on the pinned Unicode DB (NFC ran
+  Unicode DB pin below, canon v1's `canonical_bytes` *itself* still depended on the pinned Unicode DB (NFC ran
   in-hash), so the byte-identity gate stayed Unicode-version-coupled. **canon v2 relocates NFC to the
   ingestion boundary** (`py/canon_ingest.py`): canon no longer normalizes and no longer depends on any
   Unicode DB; the `unicodedata2==16.0.0` pin + fail-closed assertion + the post-13 discriminators moved
@@ -509,7 +509,7 @@ removing a vendored implementation.
   identifier still packs (NFC is the identity on ASCII under every Unicode version) and a non-ASCII one
   is refused (`IdModelError`) instead of hashing a host-dependent id. So a logical id never depends on
   the host interpreter's Unicode version.
-- **Unicode DB version skew (0A). — RESOLVED (2026-06).** Previously: Python stdlib `unicodedata` (13.0.0 on
+- **Unicode DB version skew. — RESOLVED (2026-06).** Previously: Python stdlib `unicodedata` (13.0.0 on
   CPython 3.10) vs Node Unicode 16.0, leaving a determinism hole for identifiers using codepoints assigned
   *after* Unicode 13 (their NFC could differ between ports). Resolution (canon v1; the pin now lives at the
   v2 ingest boundary):

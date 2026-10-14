@@ -32,14 +32,26 @@ Every software project has two things: a **blueprint** (what it's *supposed* to 
 
 The six parity dimensions: **completeness**, **soundness**, **closure**, **prohibition**, **revision-alignment**, **acceptance** (`spec-engine-projection:v5`; certificates from before 0.7.0 carry the first five).
 
+### Schema patterns 0.7.2 — patch
+
+`0.7.2` keeps projection `spec-engine-projection:v5`, certificate `schema_version` `"2"` and canon-core
+`0.4.0`; no certificate, finding-set or payload digest moves. Every schema `pattern` is a plain
+RE2-portable `^…$` with a sibling `not` that refuses a newline (on the outside-agent path field it also
+refuses a `..` segment), so any validator that applies `not` reads them alike; **keep `not` wherever
+you copy a `pattern`**. This reverses the 0.7.1 note below about lookahead. The reference verifier
+reads `$` as the true end of the string and applies `not`. The outside-agent submission schema digest
+moves, the workflows pin their actions to commit SHAs, and `rust-toolchain.toml` joins the repository.
+See [`CHANGELOG.md`](CHANGELOG.md).
+
 ### Acceptance scope 0.7.1 — patch
 
 `0.7.1` keeps projection `spec-engine-projection:v5`, certificate `schema_version` `"2"` and canon-core
 `0.4.0`; no certificate, finding-set or payload digest moves. The reference verifier gains the
 `acceptance_scope` check (see "Verify a certificate" below). The `authority_id` pattern in
 `ec.schema.json` and `result-state.schema.json` ends in a lookahead, so it refuses a trailing newline
-and needs a regex engine with lookahead (not RE2). `spec-parity/conformance/check.sh`, which needs
-engine files that are not public, is removed. See [`CHANGELOG.md`](CHANGELOG.md).
+and needs a regex engine with lookahead (not RE2; reversed in `0.7.2`, above).
+`spec-parity/conformance/check.sh`, which needs engine files that are not public, is removed. See
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ### Acceptance evidence 0.7.0 — breaking
 

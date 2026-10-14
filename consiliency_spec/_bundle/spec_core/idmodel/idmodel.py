@@ -37,7 +37,7 @@ import struct
 import unicodedata as _stdlib_unicodedata
 from typing import Any, Dict, List, Optional
 
-# Reuse canon's NFC discipline (and ONLY that) so the two spine contracts agree on normalization.
+# Reuse canon's NFC discipline (and ONLY that) so the two identity contracts agree on normalization.
 from ..canon import canon
 
 # NFC is defined against a Unicode version, and the stdlib `unicodedata` is bound to the interpreter's
@@ -343,8 +343,8 @@ def engine_join_id(node: Dict[str, Any]) -> str:
 # Tier-2 occurrence / evidence record (SPEC.md section 5)
 # --------------------------------------------------------------------------- #
 #
-# A thin PROVENANCE wrapper around the existing per-revision hashes (greenfield boundary digest,
-# chunker definition_id/node_id, etc). These are NEVER used as cross-revision identity. The
+# A thin PROVENANCE wrapper around the existing per-revision hashes (the Interface Boundary IR's
+# boundary digest, chunker definition_id/node_id, etc). These are NEVER used as cross-revision identity. The
 # occurrence_id is content-addressed via canon (semantic-content profile) over the provenance, so
 # it is itself deterministic per revision but is explicitly demoted to evidence.
 

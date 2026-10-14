@@ -17,7 +17,7 @@
       "required": ["repo", "commit", "subdir"],
       "properties": {
         "repo": { "type": "string", "minLength": 1 },
-        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$", "not": {"pattern": "\\n"} },
         "subdir": { "type": "string", "description": "Path inside the source checkout that was extracted." }
       }
     },
@@ -42,12 +42,13 @@
       "type": "array",
       "minItems": 2,
       "maxItems": 2,
-      "items": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+      "items": { "type": "string", "pattern": "^[0-9a-f]{64}$", "not": {"pattern": "\\n"} },
       "description": "canon semantic-content digest of each of the two independent extractions."
     },
     "compared_digest": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$",
+      "not": {"pattern": "\\n"},
       "description": "The digest both extractions and the pinned E(C) share. MUST equal the canon semantic-content digest of the E(C) at ec_path."
     },
     "reproducible": { "const": true, "description": "Only a successful measurement is recorded; a failed one is never committed as an attestation." }
