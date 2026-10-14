@@ -14,7 +14,7 @@ now target `ingest`, not `canon`:
      thing that proves the pin is load-bearing, because canon v2 passes bytes through verbatim and
      the cross-language gate stays green even if ingest NFC were missing entirely.
 
-Run: python3 canon/conformance/test_unicode_skew.py   (exit 0 = pass)
+Run: PYTHONPATH=src python3 canon/conformance/test_unicode_skew.py   (exit 0 = pass)
 """
 
 import json
@@ -24,12 +24,13 @@ import sys
 import textwrap
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PY = os.path.join(HERE, "..", "py")
 VECTORS = os.path.join(HERE, "..", "vectors", "canon-vectors.json")
-sys.path.insert(0, PY)
+# The spec_core package (src/spec_core/canon, byte-mirrored at canon/py): run with src/ as the import
+# root, which canon/conformance/check.sh exports.
+SRC = os.path.normpath(os.path.join(HERE, "..", "..", "src"))
 
-import canon  # noqa: E402  (canon v2: Unicode-DB-independent; used only to decode vector inputs)
-import canon_ingest as ingest  # noqa: E402  (asserts the pinned DB at import; must succeed here)
+from spec_core.canon import canon  # canon v2: Unicode-DB-independent; only decodes vector inputs
+from spec_core.canon import canon_ingest as ingest  # asserts the pinned DB at import; must succeed
 
 
 def test_assertion_fails_on_wrong_version() -> None:
@@ -54,13 +55,13 @@ def test_assertion_fails_on_wrong_version() -> None:
                 "def normalize(form, s):\n"
                 "    return _u.normalize(form, s)\n"
             )
-        # Put the stub dir FIRST on PYTHONPATH so it shadows the real unicodedata2; add canon/py so
-        # `import canon_ingest` resolves.
+        # Put the stub dir FIRST on PYTHONPATH so it shadows the real unicodedata2; add src so
+        # `spec_core.canon.canon_ingest` resolves.
         env = dict(os.environ)
-        env["PYTHONPATH"] = os.pathsep.join([stub_dir, PY, env.get("PYTHONPATH", "")])
+        env["PYTHONPATH"] = os.pathsep.join([stub_dir, SRC, env.get("PYTHONPATH", "")])
         code = textwrap.dedent(
             """
-            import canon_ingest  # noqa: F401  -- must RAISE under the stubbed stale Unicode version
+            from spec_core.canon import canon_ingest  # noqa: F401  -- must RAISE (stale Unicode)
             print("LOADED-WITHOUT-ASSERTION")  # reaching here is a FAILURE
             """
         )

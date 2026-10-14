@@ -22,7 +22,12 @@
 set -euo pipefail
 
 CANON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(dirname "$CANON_DIR")"
 PY="$CANON_DIR/py"
+# The one sanctioned Python import root, src/ (the spec_core package): the ingest-boundary tests and
+# the vector generator import spec_core.canon. This script is
+# public and cannot source ci/lib/pyroot.sh, so it sets the same value inline.
+export PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 TS="$CANON_DIR/ts"
 TMP="$(mktemp -d)"
 # tsx pinned exactly (CI-5): a bare `npx --yes tsx` runs whatever npm
@@ -45,6 +50,12 @@ echo
 
 # --- 1. Python canon self-conformance ---
 echo "[1/5] Python canon conformance (vs pinned vectors)"
+# canon/py/canon.py and canon_ingest.py are byte mirrors of src/spec_core/canon/: test_canon.py runs
+# the mirror by path, steps 3 and 4 import the package, so the two must be the same bytes.
+for f in canon.py canon_ingest.py; do
+  cmp -s "$PY/$f" "$ROOT/src/spec_core/canon/$f" \
+    || { echo "FAIL: canon/py/$f is not a byte copy of src/spec_core/canon/$f" >&2; exit 1; }
+done
 python3 "$PY/test_canon.py"
 echo
 

@@ -18,6 +18,9 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PARITY="$(dirname "$HERE")"
 ROOT="$(dirname "$PARITY")"
 ENGINE="$ROOT/spec-engine"
+# src/ is the Python import root: the engine is the spec_core.engine package.
+# This script is public and cannot source ci/lib/pyroot.sh, so it sets the same value inline.
+export PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 
 PY="${PYTHON:-python3}"
 
@@ -61,7 +64,6 @@ echo "   OK: a draft-S certificate is refused without --allow-draft"
 EMPTY_BADGE="$("$PY" run_engine.py fixtures/empty-run.json --emit payload --allow-draft \
   | "$PY" -c "
 import json, sys, os
-sys.path.insert(0, os.path.join('$ROOT', 'spec-engine'))
 from jsonschema.validators import Draft202012Validator
 from referencing import Registry, Resource
 from referencing.jsonschema import DRAFT202012

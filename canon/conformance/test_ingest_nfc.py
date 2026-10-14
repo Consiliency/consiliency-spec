@@ -16,18 +16,15 @@ as `*-verbatim` in canon-vectors.json for canon's own byte-identity coverage):
 
 All non-ASCII is built with chr() so the exact codepoints are unambiguous in source.
 
-Run: python3 canon/conformance/test_ingest_nfc.py   (exit 0 = pass)
+Run: PYTHONPATH=src python3 canon/conformance/test_ingest_nfc.py   (exit 0 = pass)
 """
 
-import os
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-PY = os.path.join(HERE, "..", "py")
-sys.path.insert(0, PY)
-
-import canon  # noqa: E402  (canon v2: verbatim, Unicode-DB-independent)
-import canon_ingest as ingest  # noqa: E402  (the relocated ingest-boundary NFC normalizer + pin)
+# The spec_core package (src/spec_core/canon, byte-mirrored at canon/py): run with src/ as the import
+# root, which canon/conformance/check.sh exports.
+from spec_core.canon import canon  # canon v2: verbatim, Unicode-DB-independent
+from spec_core.canon import canon_ingest as ingest  # the ingest-boundary NFC normalizer + pin
 
 DECOMPOSED_EACUTE = "e" + chr(0x0301)   # 'e' + COMBINING ACUTE ACCENT -> NFC U+00E9
 COMPOSED_EACUTE = chr(0x00E9)            # precomposed U+00E9

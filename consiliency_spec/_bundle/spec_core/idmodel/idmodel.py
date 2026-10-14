@@ -1,7 +1,7 @@
 """idmodel v1 — Python reference implementation (two-tier identity + correspondence).
 
-Normative contract: ../SPEC.md. Builds on canon v1
-(``../../canon/py/canon.py``) — reuses ONLY canon's NFC discipline, not its JSON encoder.
+Normative contract: idmodel/SPEC.md. Builds on canon v1
+(``../canon/canon.py``) — reuses ONLY canon's NFC discipline, not its JSON encoder.
 
 Tier-1 logical-entity id = a CHIE-discipline TYPED BINARY PACK of
 ``{file_role, qualified_symbol, kind, normalized_signature}`` -> SHA-256 with the domain prefix
@@ -32,16 +32,13 @@ Public API:
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 import struct
-import sys
 import unicodedata as _stdlib_unicodedata
 from typing import Any, Dict, List, Optional
 
 # Reuse canon's NFC discipline (and ONLY that) so the two spine contracts agree on normalization.
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "canon", "py"))
-import canon  # noqa: E402
+from ..canon import canon
 
 # NFC is defined against a Unicode version, and the stdlib `unicodedata` is bound to the interpreter's
 # (Python 3.12 ships 15.0, 3.14 ships 16.0). Hashing a non-ASCII identity under the host DB would give

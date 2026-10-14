@@ -13,7 +13,7 @@ The functions being defined:
 
 ```
 P(E(C), S)  -> projection      # projects realized Boundary IR E(C) onto the frontier selected by S
-N(projection) -> finding_set + certificate   # the 5-dimension parity checker; deterministic, NEVER LLM-graded
+N(projection) -> finding_set + certificate   # the 6-dimension parity checker (projection v5; five before v5); deterministic, NEVER LLM-graded
 ```
 
 `N(S) = N(P(E(C),S))` is the parity result. `N` emits a machine-readable `finding_set`
@@ -51,10 +51,10 @@ N(projection) -> finding_set + certificate   # the 5-dimension parity checker; d
   0.4.0 engine subset, which relaxed level ordering and operation-requires-signature, is gone): among
   others, every `decomposes_to` descends to a strictly lower level and every `operation` declares a
   signature. `E(C)` must match `schemas/ec.schema.json` with unique `boundary_id`s and no JSON floats,
-  and an **extracted** `E(C)` (a string `provenance.tsc_version`, `source: "treesitter-chunker"`, or any
-  `provenance.tsc_*` key) must carry `extraction_coverage` (consiliency-spec 0.6.0,
-  `projection.validate_ec`; sec 4.2: the `declared` basis is for hand-authored `E(C)`s only, so a legacy
-  or stripped capture is refused and the fix is to re-extract).
+  and an **extracted** `E(C)` (any extraction-adapter marker, listed in sec 4.2) must carry
+  `extraction_coverage` (consiliency-spec 0.6.0, `projection.validate_ec`; sec 4.2: the `declared` basis
+  is for hand-authored `E(C)`s only, so a legacy or stripped capture is refused and the fix is to
+  re-extract).
   Independently of the entry point, `P` and `N` themselves refuse a malformed input before grading it:
   their shared grading boundary runs the same full `spec_graph.validate` on `S` (projection v4), plus
   the structural checks: duplicate or empty `S` node names, dangling edges, an `operation` without a signature, a malformed `E(C)` (duplicate
@@ -300,7 +300,7 @@ paths, sorted; no floats):
 | `parse_error` | tsc `files[].status == "error"` (missing grammar, parser exception) |
 | `no_language` | tsc `files[].status == "skipped"` |
 | `syntax_error` | tsc reports the file `parsed`, but re-parsing it with tsc's own parser yields a tree with `ERROR`/`MISSING` nodes (tsc reports these files `parsed` with **empty** diagnostics), or a tsc diagnostic is attributed to it |
-| `unsupported_extension` | a source file on disk (spec-pinned extension catalog, `realized/extract.py` `SOURCE_CODE_EXTENSIONS`) that tsc never listed in `files[]` — e.g. `.mjs`, `.cjs`, `.mts`, `.proto`, `.vue` |
+| `unsupported_extension` | a source file on disk (spec-pinned extension catalog, `spec_core.engine.realized.extract` `SOURCE_CODE_EXTENSIONS`) that tsc never listed in `files[]` — e.g. `.mjs`, `.cjs`, `.mts`, `.proto`, `.vue` |
 | `excluded_directory` | a source file below a directory tsc skips by name although it can hold real source (`build`, `dist`, `archive`), or below a directory the brownfield ingest excluded — its default generated/build set (`baml_client`, `out`, `coverage`, `build`, ...) or an operator `--exclude`. The ingest re-walks each excluded directory in the repo with the same walker the direct extract uses, so both paths report the same entry for the same file |
 | `unreadable` | a directory that could not be listed (permissions, I/O) — ONE entry, language null — in the direct walk, the protobuf walk and the brownfield mirror; or a source file the brownfield mirror could not read (permissions, I/O), with its language |
 | `symlink_not_followed` | a source file tsc never listed because it is a symlink (incl. dangling) or not a regular file (a FIFO, socket or device, which is never opened); or a symlinked **directory** — never descended (its contents may lie outside the repo, and links can fan out), recorded as ONE entry with `language: null`, exactly as the brownfield mirror records it; or a symlinked or non-regular source file the mirror skipped |
@@ -336,15 +336,27 @@ lists is a source file, including languages outside the on-disk catalog that tsc
   was handed an IR carrying no coverage record). Graded exactly like **partial**: an unmeasured extraction
   never claims full coverage, so a producer that forgets to measure surfaces as non-`pass`.
 - **declared** — `E(C)` carries **no** `extraction_coverage` at all: a hand-authored / greenfield fixture
-  `E(C)` (no extraction marker: no `provenance.tsc_*` key and `source` other than `treesitter-chunker`).
-  Its producer's `modeled_domains` declaration stands alone (the v1 rule). The adapters always emit the
-  field, so a live extraction is never `declared`. An **extracted** `E(C)` (any one marker: a string
-  `provenance.tsc_version`, `source: "treesitter-chunker"`, or any `provenance.tsc_*` key) with no
-  `extraction_coverage` key, such as a frozen pre-v2 capture or a hand-stripped one, is **refused at
-  entry** since consiliency-spec 0.6.0 (sec 0); it is no longer graded on the `declared` basis. Removing
-  one marker does not change that: each marker refuses on its own. The fix is to re-extract. A
-  hand-built `E(C)` that declares `source: "treesitter-chunker"` to select the tsc kind-alignment rows
-  must carry a coverage record (a measured `full` record grades exactly like `declared`). (The
+  `E(C)` (no extraction marker, below). Its producer's `modeled_domains` declaration stands alone (the v1
+  rule). The adapters always emit the field, so a live extraction is never `declared`. An **extracted**
+  `E(C)` with no `extraction_coverage` key, such as a frozen pre-v2 capture or a hand-stripped one, is
+  **refused at entry** since consiliency-spec 0.6.0 (sec 0); it is no longer graded on the `declared`
+  basis. Extracted means any one marker that only an extraction adapter writes (consiliency-spec 0.7.0):
+  `source` `treesitter-chunker` or `protobuf`; a `provenance.tsc_*` key other than `tsc_version`; a
+  protobuf / baml adapter key (`provenance.descriptor_identity`, `grpcio_tools_version`, `baml_version`,
+  or `provenance.realization` `protobuf` / `baml`); a top-level `collapsed_boundary_ids`; or a node whose
+  `provenance` has such a `tsc_*` key (every tree-sitter-chunker node carries `tsc_node_id`). Each marker
+  refuses on its own. Stripping the top-level markers does not pass a tree-sitter-chunker capture (a baml
+  realization included, whose structural nodes are tree-sitter-chunker nodes) off as hand-authored: the
+  per-node markers remain. A protobuf capture has no per-node marker (no key of its node `provenance`, such
+  as `language` or `semantic_path`, is one only an adapter writes), so one stripped of its top-level
+  markers is not refused: it is graded on the `declared` basis, like any `E(C)` stripped
+  of every marker (below). A `provenance.tsc_version` alone is **not** a marker, because `tsc` is also
+  the TypeScript compiler and a hand-authored `E(C)` may record that compiler's version there. The fix is
+  to re-extract. A hand-built `E(C)` that declares `source: "treesitter-chunker"` to select the tsc
+  kind-alignment rows must carry a coverage record (a measured `full` record grades exactly like
+  `declared`). An `E(C)` stripped of every marker, at the top level and on every node (for a protobuf
+  capture, the top-level markers are all it has), is by construction indistinguishable from a
+  hand-authored one; the certificate's `ec_digest` still binds exactly the bytes that were graded. (The
   brownfield `ga_author`/`ga_e2e` fixtures were such captures until 0.6.0 re-extracted them with
   measured coverage.) An explicit `null`, malformed or `unmeasured` record is not refused: it keeps the
   `unmeasured` grading below.
@@ -370,10 +382,11 @@ lists is a source file, including languages outside the on-disk catalog that tsc
 
 Scope note: the rule is deliberately global — one unextracted file anywhere makes every universal claim
 `unknown`. A finer, per-domain rule (e.g. an `edge_set` scan is unaffected when every *governed* boundary's
-file was extracted) is sound **only under adapter preconditions the shipped extractor does not meet**: an
-edge's existence and call token must be a function of its call-site file's bytes alone, parents must be
-same-file, semantic paths must be file-qualified, and unextracted paths must share the node files' path
-space. The 0.6.0 board review rejected such a rule (projection v5) on executed
+file was extracted) is sound **only under adapter preconditions the shipped extractor does not fully
+meet**: an edge's existence and call token must be a function of its call-site file's bytes alone,
+parents must be same-file, semantic paths must be file-qualified, and unextracted paths must share the
+node files' path space. Same-file parents and NFC unextracted paths hold since 0.6.0; edge anchoring,
+deduplication and self-edge dropping do not. The 0.6.0 board review rejected such a rule (projection v5) on executed
 counterexamples: under treesitter-chunker 5.3.0 a same-stem file can steal an edge's anchor, edges are
 deduplicated and self-resolved edges dropped across files, so another file can decide whether a governed
 forbidden call exists; a forbidden token may also match the boundary-id grammar. The global rule therefore
@@ -549,7 +562,7 @@ per check as a `finding` (when not `pass`) and rolls them up per dimension (sec 
 
 ### 6.3 Per-dimension rollup
 
-Each of the five dimensions reports one `result_state` = the rollup of its checks, using the **same severity
+Each dimension reports one `result_state` = the rollup of its checks, using the **same severity
 order** as sec 6.4: `fail` if any check fails; else `unknown` if any unknown; else `unsupported` if any
 unsupported; else `pass`; `not_applicable` only if the dimension had **no subject at all**.
 
@@ -602,10 +615,10 @@ the `vacuity` record additionally carries `extraction_coverage` (the summary), s
 
 ---
 
-## 7. The five parity dimensions
+## 7. The six parity dimensions
 
 Each dimension below has (a) a one-sentence operational definition, (b) what it checks, and (c) its allowed
-result-state range. All five ALWAYS appear in `dimension_results` (a dimension with no subject reports
+result-state range. All six ALWAYS appear in projection v5 `dimension_results` (a dimension with no subject reports
 `not_applicable`).
 
 | dimension | operational definition | allowed states |
@@ -615,6 +628,7 @@ result-state range. All five ALWAYS appear in `dimension_results` (a dimension w
 | **closure** | Every in-scope realized fact at/above the frontier is classified — matched, refinement_below_frontier, or permitted_freedom; nothing in-scope is left unclassified. | pass · fail · unknown · unsupported · not_applicable |
 | **prohibition** | Every in-scope `prohibition` is decided over its closed-world domain (sec 4). | pass · fail · unknown · unsupported · not_applicable |
 | **revision_alignment** | `E(C)`'s revision and `S`'s pinned revision resolve through the idmodel correspondence map; lifecycle is consistent. | pass · fail · unknown · unsupported · not_applicable |
+| **acceptance** | Each in-scope criterion reports a command result together with its run authority and verdict role. | pass · fail · unknown · not_applicable |
 
 ### 7.1 completeness
 For each in-scope desired node `d`, if `P` found at least one parity-bearing realized correspondence → the
@@ -626,7 +640,8 @@ duplicate entries for `d`, the entry dangles outside `E(C)`, or the only candida
 edge) — see the sec 2 table — or if `d` has no correspondence but the extraction is measured-partial or
 unmeasured (`desired_element_unobservable`, sec 4.2: absence is not evidence over unextracted source). **unsupported** if `d`
 is an unmapped/no-realized-path kind (sec 5 / `kind-alignment.json` `no_realized_mapping`). **not_applicable**
-if the frontier selected no completeness-bearing nodes.
+if the frontier selected no completeness-bearing nodes. `acceptance_criterion` is never a direct
+completeness subject: its observation path is acceptance (sec 7.6).
 
 ### 7.2 soundness
 For each realized fact at/above the frontier corresponding to a `d`, compare structure (kind alignment,
@@ -696,6 +711,128 @@ element is `deleted` in the spec revision but realized as present, or vice-versa
 **unsupported** if no correspondence map is supplied for the run.
 
 ---
+
+### 7.6 acceptance
+
+An `acceptance_criterion` is in scope when it is selected by the frontier, or is the target of
+`verified_by` from an in-scope spec node. `verified_by` remains a spec-node-to-spec-node edge;
+it never points to a test result. Default closure still filters to capability/component/interface/
+operation, but their `verified_by` targets are acceptance subjects, just as `governed_by` targets
+are prohibition subjects. An unlinked, unselected criterion is out of scope, not an evaluated pass.
+
+E(C) may carry `acceptance_evidence`, an array with at most one record per criterion. Each record has
+exactly these seven fields, plus an optional eighth, `authority_id`:
+
+```json
+{
+  "criterion_logical_id": "<64 lowercase hex engine join id>",
+  "argv": ["python", "-m", "pytest", "tests/test_invoke.py"],
+  "exit_code": 0,
+  "log_sha256": "<64 lowercase hex SHA-256 of command log bytes>",
+  "pipeline_mode": "standalone",
+  "pipeline_engaged": false,
+  "authority": "producer",
+  "authority_id": "example-ci"
+}
+```
+
+`criterion_logical_id` is `projection.desired_logical_id(criterion)` (idmodel's `engine_join_id`),
+the same id used in finding subjects and correspondence. It is not the graph's level-bearing node
+logical_id. E(C)'s revision and code-head pins identify the run's realized snapshot. The producer
+exports one chosen command result per criterion for that snapshot, not a history of retries.
+`argv` has a non-empty command; subsequent arguments are strings. Exporters must NFC-normalize
+`argv` and redact secrets from it before export: `argv` is in the `ec_digest` preimage, and any
+published E(C) exposes it (payloads do not carry it). Exit codes are JSON integers within canon's
+bare-integer domain, -(2^53-1) to 2^53-1, including negative signal exits and Windows NTSTATUS exits;
+floats, booleans and integers outside that domain are rejected. Log bodies are not embedded.
+`pipeline_mode` is `standalone`, `pipeline_optional` or `pipeline_required`; `pipeline_engaged`
+records whether an external acceptance pipeline actually engaged on this run. `authority` is a
+generic role, never a product name (next table). `authority_id` is an optional producer-declared
+name for the concrete owner, matching `^[a-z0-9][a-z0-9._/-]{0,127}$` (for example `agent-harness`,
+`example-ci` or another CI system's name). spec never interprets `authority_id`: it only copies it
+into the result and binds it through `record_digest`. The stdlib `validate_ec` is at least as strict
+as the schema on record shape and authority consistency, and the engine fails closed; engine entry
+also rejects duplicate criterion records and ids that do not name an `acceptance_criterion` in S,
+even if that evidence would be out of scope. Invalid evidence refuses grading, never yields `unknown`.
+
+For each in-scope criterion, exit 0 gives **pass** (`acceptance_command_pass`), any non-zero exit
+gives **fail** (`acceptance_command_fail`), and no record gives **unknown** (`acceptance_unobserved`).
+One exception (owner decision S2): a `pipeline_required` record with `pipeline_engaged: false` gives
+**unknown** (`acceptance_pipeline_unengaged`) whatever its exit code. The required pipeline never
+engaged, so it never ruled, and the run must not show a green acceptance pass in its place.
+No in-scope criterion gives **not_applicable**. One finding is emitted for every check, including pass,
+with an `acceptance_result`. The acceptance dimension's `acceptance_results` copies these records,
+sorted by criterion id, into the finding set, certificate and metadata-only payload. Each carries
+criterion id, result state, authority, verdict role and, when observed, mode, actual engagement,
+`authority_id` (exactly when the record has one) and `record_digest` (canon semantic-content digest
+of the exact evidence record, so `authority_id` is bound by it). An unknown result with no record has
+null authority and role `unobserved`, with no fabricated producing mode, engagement or
+`authority_id`. An `acceptance_pipeline_unengaged` result does have a record, so it keeps the
+table's authority and role below (`pipeline`, `pipeline_input`) together with
+`pipeline_mode: pipeline_required`, `pipeline_engaged: false`, the record's `authority_id` if any and
+its `record_digest`; only its state is `unknown`. A `finding_id` covers dimension, state, code and
+subject, not authority, command or log, so it stays stable while the evidence changes; finding-id
+stability is not evidence stability, and a waiver keyed on it carries across evidence changes.
+
+**Acceptance truth depends on the producing run (owner decision).** `authority` names a role:
+
+- `producer`: the run that executed the command owns its result. Role `run_verdict`, for that run only.
+- `pipeline`: an external acceptance authority owns acceptance truth, and this run's result is input
+  to it. Role `pipeline_input`.
+
+| Producing mode and actual engagement | Authority | Result's verdict role |
+|---|---|---|
+| `standalone`, pipeline not engaged | `producer` | `run_verdict`, for its own run only |
+| `pipeline_optional`, pipeline not engaged | `producer` | `run_verdict`, for its own run only |
+| `pipeline_optional`, pipeline engaged | `pipeline` | `pipeline_input` |
+| `pipeline_required`, whether or not engagement succeeded | `pipeline` | `pipeline_input` (state `unknown` when not engaged) |
+
+Standalone with an engaged pipeline is contradictory and is rejected. `pipeline_required` never
+falls back to producer ownership, including when engagement fails; its actual engagement is still
+recorded. `pipeline_optional` must record actual engagement, not just the declared mode.
+For pipeline-owned acceptance, the producer's evidence is an input, **never the pipeline's verdict**:
+even a `pass` with authority `pipeline` has role `pipeline_input`. This slice has no channel for
+the pipeline's final acceptance verdict. A standalone pass is the producer's run verdict, never
+pipeline-certified. Consumers must retain and display the authority and verdict role alongside
+acceptance states; neither an acceptance pass nor the overall parity pass asserts pipeline acceptance.
+These fields are producer assertions whose consistency the engine checks, not authenticated authority.
+Given E(C), the public verifier checks that every row copies the record it names (`record_digest`,
+authority, `authority_id`, verdict role, mode, engagement, and its state: unknown for an unengaged
+`pipeline_required` record, otherwise pass exactly for exit 0), that a row without a record is
+unknown and unobserved, and that the rows are strictly increasing by `criterion_logical_id` (one row
+per criterion, in the engine's order); which criteria have rows is scope and needs re-grading, so it
+is not re-derived.
+
+**Where the evidence lives (owner decision S5).** Acceptance evidence stays inside E(C). The
+consequences, which producers and consumers must plan for:
+
+- Evidence may name only criteria in the S being graded. A record whose id does not name an
+  `acceptance_criterion` in S refuses the whole run (above), so a stale or foreign record cannot be
+  carried along. Exporters filter evidence to the criteria of the graded S before attaching it.
+- Because the evidence is part of E(C), `ec_digest` depends on it. A reproducibility attestation
+  (`spec_core.engine.realized.reproducibility`) compares whole-E(C) digests, so a producer that wants
+  `ec_reproducible: true` must attach the same evidence records inside the measured build; records
+  attached after measurement make the two extractions differ.
+- `ingest_from_ec` (the ingest packages' replay entry) refuses an E(C) that carries any evidence
+  record: the draft S it scaffolds from code has no acceptance criteria, so every record fails the
+  names-a-criterion rule. An empty `acceptance_evidence` list is accepted. This holds until the
+  Slice B exporter defines how evidence is replayed.
+- `log_sha256`, `pipeline_engaged` and `authority_id` are producer assertions. The engine checks their
+  shape and consistency with the declared mode and authority; it does not see the log bytes, observe
+  the pipeline handshake or resolve `authority_id`, and no artifact here carries the log.
+
+The outside-agent schemas' `acceptance_truth_owner` constant is a separate, older intake-surface
+token; it applies only to pipeline-mode intake and is not this evidence channel's `authority`.
+
+**Honest limit:** exit 0 shows that a command passed, not that it tests the criterion. The
+criterion-to-test link stays a human-made assertion. No live criterion pilot or producer exporter
+is claimed by this slice.
+
+**Completeness contradiction resolved:** the kind-alignment prose already described a missing
+acceptance observation as `unknown`; that is the intended acceptance behavior (sec 6's data-absence
+rule). The previous code's `unsupported` came from routing the criterion through completeness's
+no-realized-kind branch, where no evidence observation existed. Criteria now skip completeness and
+use this dimension. The kind-matching matrix itself and its version remain unchanged.
 
 ## 8. Waiver / suppression lifecycle
 
@@ -814,7 +951,7 @@ A certificate MUST pin (union of the Storage `certificates` record shape and Pha
   certificate over a non-reproducible `E(C)` is **advisory** (`ec_reproducible:false`) and not gating
   (Benchmark C: parity over non-reproducible `E(C)` is meaningless). **Measured or false** (ENG-1): `parity()` takes `ec_reproducible` as an input defaulting to `false`; only a
   producer that actually *measured* it — extracted `E(C)` twice with independent extractor invocations and
-  found the canonical bytes identical (`spec-engine/realized/reproducibility.py`, used by the live realized
+  found the canonical bytes identical (`src/spec_core/engine/realized/reproducibility.py`, used by the live realized
   drivers) — passes `true`. A PINNED `E(C)` may be `true` only by citing a committed **reproducibility
   attestation** (`schemas/ec-reproducibility-attestation.schema.json`): a recorded two-extraction
   measurement against the real source whose compared digest equals the digest of the exact `E(C)` being
@@ -835,9 +972,9 @@ A certificate MUST pin (union of the Storage `certificates` record shape and Pha
   stays valid *as a v1 record*; a v1 digest is never compared against a v2 digest; a mixed-`canon_version`
   graph is rejected at the consumer (never silently re-hashed). See `canon/SPEC.md` §9. Downstream
   consumers cut over to v2 wholesale (metadata-only notification; OPEN-5). Separately,
-  **`projection_algo_version` is `spec-engine-projection:v4`** since the 0.5.0 engine-contract
+  **`projection_algo_version` is `spec-engine-projection:v5`** since the 0.7.0 acceptance-evidence
   release (sec 9.2), under the same historical-cert policy.
-- **`overall_result_state`** + **`dimension_results`** (all five) — per sec 6. **Invariant:** these are
+- **`overall_result_state`** + **`dimension_results`** (all six in v5) — per sec 6. **Invariant:** these are
   byte-equal (after canon canonicalization) to the referenced `finding_set`'s `overall_result_state` /
   `dimension_results` — the certificate copies, never recomputes, them. An implementer derives the embedded
   copies from the `finding_set` at `findings_ref`; they must not drift.
@@ -867,6 +1004,18 @@ inputs (same `E(C)`, `S`, correspondence, kind-alignment, vocab, waivers, run) c
 algo versions as if they were the same function, and must not re-hash or re-grade a stored certificate under
 a newer version: a v1 certificate stays a valid **v1** record.
 
+The known versions are exactly `spec-engine-projection:v1` through `spec-engine-projection:v5`, listed
+below. The certificate and portal-payload schemas enumerate them, and the public verifier refuses any
+other version by name instead of checking it under another version's dimension rules.
+
+- **`spec-engine-projection:v5`** (0.7.0, acceptance evidence; certificate `schema_version` stays
+  `"2"`). Six dimensions, with authority-bearing acceptance results (sec 7.6); criteria no longer
+  contribute unsupported completeness checks. Every newly produced certificate and finding-set id
+  moves because the version and sixth dimension are hashed. E(C) uses the existing canon v2
+  semantic-content digest unchanged: adding or changing evidence, including authority or engagement,
+  moves `ec_digest`. An E(C) with no evidence and no other edit retains its digest. Re-pin generated
+  bundles, public manifest and active goldens in the same batch; stored v1-v4 certificates retain
+  their original bytes and five dimensions and remain readable without re-grading.
 - **`spec-engine-projection:v4`** (the 0.5.0 engine-contract release; certificate `schema_version` stays
   `"2"`, no certificate field changes). Every certificate digest changes (the version is in the
   preimage). Grading changes:
@@ -1025,7 +1174,7 @@ both resolve with only the rules in this document.
    not fail (allowed-freedom / idmodel body-only stability).
 6. **Closure (sec 7.3):** the operation's private helpers below the frontier are classified
    `refinement_below_frontier` (sec 3) → closure `pass`.
-7. **Overall (sec 6.4):** if all five dimensions are `pass`/`not_applicable` → `overall_result_state: pass` →
+7. **Overall (sec 6.4):** if all six dimensions are `pass`/`not_applicable` → `overall_result_state: pass` →
    **green** certificate.
 
 ---
@@ -1061,7 +1210,7 @@ Everything not listed here is fully pinned by this document + the three schemas 
 A **delivery** is the metadata-only, render-ready **projection of a certificate** that a consumer (the portal)
 renders. It is NOT the certificate, and NOT the finding_set — it is a redacted, content-addressed *summary*.
 
-Schema: `schemas/portal-payload.schema.json`. Producer: `spec-engine/deliver.py` (`project(certificate,
+Schema: `schemas/portal-payload.schema.json`. Producer: `src/spec_core/engine/deliver.py` (`project(certificate,
 finding_set) -> payload`), a pure deterministic function, canon-serialized and content-addressed.
 
 ### 12.1 Why two inputs (certificate AND finding_set)
@@ -1080,8 +1229,10 @@ The payload is built by **allowlist**: only known-safe fields are copied in. Not
   verify against the stored certificate by this digest (canon §9 verbatim replay; `OPEN-5` byte-match domain).
 - **`spec_revision_digest`, `desired_graph_digest`, `ec_digest`, `code_head_sha`, `ec_revision_id`** — the
   provenance pins. All are **digests/ids** — content-addressed, **not fetchable URLs** (SSRF-safe).
-- **`overall_result_state`** + **`dimension_results`** (all five, state-only) — for the badge and per-dimension
+- **`overall_result_state`** + **`dimension_results`** (all six in v5, state-only) — for the badge and per-dimension
   rendering. Copied verbatim from the certificate (never recomputed).
+  Acceptance additionally retains the authority-bearing `acceptance_results` metadata (sec 7.6),
+  including evidence digest refs, but never command argv, exit-code payloads or log bodies.
 - **`badge`** — a derived render hint, **green IFF `overall_result_state == pass`**. `not_applicable` is
   **neutral/non-green** (sec "never silently green" / line ~298), `fail`→failing, `unknown`/`unsupported`→
   non-green. The badge is a convenience; `overall_result_state` is the load-bearing truth.
@@ -1362,7 +1513,7 @@ checkpoints signed by a key the ledger writer does not hold (a tracked, cross-re
 ### 13.4 External freeze reference
 
 `authority_event_protocol.v1` is a **contract-owned** shape (`consiliency-contract`), vendored verbatim and
-digest-pinned here. A downstream **governed pipeline fail-close gate** consumes what delivery writes:
+digest-pinned here. A downstream **fail-close acceptance gate** consumes what delivery writes:
 `authority-event.json` (the stored, chain-appended ledger row) and `authority-event.schema.json` (a copy of
 the vendored protocol schema), next to `spec-certificate.json`. spec owns the verifying ingress, the
 append-only ledger, and the resolver semantics above; it does **not** own the signing key, the consumer

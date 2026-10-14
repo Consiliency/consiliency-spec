@@ -21,7 +21,8 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
+# Run by path, so sys.path[0] is already this directory and `canon` is its sibling canon.py, the
+# public byte mirror of src/spec_core/canon/canon.py.
 import canon  # noqa: E402
 
 # canon v2 is Unicode-DB-INDEPENDENT (NFC moved to the ingestion boundary), so there is no Unicode

@@ -3,6 +3,75 @@
 All notable changes to `@consiliency/spec` / `consiliency-spec` are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## 0.7.0 — acceptance evidence (projection v5), Python 3.12 or later
+
+Certificate `schema_version` stays `"2"`, canon-core stays `0.4.0`, and the outside-agent schemas and
+test vectors are unchanged. New certificates pin `spec-engine-projection:v5` and carry a sixth parity
+dimension, so every certificate, finding-set and payload digest differs from `0.6.x`. Stored v1-v4
+certificates keep their bytes and verify under the `0.7.0` verifier as five-dimension records.
+
+### Breaking
+
+- **Projection v5: a sixth dimension, `acceptance`** (`SEMANTICS.md` §7.6). It follows
+  `revision_alignment` in `dimension_results` and carries `acceptance_results`: one row per in-scope
+  acceptance criterion, sorted by `criterion_logical_id`, each with its result state, authority and
+  verdict role.
+- **Verifiers `0.6.0` and earlier refuse v5 certificates**, and so does any consumer that requires
+  exactly five dimensions. Upgrade verifiers and consumers before producers. A consumer that needs
+  acceptance results must require `spec-engine-projection:v5`.
+- **Python 3.12 or later** (was 3.10). pip will not install `0.7.0` on an older interpreter.
+- **Extracted-`E(C)` markers (input)** (`SEMANTICS.md` §0, §4.2). Without `extraction_coverage`, a
+  tree-sitter-chunker or baml capture stripped of its top-level markers (its nodes keep
+  `provenance.tsc_node_id`), a protobuf or baml extraction that keeps a top-level marker, and any `E(C)`
+  with a top-level `collapsed_boundary_ids` key are now refused. A hand-authored `E(C)` whose only
+  marker is `provenance.tsc_version` is no longer refused and grades on the `declared` basis.
+- **Bundled reference modules** moved to `consiliency_spec/_bundle/spec_core/` (`canon`, `graph`,
+  `idmodel`); `_bundle/idmodel/py/` and `_bundle/spec-graph/py/` are gone. `src/spec_core/canon/` is a
+  new public directory. Code that only calls `consiliency_spec.verify_certificate` is unaffected.
+
+### Added
+
+- **`E(C).acceptance_evidence`** (`ec.schema.json`): closed records with the criterion's engine join
+  id, argv, exit code (within canon's bare-integer domain), log SHA-256, producing mode, actual
+  pipeline engagement and a generic `authority` role: `producer` (the run that executed the command
+  owns its result) or `pipeline` (an external acceptance authority owns the truth and the result is
+  input to it). An optional `authority_id` names the concrete owner; it is copied and bound in
+  `record_digest`, never interpreted.
+- The certificate, portal-payload, result-state and waiver schemas enumerate the `acceptance`
+  dimension; new finding codes `acceptance_command_pass`, `acceptance_command_fail`,
+  `acceptance_unobserved` and `acceptance_pipeline_unengaged`. An unengaged `pipeline_required` record
+  grades `unknown` whatever the command exited.
+- **Verifier:** given the `E(C)`, every `acceptance_results` row must copy the record it names and the
+  rows must be strictly increasing by `criterion_logical_id` (check `acceptance_evidence`). An unknown
+  `projection_algo_version` is refused by name. The verifier does not re-derive acceptance scope: a
+  consumer that needs the full scope re-runs the engine.
+- **Release tooling:** `scripts/consiliency-spec/check_release.sh` runs a publish dry-run (wheel and
+  sdist built and version-checked, `npm publish --dry-run`), and `publish.yml` refuses a release tag
+  that does not match `package.json` and `pyproject.toml`.
+
+### Changed
+
+- Completeness no longer scores acceptance criteria; the acceptance dimension reports them. A graph
+  whose only completeness concern was a criterion can change completeness state.
+- `kind-alignment.json`: the criterion row points at the acceptance dimension (wording only;
+  `kind_alignment_version` stays `"1"`).
+- `docs/outside-agent-contract.md` scopes its acceptance-owner constant to pipeline-mode intake,
+  names no consumer in its normative text (the frozen v0.1 `governed_pipeline` token is unchanged),
+  states that the packages are published, and drops a reference to a file outside this repository
+  (wording only; the schemas and vectors are unchanged).
+- `spec-parity/schemas/portal-payload.schema.json`: its `description` names the producing module
+  `spec_core.engine.deliver` (wording only; no validation rule changes).
+- `test-vectors/certificate/pass-demo/` is regenerated as a v5 certificate.
+
+### Migration
+
+- Install the `0.7.0` verifier and v5-aware consumers first, then upgrade producers. Store the new
+  certificate and payload digests; do not compare them with `0.6.x` values.
+- Run on Python 3.12 or later.
+- Re-extract any extracted `E(C)` that lacks `extraction_coverage`, or attach a coverage record.
+- Import bundled reference modules from `consiliency_spec._bundle.spec_core` if you loaded them
+  directly.
+
 ## 0.6.0 — realized extraction with treesitter-chunker 5.3.0, the coverage-record requirement
 
 Certificate `schema_version` `"2"`, projection `spec-engine-projection:v4`, canon-core `0.4.0`, the
@@ -84,11 +153,15 @@ and no existing API changes. A `0.5.0` certificate verifies unchanged under `0.5
   text or bytes where you can: a parsed `dict` cannot show how a number was spelled.
 - **The `verify` extra**: `pip install "consiliency-spec[verify]"` adds `jsonschema>=4.18` and
   `unicodedata2==16.0.0`. `jsonschema` is always required (full schema validation). `unicodedata2` is
-  required only to bind a desired graph, which applies NFC under the pinned Unicode 16.0 database. A
-  missing dependency, a Unicode database other than 16.0, or a bundled module, schema or data file
-  whose bytes do not match the package manifest raises `VerifierUnavailable`. The verifier never
-  returns a verdict with a check skipped. The npm package has no verifier (there is no TypeScript
-  spec-graph port).
+  required only to bind a desired graph, which applies NFC under the pinned Unicode 16.0 database.
+  `VerifierUnavailable` is raised for a missing `jsonschema`, for a bundled module, schema or data file
+  whose bytes do not match the package manifest, and, only when a desired graph is supplied, for a
+  missing `unicodedata2` or a Unicode database other than 16.0. The verifier never returns a verdict
+  with a check skipped. The npm tarball carries the verifier's Python source
+  (`consiliency_spec/certificate_verifier.py`) as a public file, but there is no JavaScript verifier
+  (there is no TypeScript spec-graph port).
+- A dimension that records `checks_evaluated` must be `not_applicable` exactly when it evaluated no
+  check (§6.3); the verifier does not apply that rule to a dimension without the field.
 - The spec-graph and idmodel reference modules ship under `consiliency_spec/_bundle/`, digest-pinned in
   the manifest. The verifier loads them, with the bundled canon port, only after their sha256 matches
   the manifest, and computes the normalized desired-graph digest with them.

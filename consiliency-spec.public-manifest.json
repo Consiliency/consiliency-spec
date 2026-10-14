@@ -2,12 +2,12 @@
   "package": {
     "npm": "@consiliency/spec",
     "pypi": "consiliency-spec",
-    "version": "0.6.0"
+    "version": "0.7.0"
   },
   "public_files": [
     {
       "path": "canon/README.md",
-      "sha256": "d3c94e37d13a6f6bf68bf67b3197de425ca30071e6255baaa9bd406a6031cfb7"
+      "sha256": "7bf3792f600911b0cacc1241f96027cccbe52a6cd3115acabdba1a9bdf8bf004"
     },
     {
       "path": "canon/SPEC.md",
@@ -23,7 +23,7 @@
     },
     {
       "path": "canon/conformance/check.sh",
-      "sha256": "06c6c0a6d926c3f326871af11c636f29fc329230003543bf78dbf7bd0136d799"
+      "sha256": "93c58caa1d42ed7112623995e4864585a772edd99cbaa64794b5f11c0b4f885b"
     },
     {
       "path": "canon/conformance/check_dabi_cabi.sh",
@@ -35,7 +35,7 @@
     },
     {
       "path": "canon/conformance/check_xg4_canon_core.sh",
-      "sha256": "95cd70bc1cee7c99eca60249ff375df62e120f7373b38e472a7ec1787e739efc"
+      "sha256": "5af63b4301e9141eb6a2a5f61b973b17103df570d897d43c5fb49ebe129dfaaf"
     },
     {
       "path": "canon/conformance/emit_published_npm.mjs",
@@ -63,11 +63,11 @@
     },
     {
       "path": "canon/conformance/test_ingest_nfc.py",
-      "sha256": "c763561b935c4974e4e637f448523555e342eef18d6271054f785a3d8ffbb7ff"
+      "sha256": "f5de6db669469083166ff1ee7bb8845db38b260a053f6bb46a2d2039ef7f5aca"
     },
     {
       "path": "canon/conformance/test_unicode_skew.py",
-      "sha256": "5e1bbe79793a896a7a070da791131734377ba822c414c4effb85348d3dd339b3"
+      "sha256": "e58cb53b6bf226bf3de8268338d38dd3ceb3748f8d1c809fa47221acbe2144af"
     },
     {
       "path": "canon/conformance/wasm_surrogate_finding.mjs",
@@ -127,7 +127,7 @@
     },
     {
       "path": "canon/py/test_canon.py",
-      "sha256": "0c34e3d0ae0ad606239d19d404008fb186c6d11b3366223602e64b938ef18718"
+      "sha256": "a48c67f3a7225caaf380004a242ed5ab16301745bdae83eb7b0c7d6a2408e3a3"
     },
     {
       "path": "canon/ts/canon.test.ts",
@@ -143,7 +143,7 @@
     },
     {
       "path": "canon/vectors/gen_vectors.py",
-      "sha256": "842e1a973c1a0938af3083dd702aec67909ad4267e8b7a016dffb400681a42c6"
+      "sha256": "60966c144c92611eec8c483e309ded5e5a4f4edb80ddfbcb53760075158d2948"
     },
     {
       "path": "canon/vectors/gov-cross-repo-canon-vectors.PROVENANCE.md",
@@ -155,19 +155,43 @@
     },
     {
       "path": "consiliency_spec/__init__.py",
-      "sha256": "7d101e6bb8e3cf051d99568d3cf17c22747c0c9a074640b981b9f74123ab5396"
+      "sha256": "0c7467376be926ec4c3c8f7549dae3a4dfe5b635327618287d1c68550071074d"
     },
     {
-      "path": "consiliency_spec/_bundle/idmodel/py/idmodel.py",
-      "sha256": "0358a5bc6bb8106c696667f92dcc236a0a6a1b2d0bf1fe969e4b94aee22602f4"
+      "path": "consiliency_spec/_bundle/spec_core/__init__.py",
+      "sha256": "adf53266c1c4629ae4ce34c8d53c351c827c59dc26e6f20076c19b7d00b0e853"
     },
     {
-      "path": "consiliency_spec/_bundle/spec-graph/py/spec_graph.py",
-      "sha256": "962a896fe766892510d0872d7c38f5a4c012c16eee717873a20f4fcf22a1c886"
+      "path": "consiliency_spec/_bundle/spec_core/canon/__init__.py",
+      "sha256": "aea51da98e5bc45d765f6c344e1a9ed472b1168a57a611a45b414cb9ef52eb9b"
+    },
+    {
+      "path": "consiliency_spec/_bundle/spec_core/canon/canon.py",
+      "sha256": "c7baf9db1c8835c1aad547b0d6b9e977c6ce9970d34e91df37bd2641d69cfb22"
+    },
+    {
+      "path": "consiliency_spec/_bundle/spec_core/canon/canon_ingest.py",
+      "sha256": "bd4cf1cc93cf2fe26af87e005f507661ba7f376f1e0bf1c65c2d3725589def74"
+    },
+    {
+      "path": "consiliency_spec/_bundle/spec_core/graph/__init__.py",
+      "sha256": "91cd1c72f58c7f25378fbd20c2a2c28e165b9d95d74fa9af01bbbd765c9124a9"
+    },
+    {
+      "path": "consiliency_spec/_bundle/spec_core/graph/spec_graph.py",
+      "sha256": "bf7c5d8228deac1bb32f156b65a3f1fff9f11800e1fd8ef667e3cfd8f5c166a0"
+    },
+    {
+      "path": "consiliency_spec/_bundle/spec_core/idmodel/__init__.py",
+      "sha256": "3c5b081522f1f213e00b99abcfa009b529769fa786bb0305077a4bceb51a76b1"
+    },
+    {
+      "path": "consiliency_spec/_bundle/spec_core/idmodel/idmodel.py",
+      "sha256": "9007f100e74ede21434b5c827daad9e5cb4438c49396f5547528eb9ac69bd827"
     },
     {
       "path": "consiliency_spec/certificate_verifier.py",
-      "sha256": "a62d41742dd018e6e5f8fcc20e92dd6ca03a7ed495557b80f3d89cdba2ce216d"
+      "sha256": "f2a9e8ff8eaaa41c52f04caf48aec124965cd051bbdfa21755b2ad868ca8e524"
     },
     {
       "path": "consiliency_spec/outside_agent_router.py",
@@ -179,7 +203,7 @@
     },
     {
       "path": "docs/outside-agent-contract.md",
-      "sha256": "38ea65a6dbb8759b86cb8d8a1dd9f7e2c152ee9fd12851f4b713dfbb948c3ed3"
+      "sha256": "019c37356ca7472264de04ebabf84588208d94a09617b44f380a9f27c6b99d71"
     },
     {
       "path": "idmodel/correspondence/schema.json",
@@ -211,11 +235,11 @@
     },
     {
       "path": "spec-parity/SEMANTICS.md",
-      "sha256": "24126b047689d471c09d959935cac55adbaa2dee81cf040cd056748680510b25"
+      "sha256": "ef1495adec117fda56332dfd886fac9464fdc76b864b2716d5ee463de05e2244"
     },
     {
       "path": "spec-parity/conformance/check.sh",
-      "sha256": "4b7ac71d49734197be9fdf8f2c1a396893509ec6ea262f3546bb95e99c988477"
+      "sha256": "1ea6667bfc838887ec5a71fb840bf590f0663e87a3a9eab9c7eb2ac5b0c5fe1c"
     },
     {
       "path": "spec-parity/conformance/check_xg0_envelope.sh",
@@ -223,7 +247,7 @@
     },
     {
       "path": "spec-parity/kind-alignment.json",
-      "sha256": "01f6477fb73d2368cd1a74c78315a4ff16d327f226ad3682e9ae36673c352f14"
+      "sha256": "828cebaca779678cf7b954ec91c1ae4673792c9db216569e6d57ff50de3dc652"
     },
     {
       "path": "spec-parity/permitted-freedom-vocab.json",
@@ -231,7 +255,7 @@
     },
     {
       "path": "spec-parity/schemas/certificate.schema.json",
-      "sha256": "27a05b3d712f5cf95953ffe63fcd9a4cc7d0e42acd5a2a9479f7d243d286833d"
+      "sha256": "7563893b1e2f72daceda903d28ccafcb0484a262fd5f84597b9636478c76adc9"
     },
     {
       "path": "spec-parity/schemas/ec-reproducibility-attestation.schema.json",
@@ -239,7 +263,7 @@
     },
     {
       "path": "spec-parity/schemas/ec.schema.json",
-      "sha256": "9b4de9932605adef97fb4a523e7f860527b55755998d852be5cdb3240f37fe02"
+      "sha256": "bbff69ea33143f11aac644bf663e0d92f5d70d888262119bb879499772ace14e"
     },
     {
       "path": "spec-parity/schemas/kind-alignment.schema.json",
@@ -251,11 +275,11 @@
     },
     {
       "path": "spec-parity/schemas/portal-payload.schema.json",
-      "sha256": "49ff60e3fe81e86fd6ff5685577bd414c593e652ac81aff1f5b32fee8badde58"
+      "sha256": "12529f4359d03cc4478dc42dae6e4672f9a4efe85257d362766cb637ff192c0f"
     },
     {
       "path": "spec-parity/schemas/result-state.schema.json",
-      "sha256": "9058331454eedfe081fe646a5ec4bd81db72b2da9d19f6e3e82dbee4d7fec6b2"
+      "sha256": "ba630803ea489cd15b1be8c3857f3378114a477bd6cb383ee552b703f038b9fb"
     },
     {
       "path": "spec-parity/schemas/run-descriptor.schema.json",
@@ -263,7 +287,23 @@
     },
     {
       "path": "spec-parity/schemas/waiver.schema.json",
-      "sha256": "179a0ecf81b20d8a31f44dd1b21c8778fa2cd32bb2c3aa04949ee03cc7631ac4"
+      "sha256": "f541b78af044017cfbc23992be59676fe1250eec7af6fe63961c56f2c093c310"
+    },
+    {
+      "path": "src/spec_core/__init__.py",
+      "sha256": "adf53266c1c4629ae4ce34c8d53c351c827c59dc26e6f20076c19b7d00b0e853"
+    },
+    {
+      "path": "src/spec_core/canon/__init__.py",
+      "sha256": "aea51da98e5bc45d765f6c344e1a9ed472b1168a57a611a45b414cb9ef52eb9b"
+    },
+    {
+      "path": "src/spec_core/canon/canon.py",
+      "sha256": "c7baf9db1c8835c1aad547b0d6b9e977c6ce9970d34e91df37bd2641d69cfb22"
+    },
+    {
+      "path": "src/spec_core/canon/canon_ingest.py",
+      "sha256": "bd4cf1cc93cf2fe26af87e005f507661ba7f376f1e0bf1c65c2d3725589def74"
     },
     {
       "path": "test-vectors/certificate/manifest.json",
@@ -271,11 +311,11 @@
     },
     {
       "path": "test-vectors/certificate/pass-demo/certificate.json",
-      "sha256": "f89020548c7b89542dea004177df6587d13ec1bdbb33dafb68b87e205b8c5ad3"
+      "sha256": "3d936df45ad4eedff2e773cb943871872c69445e7dcecb4b5d6434f4cbbdc599"
     },
     {
       "path": "test-vectors/certificate/pass-demo/certificate.tampered-verdict.json",
-      "sha256": "c2e28c8ad122bfcdea4aaa18779668c948642eda45fae4b94a6d71a3d9aaf92f"
+      "sha256": "6be09a7cf7b71c315401f9f8851598d6a9410c4f586dbf9c2df61d581abf4a90"
     },
     {
       "path": "test-vectors/certificate/pass-demo/desired-graph.json",
@@ -287,15 +327,15 @@
     },
     {
       "path": "test-vectors/certificate/pass-demo/finding-set.json",
-      "sha256": "074e9de336448605eaacff758f3fcbaf22b4a32d58703258c63065e768461264"
+      "sha256": "ad43fbfa8a1afa62d544256e19f00cba6cc2e8cd3735e1f0349a9fc24a3d5aa2"
     },
     {
       "path": "test-vectors/certificate/pass-demo/payload.json",
-      "sha256": "d1baca45c14d815b038f172129bbb5a60f3b7278a7071c6ed39cf8320cb1c980"
+      "sha256": "a31becd4654947ebf18b747227443ff69965f1682035e140eaa4b0e5be864366"
     },
     {
       "path": "test-vectors/certificate/pass-demo/payload.tampered-summary.json",
-      "sha256": "84873de0d285db4c7b0dcf45035eea3d01c8aebcd6822561ddccb2ff2e25ba6d"
+      "sha256": "f54c4045b9cf04061d927e09dd09ac8497d755194efb7bad97bd5bb547ed83a8"
     },
     {
       "path": "test-vectors/outside-agent/invalid-empty-evidence-refs.json",

@@ -3,7 +3,7 @@
 Expected canonical bytes (base64) and digest (hex) are GENERATED here, never hand-authored, then
 pinned. The TypeScript port must reproduce them byte-for-byte. Run:
 
-    python3 canon/vectors/gen_vectors.py
+    PYTHONPATH=src python3 canon/vectors/gen_vectors.py
 """
 
 import base64
@@ -11,10 +11,11 @@ import json
 import os
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, "..", "py"))
+# The spec_core package (src/spec_core/canon, byte-mirrored at canon/py): run with src/ as the import
+# root, which canon/conformance/check.sh exports.
+from spec_core.canon import canon
 
-import canon  # noqa: E402
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def _nested(depth, kinds=("arr",), leaf=None):
@@ -477,7 +478,7 @@ def main(argv=None):
             committed = f.read()
         if committed != text:
             sys.stderr.write("FAIL: %s is not the output of gen_vectors.py — regenerate it "
-                             "(python3 canon/vectors/gen_vectors.py) and commit.\n" % path)
+                             "(PYTHONPATH=src python3 canon/vectors/gen_vectors.py) and commit.\n" % path)
             return 1
         print("canon-vectors.json is the generator's output (%d vectors)" % text.count('"name":'))
         return 0

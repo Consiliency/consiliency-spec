@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://spec.consiliency/spec-parity/portal-payload.schema.json",
   "title": "Delivery / portal payload (Phase 0C) — metadata-only certificate projection",
-  "description": "v0 DRAFT — pending portal co-design sign-off (the portal repo is FENCED; freeze after Wave-B review). The render-ready, METADATA-ONLY projection of a parity certificate + finding SUMMARIES that a consumer (the portal) renders. It is NOT the certificate and NOT the finding_set: it is a redacted, content-addressed summary produced by spec-engine/deliver.py via project(certificate, finding_set) -> payload (SEMANTICS.md sec 12). Built by ALLOWLIST: only the fields named here are copied in. It carries NO raw evidence, NO source text, NO secrets, NO finding `message`, and NO fetchable internal URLs — every ref is a digest/id, never an http(s) URL the portal would fetch (SSRF-safe). It is a DIGEST-BEARING record: its top-level `digest` is the canon `semantic-content` digest with `digest` excluded from its own preimage (canon sec 8) — no new canon profile is introduced. NO JSON FLOATS. See SEMANTICS.md sec 12 + OPEN-5.",
+  "description": "v0 DRAFT — pending portal co-design sign-off (the portal repo is FENCED; freeze after Wave-B review). The render-ready, METADATA-ONLY projection of a parity certificate + finding SUMMARIES that a consumer (the portal) renders. It is NOT the certificate and NOT the finding_set: it is a redacted, content-addressed summary produced by spec_core.engine.deliver via project(certificate, finding_set) -> payload (SEMANTICS.md sec 12). Built by ALLOWLIST: only the fields named here are copied in. It carries NO raw evidence, NO source text, NO secrets, NO finding `message`, and NO fetchable internal URLs — every ref is a digest/id, never an http(s) URL the portal would fetch (SSRF-safe). It is a DIGEST-BEARING record: its top-level `digest` is the canon `semantic-content` digest with `digest` excluded from its own preimage (canon sec 8) — no new canon profile is introduced. NO JSON FLOATS. See SEMANTICS.md sec 12 + OPEN-5.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -40,7 +40,8 @@
     },
     "projection_algo_version": {
       "type": "string",
-      "description": "P/N projection+parity algorithm version, copied from the certificate (currently `spec-engine-projection:v4`). Pins reproducibility of the underlying result."
+      "enum": ["spec-engine-projection:v1", "spec-engine-projection:v2", "spec-engine-projection:v3", "spec-engine-projection:v4", "spec-engine-projection:v5"],
+      "description": "P/N projection+parity algorithm version, copied from the certificate (currently `spec-engine-projection:v5`). Pins reproducibility of the underlying result. Only the known versions v1-v5 are valid (SEMANTICS.md sec 9.2)."
     },
     "canon_version": { "type": "string", "description": "canon contract version, copied from the certificate." },
     "idmodel_version": { "type": "string", "description": "idmodel contract version, copied from the certificate." },
@@ -86,7 +87,7 @@
     "dimension_results": {
       "type": "array",
       "minItems": 5,
-      "maxItems": 5,
+      "maxItems": 6,
       "description": "Per-dimension states (state-only), copied verbatim from the certificate for at-a-glance rendering. Exactly one entry per parity_dimension.",
       "items": {
         "type": "object",
@@ -95,7 +96,8 @@
         "properties": {
           "dimension": { "$ref": "result-state.schema.json#/$defs/parity_dimension" },
           "result_state": { "$ref": "result-state.schema.json#/$defs/result_state" },
-          "checks_evaluated": { "type": "integer", "minimum": 0, "description": "Optional count, copied from the certificate's dimension_result if present. A metadata count, not evidence." }
+          "checks_evaluated": { "type": "integer", "minimum": 0, "description": "Optional count, copied from the certificate's dimension_result if present. A metadata count, not evidence." },
+          "acceptance_results": { "type": "array", "items": { "$ref": "result-state.schema.json#/$defs/acceptance_result" }, "description": "Authority-bearing command states copied from the certificate. Never omit the authority when displaying acceptance." }
         }
       }
     },
