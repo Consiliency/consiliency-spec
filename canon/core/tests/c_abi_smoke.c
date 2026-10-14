@@ -1,4 +1,4 @@
-/* C-ABI smoke test for the canon-core `c-binding` feature (DABI / IF-0-DABI-1).
+/* C-ABI smoke test for the canon-core `c-binding` feature (the frozen C ABI).
  *
  * Proves the extern "C" surface is byte-identical to the engine by round-tripping a corpus vector
  * (object-keys-sorted) through the C ABI and asserting the canonical bytes + digest match the pinned

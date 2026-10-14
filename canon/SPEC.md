@@ -1,7 +1,7 @@
 # canon v2 — Canonical Serialization + Content-Addressing Contract
 
 Status: **NORMATIVE**, frozen for v2. Owned by `spec` (Consiliency). This is the foundational
-content-addressing contract (**S1**) on which the rest of the engine builds.
+content-addressing contract on which the rest of the engine builds.
 
 > **canon v1 → v2 (NFCBOUNDARY).** v2 is identical to v1 except that mandatory Unicode **NFC is no
 > longer applied inside `canonical_bytes`** — it relocated to the **ingestion boundary** (callers
@@ -443,7 +443,7 @@ ingest tests prove NFC enforcement actually lives at the boundary and that its p
 If any vector cannot be made byte-identical across languages, that is a contract defect to be
 reported and fixed — never papered over.
 
-## 12. canon-core API freeze (IF-0-XG4-1)
+## 12. canon-core API freeze
 
 `canon/core` is the single portable implementation of the canon v2 algorithm. The frozen core
 surface is:
@@ -499,13 +499,16 @@ removing a vendored implementation.
   to the ingest tests, and the digest prefix bumped `v1`→`v2` (§8). The pin **relocated, it did not
   vanish** — a deterministic Unicode DB is still required at ingest for cross-language NFC. See §5, §8,
   §9 (historical-cert policy).
-- **`idmodel` boundary-id NFC (follow-on, NOT addressed here).** Removing canon's in-hash NFC *unmasks*
-  `idmodel`'s own NFC: `idmodel/py/idmodel.py` normalizes occurrence-id content with **stdlib**
-  `unicodedata` (host-CPython Unicode version), and under v1 canon (unicodedata2 16.0) re-normalized that
-  content so canon was authoritative. Under v2 canon no longer re-NFCs, so idmodel's stdlib NFC becomes
-  authoritative for occurrence-ids — a possibly-unpinned Unicode dependency. All committed idmodel content
-  is NFC-invariant (verified), so no current artifact is affected; harmonizing idmodel onto the same
-  pinned ingest normalizer is a named follow-on, out of NFCBOUNDARY's "NFC placement only" scope.
+- **`idmodel` boundary-id NFC (RESOLVED: pinned).** Removing canon's in-hash NFC *unmasked* `idmodel`'s
+  own NFC, which at the time used the host interpreter's stdlib `unicodedata`. That is no longer the case:
+  `idmodel` (the `spec_core.idmodel.idmodel` module, shipped in the public package as
+  `consiliency_spec/_bundle/spec_core/idmodel/idmodel.py`) normalizes under the **same pinned Unicode
+  version** as the ingest boundary (`PINNED_UNICODE = "16.0"`, the ingest boundary's `EXPECTED_UNICODE`).
+  It resolves that database itself: the `unicodedata2` backport when it reports 16.0, else the stdlib
+  `unicodedata` only when the stdlib already reports 16.0, else none, in which case a pure-ASCII
+  identifier still packs (NFC is the identity on ASCII under every Unicode version) and a non-ASCII one
+  is refused (`IdModelError`) instead of hashing a host-dependent id. So a logical id never depends on
+  the host interpreter's Unicode version.
 - **Unicode DB version skew (0A). — RESOLVED (2026-06).** Previously: Python stdlib `unicodedata` (13.0.0 on
   CPython 3.10) vs Node Unicode 16.0, leaving a determinism hole for identifiers using codepoints assigned
   *after* Unicode 13 (their NFC could differ between ports). Resolution (canon v1; the pin now lives at the

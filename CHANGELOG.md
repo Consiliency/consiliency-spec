@@ -3,6 +3,51 @@
 All notable changes to `@consiliency/spec` / `consiliency-spec` are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## 0.7.1 — the verifier's acceptance-scope check, a stricter `authority_id` pattern
+
+A patch on `0.7.0`. Projection `spec-engine-projection:v5`, certificate `schema_version` `"2"`,
+canon-core `0.4.0` and the outside-agent schemas and test vectors are unchanged, and no certificate,
+finding-set or payload digest moves. Public manifest rows move for the files listed below.
+
+### Added
+
+- **Verifier check `acceptance_scope`.** When `desired_graph=` is supplied and the certificate has an
+  `acceptance` dimension, every `acceptance_results` row must name an `acceptance_criterion` of `S'`
+  (its idmodel engine join id over `S'`'s hashed content). A row with no `E(C)` record carries nothing
+  the `acceptance_evidence` check can compare, so without this check a re-hashed certificate with an
+  added no-record row for a criterion `S` does not have verified. Without `S'` that gap remains
+  (`SEMANTICS.md` §7.6); which in-scope criteria have rows is still not checked.
+
+### Changed
+
+- **`authority_id` pattern** (`ec.schema.json`, `result-state.schema.json`): it now ends in the
+  lookahead `(?![\s\S])` instead of `$`, which anchors the true end of the string in both Python `re`
+  and ECMA-262 (`u` flag), so a trailing newline is refused. Validating with these schemas needs a
+  regex engine that supports lookahead; an RE2-based validator cannot compile the pattern.
+- **Removed `spec-parity/conformance/check.sh`** from this repository and the packages. It needs engine
+  files that are not public, so it could not run here. `spec-parity/conformance/check_xg0_envelope.sh`
+  stays. The manifest now pins **98 files** (was 99).
+- **Documentation** (wording only): `canon/SPEC.md` states that idmodel normalizes under the pinned
+  Unicode 16.0 database (`unicodedata2`, or the standard library only when it already reports 16.0;
+  otherwise non-ASCII input is refused with `IdModelError`); `SEMANTICS.md` §4.2 keeps the global
+  coverage rule as the v5 rule (a finer rule could only arrive in v6 or later) and §12 names the public
+  delivery projection mirror; internal planning references are removed from `canon/README.md`,
+  `canon/SPEC.md`, `SEMANTICS.md`, the spec-parity and spec-graph schema descriptions,
+  `kind-alignment.json` notes (`kind_alignment_version` stays `"1"`) and canon-core source comments.
+
+### Fixed
+
+- The reference engine refuses a lone surrogate in an acceptance evidence record's `argv` at `E(C)`
+  validation, as an input error (`SEMANTICS.md` §7.6).
+- `canon/conformance/test_unicode_skew.py` no longer depends on the working directory.
+
+### Migration
+
+- Upgrade the verifier to `0.7.1` to get `acceptance_scope`, and pass `desired_graph=` where you hold
+  `S'`.
+- Use a JSON Schema validator whose regex engine supports lookahead.
+- Re-record any per-file digests you pin; drop `spec-parity/conformance/check.sh` from any file list.
+
 ## 0.7.0 — acceptance evidence (projection v5), Python 3.12 or later
 
 Certificate `schema_version` stays `"2"`, canon-core stays `0.4.0`, and the outside-agent schemas and

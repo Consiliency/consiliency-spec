@@ -151,7 +151,7 @@ The result of `P` is a **projection**: for each in-scope `d`, a `match` record =
 realized_occurrences[], match_origin (correspondence|logical_id|none), confidence}` — confidence as a
 string-decimal.
 
-**Correspondence-entry resolution (ENG-3).** A map entry is parity-bearing only if
+**Correspondence-entry resolution.** A map entry is parity-bearing only if
 it *resolves*. Each match record carries `correspondence_status` (and the entry's
 `correspondence_lifecycle` when there is exactly one entry):
 
@@ -272,7 +272,7 @@ A violating fact always wins (a single observed violation is `fail` even on part
 violation is `pass` **only** under full coverage; otherwise `unknown`. This is the construction that makes
 "unobservable → unknown" enforceable rather than aspirational.
 
-**Coverage is MEASURED, not declared (ENG-6; projection v2).** `coverage(D, E(C))` is
+**Coverage is MEASURED, not declared (projection v2).** `coverage(D, E(C))` is
 `full` iff **both**:
 
 1. **declared:** the extractor models the domain *type* at all — `D.type ∈ E(C).modeled_domains.full_coverage`
@@ -386,11 +386,13 @@ file was extracted) is sound **only under adapter preconditions the shipped extr
 meet**: an edge's existence and call token must be a function of its call-site file's bytes alone,
 parents must be same-file, semantic paths must be file-qualified, and unextracted paths must share the
 node files' path space. Same-file parents and NFC unextracted paths hold since 0.6.0; edge anchoring,
-deduplication and self-edge dropping do not. The 0.6.0 board review rejected such a rule (projection v5) on executed
+deduplication and self-edge dropping do not. The 0.6.0 board review rejected such a rule on executed
 counterexamples: under treesitter-chunker 5.3.0 a same-stem file can steal an edge's anchor, edges are
 deduplicated and self-resolved edges dropped across files, so another file can decide whether a governed
 forbidden call exists; a forbidden token may also match the boundary-id grammar. The global rule therefore
-stays (projection v4), and a partial or unmeasured extraction never yields a prohibition `pass`.
+stays as shipped (it is the rule of the current acceptance projection, v5), and a partial or unmeasured
+extraction never yields a prohibition `pass`. A finer rule could only arrive as a future projection version
+(v6 or later), once the extractor meets those preconditions.
 
 ### 4.3 Prohibitions the extractor cannot observe
 
@@ -471,7 +473,7 @@ therefore asserts the scanned domain is **non-empty** (at least one in-domain ed
 if the domain descriptor names `edge_types` that match no in-scope edge at all, the domain is not actually
 observed and the prohibition is `unknown` (`prohibition_unobservable`), not a silent `pass`.
 
-**Extraction coverage caps the scan (ENG-6).** Token observability is necessary, not sufficient: over a
+**Extraction coverage caps the scan.** Token observability is necessary, not sufficient: over a
 measured-partial or unmeasured extraction (sec 4.2) an unextracted file may hold a governed body or a violating
 call, so the scan's coverage is capped at `partial` and a clean scan is `unknown`. An observed forbidden token
 is still `fail`.
@@ -524,7 +526,7 @@ pins the handling rules.
 
 Greenfield's node-`kind` values are now reconciled against the **published closed set** in
 the greenfield producer's `interface_boundary.py` (`SYMBOL_NODE_KINDS = frozenset({module, class, interface, struct,
-trait, function, method})`), confirmed via `IF-0-PUBKINDS-1`. The greenfield rows in `kind-alignment.json` are
+trait, function, method})`), as confirmed against that producer's published set. The greenfield rows in `kind-alignment.json` are
 flagged `CONFIRMED` and cover **exactly** that set. Versus the prior NodeKind proxy this **added
 `struct`** (greenfield emits it for Go/Rust record types — `struct → type`, mirroring the tsc-source `struct →
 type` and protobuf `message → type` rows) and **dropped the dead `field`/`property` rows** (greenfield never
@@ -606,7 +608,7 @@ vacuous-by-construction. `N` short-circuits: every dimension is `not_applicable`
 `not_applicable`, and a `vacuity` record (`is_vacuous`, `reason: no_kind_aligned_realized_boundary`,
 `realized_boundary_count`, `kind_aligned_realized_count: 0`) is pinned in the finding_set and the certificate.
 
-**Partial coverage and the tripwire (ENG-6, v2).** A partial extraction that still yields real code is **not**
+**Partial coverage and the tripwire (v2).** A partial extraction that still yields real code is **not**
 vacuous — there is code, and observed violations in it are real — so the tripwire does not fire on partial
 coverage alone; instead sec 4.2 degrades every absence-based claim to `unknown` and pins the coverage summary
 on the certificate, so no partial run can certify `pass` on a universal claim. When the tripwire *does* fire
@@ -748,8 +750,10 @@ floats, booleans and integers outside that domain are rejected. Log bodies are n
 `pipeline_mode` is `standalone`, `pipeline_optional` or `pipeline_required`; `pipeline_engaged`
 records whether an external acceptance pipeline actually engaged on this run. `authority` is a
 generic role, never a product name (next table). `authority_id` is an optional producer-declared
-name for the concrete owner, matching `^[a-z0-9][a-z0-9._/-]{0,127}$` (for example `agent-harness`,
-`example-ci` or another CI system's name). spec never interprets `authority_id`: it only copies it
+name for the concrete owner (for example `agent-harness`, `example-ci` or another CI system's name).
+The WHOLE string must match `[a-z0-9][a-z0-9._/-]{0,127}`, so a trailing newline is refused (the
+schemas end the pattern with `(?![\s\S])` rather than `$`, which Python's `re` also lets match before
+a final newline). spec never interprets `authority_id`: it only copies it
 into the result and binds it through `record_digest`. The stdlib `validate_ec` is at least as strict
 as the schema on record shape and authority consistency, and the engine fails closed; engine entry
 also rejects duplicate criterion records and ids that do not name an `acceptance_criterion` in S,
@@ -767,7 +771,9 @@ criterion id, result state, authority, verdict role and, when observed, mode, ac
 `authority_id` (exactly when the record has one) and `record_digest` (canon semantic-content digest
 of the exact evidence record, so `authority_id` is bound by it). An unknown result with no record has
 null authority and role `unobserved`, with no fabricated producing mode, engagement or
-`authority_id`. An `acceptance_pipeline_unengaged` result does have a record, so it keeps the
+`authority_id`. Such a row copies no record, so only the desired graph can show that its criterion
+is not an `acceptance_criterion` of S; a verifier holding S refuses it (the reference verifier's
+`acceptance_scope` check). An `acceptance_pipeline_unengaged` result does have a record, so it keeps the
 table's authority and role below (`pipeline`, `pipeline_input`) together with
 `pipeline_mode: pipeline_required`, `pipeline_engaged: false`, the record's `authority_id` if any and
 its `record_digest`; only its state is `unknown`. A `finding_id` covers dimension, state, code and
@@ -864,7 +870,7 @@ This mirrors the `unknown` philosophy: never overwrite "we don't know / it faile
   it **stops suppressing** — the finding gates again. "After" is decided against the run descriptor's
   deterministic **`as_of`** date (`schemas/run-descriptor.schema.json`, `YYYY-MM-DD`), never the wall clock:
   a waiver with `expiry < as_of` is expired; `expiry == as_of` still suppresses (end-of-day). A run that
-  supplies waivers **must** carry `as_of` — the engine refuses to evaluate waivers without it (ENG-2).
+  supplies waivers **must** carry `as_of` — the engine refuses to evaluate waivers without it.
 - **approver_ref** — a reference to the governance approval (ratification id / portal governance_event_id),
   not a name/timestamp. Wall-clock of approval is provenance → `locator` (non-hashed, canon sec 10).
 - **waiver_id** — canon `semantic-content` digest over the hashed content fields. Identifies the waiver by
@@ -930,8 +936,8 @@ A certificate MUST pin (union of the Storage `certificates` record shape and Pha
   Any one alone is insufficient: the graph digest excludes `spec_revision_id` and the draft markers. (Schema-1 certificates carried the canon digest of the
   **raw** `S`, envelope included.)
 - **`spec_authority`** — `grounded` or `draft` (AUTH-1), hashed and always present:
-  `grounded` iff the anti-vacuity predicate `is_authoritative(S)` holds (sec 0 / brownfield
-  IF-0-BOOT-1: at least one `contract`/`architecture` node whose effective provenance origin is
+  `grounded` iff the anti-vacuity predicate `is_authoritative(S)` holds (sec 0 / the brownfield
+  bootstrap freeze: at least one `contract`/`architecture` node whose effective provenance origin is
   `human_authored` and that is not marked `unratified`), else `draft` (a code-, doc- or LLM-derived,
   never-ratified `S`). It is derived from the provenance envelope that `desired_graph_digest`
   excludes, which is why it is pinned as its own field: ratifying `S` moves the certificate through
@@ -949,7 +955,7 @@ A certificate MUST pin (union of the Storage `certificates` record shape and Pha
 - **`ec_digest`** + **`ec_reproducible`** — the `E(C)` digest and whether it is byte-reproducible
   (both required). A
   certificate over a non-reproducible `E(C)` is **advisory** (`ec_reproducible:false`) and not gating
-  (Benchmark C: parity over non-reproducible `E(C)` is meaningless). **Measured or false** (ENG-1): `parity()` takes `ec_reproducible` as an input defaulting to `false`; only a
+  (Benchmark C: parity over non-reproducible `E(C)` is meaningless). **Measured or false**: `parity()` takes `ec_reproducible` as an input defaulting to `false`; only a
   producer that actually *measured* it — extracted `E(C)` twice with independent extractor invocations and
   found the canonical bytes identical (`src/spec_core/engine/realized/reproducibility.py`, used by the live realized
   drivers) — passes `true`. A PINNED `E(C)` may be `true` only by citing a committed **reproducibility
@@ -1039,11 +1045,11 @@ other version by name instead of checking it under another version's dimension r
     (sec 5, no version bump).
 - **`spec-engine-projection:v3`** (the authority-in-certificate release, certificate `schema_version`
   `"2"`). Every certificate digest changes (the version and the new fields are in the preimage); no
-  committed `result_state` or finding changed. The first five grading changes below (ENG-5,
-  D2, ENG-7, ENG-8, ENG-4) already shipped in code that still stamped `v2`, so certificates graded by
+  committed `result_state` or finding changed. The first five grading changes below (absent
+  signatures, `kind_mismatch`, unknown selectors, entry validation, closure scope) already shipped in code that still stamped `v2`, so certificates graded by
   that code cannot be told apart by version; they are versioned here. The graded view is new in this
   release:
-  - **ENG-5 absent signatures** (sec 7.2): a desired element that declares no signature passes the signature
+  - **Absent signatures** (sec 7.2): a desired element that declares no signature passes the signature
     comparison, except an `operation` matched to a realized signature, which is `unknown
     signature_undeclared`; a declared signature over a realized fact that carries none is `unknown
     signature_unobservable` (all were `fail structural_mismatch`).
@@ -1055,10 +1061,10 @@ other version by name instead of checking it under another version's dimension r
     signatureless realized kind that aligns to `component`. No committed run has such a pair, but new
     inputs can. The old sec 2 text graded a non-aligning correspondence `unknown
     ambiguous_kind_alignment`; it is now `fail` unless the realized kind is genuinely ambiguous.
-  - **ENG-7** (sec 1.2): an unknown `frontier_selector` name refuses the run (was dropped silently); the
+  - **Unknown selectors** (sec 1.2): an unknown `frontier_selector` name refuses the run (was dropped silently); the
     default closure keeps only capability/component/interface/operation nodes.
-  - **ENG-8** (sec 0): `S` and `E(C)` are validated at engine entry and an invalid input refuses the run.
-  - **ENG-4** (sec 7.3): closure's scope is documented; the unreachable `unclassified_realized_fact` branch is
+  - **Entry validation** (sec 0): `S` and `E(C)` are validated at engine entry and an invalid input refuses the run.
+  - **Closure scope** (sec 7.3): closure's scope is documented; the unreachable `unclassified_realized_fact` branch is
     removed. No output changes.
   - **The graded view** (sec 9): `P`/`N` grade `spec_graph.hashed_content(S)`, the preimage of
     `desired_graph_digest`, instead of the raw `S`. Consequences: strings are compared after Unicode
@@ -1071,16 +1077,16 @@ other version by name instead of checking it under another version's dimension r
     (was the raw-`S` canon digest), so `spec_revision_digest` moves with it; `ec_reproducible` is a
     required certificate field. Delivery refuses a `draft` certificate without an explicit opt-in
     (sec 12.6).
-- **`spec-engine-projection:v2`** (with ENG-6 measured coverage and REAL-6 protobuf nested/map/oneof). Every certificate digest changes (the version is in the preimage). Grading changes
+- **`spec-engine-projection:v2`** (with measured coverage and REAL-6 protobuf nested/map/oneof). Every certificate digest changes (the version is in the preimage). Grading changes
   relative to the last v1 code:
-  - **ENG-3 correspondence lifecycle** (shipped under v1 and only now versioned): an `ambiguous` entry is completeness `unknown`; `deleted` is `fail correspondence_deleted`
+  - **Correspondence lifecycle** (shipped under v1 and only now versioned): an `ambiguous` entry is completeness `unknown`; `deleted` is `fail correspondence_deleted`
     (even when its boundary is absent); two or more entries for one desired node are `unknown
     correspondence_duplicate` (never last-wins); a dangling entry is `unknown correspondence_unresolved`
     (was `fail missing_desired_element`).
   - **`superseded` is present** (the projection-v2 ruling, sec 2): soundness grades the changed
     signature; completeness no longer fails it (`correspondence_superseded` is retired). Absent boundary →
     `dangling` → `unknown`.
-  - **ENG-6 measured coverage** (sec 4.2): coverage is declared ∧ measured; a measured-partial or unmeasured
+  - **Measured coverage** (sec 4.2): coverage is declared ∧ measured; a measured-partial or unmeasured
     extraction makes prohibition no-violation `unknown`, completeness absence `unknown`
     (`desired_element_unobservable`), adds `closure_extraction_partial` (`unknown`), and pins
     `extraction_coverage` on the finding_set / certificate / vacuity record.
@@ -1094,8 +1100,8 @@ other version by name instead of checking it under another version's dimension r
   wrapper-kind coalescing; revision_alignment over a continuity map; the permitted_freedom vocabulary as
   the single source of truth; structural below-frontier kind classification and the real `edge_set`
   forbidden-call-target scan; lossless boundary-id collapse and the vacuity tripwire; AUTHCON
-  grounded-intent correspondence; ENG-1 measured `ec_reproducible` and ENG-2 waiver expiry/validation
-  (certificate/annotation changes, no `result_state` change); ENG-3 (above, first versioned at v2). The canon v1→v2 move (NFCBOUNDARY) is versioned by `canon_version`,
+  grounded-intent correspondence; measured `ec_reproducible` and waiver expiry/validation
+  (certificate/annotation changes, no `result_state` change); the correspondence lifecycle (above, first versioned at v2). The canon v1→v2 move (NFCBOUNDARY) is versioned by `canon_version`,
   not here.
 
 ### 9.3 Digest preimage sidecar (opt-in)
@@ -1192,7 +1198,7 @@ both resolve with only the rules in this document.
 
 - `OPEN-1` (greenfield exact node-`kind` value list) — **RESOLVED**. Greenfield published its closed kind set
   `frozenset({module, class, interface, struct, trait, function, method})` at
-  the greenfield producer's `interface_boundary.py` (`IF-0-PUBKINDS-1`); the greenfield rows in `kind-alignment.json`
+  the greenfield producer's `interface_boundary.py`; the greenfield rows in `kind-alignment.json`
   are reconciled to it and flagged `CONFIRMED` (struct added → `type`; dead `field`/`property` rows dropped).
   See sec 5.1.
 
@@ -1210,8 +1216,11 @@ Everything not listed here is fully pinned by this document + the three schemas 
 A **delivery** is the metadata-only, render-ready **projection of a certificate** that a consumer (the portal)
 renders. It is NOT the certificate, and NOT the finding_set — it is a redacted, content-addressed *summary*.
 
-Schema: `schemas/portal-payload.schema.json`. Producer: `src/spec_core/engine/deliver.py` (`project(certificate,
-finding_set) -> payload`), a pure deterministic function, canon-serialized and content-addressed.
+Schema: `schemas/portal-payload.schema.json`. Producer: the engine's delivery step, `project(certificate,
+finding_set) -> payload`, a pure deterministic function, canon-serialized and content-addressed. The public
+package carries a reference implementation of the same projection in its certificate verifier
+(`consiliency_spec.certificate_verifier`, the `payload_projection` check), so a payload can be recomputed
+and compared without the engine.
 
 ### 12.1 Why two inputs (certificate AND finding_set)
 
@@ -1242,7 +1251,7 @@ The payload is built by **allowlist**: only known-safe fields are copied in. Not
 - **`ec_reproducible`** + **`advisory`** — `advisory = not ec_reproducible`. A non-reproducible E(C) makes the
   delivery **advisory** (the portal must not gate on it). Only an explicit `ec_reproducible: true` on the
   certificate is reproducible; an absent or non-boolean value delivers as `ec_reproducible: false`,
-  `advisory: true` (fail-closed, ENG-1).
+  `advisory: true` (fail-closed).
 - **`extraction_coverage?`** — the certificate's coverage summary (sec 4.2 / sec 9), copied verbatim iff
   the certificate carries it, i.e. only when the `E(C)` extraction was measured-partial or unmeasured:
   `status` plus the measured file counts, never a path. Additive and optional (projection v4;
@@ -1353,7 +1362,7 @@ anything is appended: an unknown, revoked or expired key; a missing or bad signa
 confusion; a signer whose registry `approver` is not the core's `approver`; and a core outside its
 `validity` window. Ingress is also gated by a bearer token checked before any parsing (optionally mTLS).
 
-**Re-verification at delivery (MUST, ENG-12).** A ledger row is not trusted because it carries a `chain`
+**Re-verification at delivery (MUST).** A ledger row is not trusted because it carries a `chain`
 (the chain is unkeyed, §13.3). Delivery re-runs the same vendored verifier ingress uses, against the
 vendored registry, under the ledger lock:
 
@@ -1519,7 +1528,7 @@ the vendored protocol schema), next to `spec-certificate.json`. spec owns the ve
 append-only ledger, and the resolver semantics above; it does **not** own the signing key, the consumer
 enforcement switch, or the downstream UI ratification flow.
 
-The earlier XG2 design (IF-0-XG2-1: a `governance_bridge_decision` entry with a six-field audience and
+The earlier XG2 design (a `governance_bridge_decision` entry with a six-field audience and
 a keyless, hash-only "signature") is **superseded** by this protocol and is not implemented. Its
 schema `spec-engine/authority/authority-event.schema.json` is still published in the package for
 compatibility, but it is not normative and no spec code reads it.

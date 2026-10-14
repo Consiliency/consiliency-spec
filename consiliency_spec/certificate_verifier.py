@@ -55,6 +55,11 @@ Checks (each is reported, with a reason, in ``CertificateVerification.checks``):
                             ``pass`` exactly for exit 0; a row with no record is
                             ``unknown``/``unobserved`` and E(C) holds no record for it. Which criteria have rows is scope, which needs
                             re-grading, so it is not checked.
+* ``acceptance_scope``      (``desired_graph=``, a certificate with an ``acceptance`` dimension) every
+                            ``acceptance_results`` row names an ``acceptance_criterion`` of S' (its
+                            idmodel engine join id over S's hashed content). A row with no E(C) record
+                            carries nothing ``acceptance_evidence`` can compare, so only S' refuses
+                            an added row for a criterion S does not have.
 * ``desired_graph_valid`` / ``desired_graph_digest`` / ``spec_revision_digest`` / ``spec_authority``
                             (``desired_graph=``) the binding procedure of SEMANTICS section 9 for a
                             candidate S': S' passes the full spec-graph rule set, its normalized
@@ -862,7 +867,12 @@ def verify_certificate(
     # -- the desired graph: the binding procedure ------------------------------------------------
     bound = False
     if desired_graph is not None:
-        bound = _bind_desired_graph(checks, recomputed, canon, spec_graph, cert, desired_graph)
+        bound, graph = _bind_desired_graph(checks, recomputed, canon, spec_graph, cert, desired_graph)
+        problems = _acceptance_scope_problems(spec_graph, cert, graph) if graph is not None else None
+        if problems is not None:
+            checks.add("acceptance_scope", not problems,
+                       "; ".join(problems[:5]) if problems else
+                       "every acceptance row names an acceptance_criterion of S'")
 
     # -- portal payload --------------------------------------------------------------------------
     if payload is not None:
@@ -1010,27 +1020,60 @@ def _acceptance_evidence_problems(canon: Any, cert: Mapping[str, Any],
     return problems
 
 
+def _acceptance_scope_problems(spec_graph: Any, cert: Mapping[str, Any],
+                               graph: Mapping[str, Any]) -> Optional[List[str]]:
+    """Every acceptance row names an acceptance_criterion of the supplied S' (SEMANTICS sec 7.6).
+    None when the certificate has no acceptance dimension. The
+    engine refuses E(C) evidence for a criterion outside S, but a row with NO record (``unknown``,
+    no authority) carries nothing the E(C) checks can compare, so without S' an added row for a
+    criterion that S does not have would verify. This check needs S'; which in-scope criteria have
+    rows is still not checked (that is re-grading)."""
+    dims = cert.get("dimension_results")
+    acc = [d for d in dims if isinstance(d, Mapping) and d.get("dimension") == "acceptance"] \
+        if isinstance(dims, list) else []
+    if not acc:
+        return None
+    rows = acc[0].get("acceptance_results")
+    if not isinstance(rows, list):
+        return ["acceptance_results is not a list"]
+    try:
+        # The engine grades S's hashed content (sec 9) and keys a criterion by idmodel's engine join id.
+        criteria = {spec_graph.idmodel.engine_join_id(n) for n in spec_graph.hashed_content(graph)["nodes"]
+                    if n.get("kind") == "acceptance_criterion"}
+    except (ValueError, TypeError, KeyError, AttributeError, RecursionError) as e:
+        return ["cannot derive S' acceptance criteria: %s" % e]
+    # A non-string id (an array or object is unhashable) is a failed check, never a TypeError.
+    return ["acceptance row %r names no acceptance_criterion of S'"
+            % (row.get("criterion_logical_id") if isinstance(row, Mapping) else row,)
+            for row in rows
+            if not (isinstance(row, Mapping) and isinstance(row.get("criterion_logical_id"), str)
+                    and row["criterion_logical_id"] in criteria)]
+
+
 def _bind_desired_graph(checks: _Checks, recomputed: Dict[str, str], canon: Any, spec_graph: Any,
-                        cert: Mapping[str, Any], desired_graph: JsonInput) -> bool:
+                        cert: Mapping[str, Any],
+                        desired_graph: JsonInput) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    """The binding procedure. Returns (bound, S') where S' is the decoded graph once it passes
+    validation (None before that)."""
     # (1) the engine's entry check: the full spec-graph rule set.
     try:
         graph = _decode(desired_graph, "desired_graph")
     except _DecodeError as e:
         checks.add("desired_graph_valid", False, "desired_graph: %s" % e)
-        return False
+        return False, None
     try:
         if not isinstance(graph, dict):
             raise ValueError("S is not a JSON object")
         spec_graph.validate(graph)
     except (ValueError, TypeError, KeyError, AttributeError, RecursionError) as e:
         checks.add("desired_graph_valid", False, "S' is refused by spec-graph validation: %s" % e)
-        return False
+        return False, None
     checks.add("desired_graph_valid", True, "S' passes the full spec-graph rule set")
     # (2) the normalized graph digest.
     graph_digest, why = _digest_or_reason(lambda: spec_graph.graph_digest(graph))
     if graph_digest is None:
         checks.add("desired_graph_digest", False, "S' cannot be normalized: %s" % why)
-        return False
+        return False, graph
     recomputed["desired_graph_digest"] = graph_digest
     g_ok = graph_digest == cert.get("desired_graph_digest")
     checks.add("desired_graph_digest", g_ok,
@@ -1058,7 +1101,7 @@ def _bind_desired_graph(checks: _Checks, recomputed: Dict[str, str], canon: Any,
                "is_authoritative(S') agrees with spec_authority %r" % (claimed,) if a_ok else
                "is_authoritative(S') is %s but the certificate says spec_authority %r"
                % (s_grounded, claimed))
-    return g_ok and r_ok and a_ok
+    return g_ok and r_ok and a_ok, graph
 
 
 #: Fields a portal payload copies verbatim from its certificate (SEMANTICS sec 12).

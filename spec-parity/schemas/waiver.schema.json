@@ -39,7 +39,7 @@
     "reason": { "type": "string", "minLength": 1, "description": "Why the drift is accepted. Required; an empty reason is invalid (no silent waivers)." },
     "expiry": {
       "type": "string",
-      "description": "Expiry as an ISO-8601 calendar DATE (YYYY-MM-DD), interpreted as end-of-day UTC. Required and bounded -- NO open-ended waivers in v1. After expiry the waiver lifecycle becomes `expired` and it stops suppressing: the engine treats a waiver with expiry < the run descriptor's deterministic `as_of` date (run-descriptor.schema.json) as expired, and refuses to evaluate waivers for a run with no `as_of` (ENG-2). This is a semantic (hashed) field; it is a fixed date string, NOT a wall-clock timestamp, so it is deterministic across runs.",
+      "description": "Expiry as an ISO-8601 calendar DATE (YYYY-MM-DD), interpreted as end-of-day UTC. Required and bounded -- NO open-ended waivers in v1. After expiry the waiver lifecycle becomes `expired` and it stops suppressing: the engine treats a waiver with expiry < the run descriptor's deterministic `as_of` date (run-descriptor.schema.json) as expired, and refuses to evaluate waivers for a run with no `as_of`. This is a semantic (hashed) field; it is a fixed date string, NOT a wall-clock timestamp, so it is deterministic across runs.",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
     },
     "approver_ref": {

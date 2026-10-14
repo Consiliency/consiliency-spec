@@ -56,9 +56,15 @@ def test_assertion_fails_on_wrong_version() -> None:
                 "    return _u.normalize(form, s)\n"
             )
         # Put the stub dir FIRST on PYTHONPATH so it shadows the real unicodedata2; add src so
-        # `spec_core.canon.canon_ingest` resolves.
+        # `spec_core.canon.canon_ingest` resolves. Hermetic: `-P`
+        # keeps the child's working directory off sys.path (a `-c` child would otherwise put it at
+        # sys.path[0], AHEAD of the stub), and only absolute inherited PYTHONPATH entries are kept: an
+        # empty or relative entry (such as ".") also resolves against the working directory. So no file
+        # in whatever directory the test runs from (a unicodedata2.py, a sitecustomize.py) can stand in
+        # for the stub.
         env = dict(os.environ)
-        env["PYTHONPATH"] = os.pathsep.join([stub_dir, SRC, env.get("PYTHONPATH", "")])
+        inherited = [p for p in env.get("PYTHONPATH", "").split(os.pathsep) if os.path.isabs(p)]
+        env["PYTHONPATH"] = os.pathsep.join([stub_dir, SRC] + inherited)
         code = textwrap.dedent(
             """
             from spec_core.canon import canon_ingest  # noqa: F401  -- must RAISE (stale Unicode)
@@ -66,7 +72,7 @@ def test_assertion_fails_on_wrong_version() -> None:
             """
         )
         proc = subprocess.run(
-            [sys.executable, "-c", code], env=env, capture_output=True, text=True
+            [sys.executable, "-P", "-c", code], env=env, capture_output=True, text=True
         )
         combined = (proc.stdout or "") + (proc.stderr or "")
         assert proc.returncode != 0, (
@@ -82,6 +88,52 @@ def test_assertion_fails_on_wrong_version() -> None:
         import shutil
 
         shutil.rmtree(stub_dir, ignore_errors=True)
+
+
+def test_assertion_child_ignores_the_working_directory() -> None:
+    """The stale-version child is independent of the directory the test runs from.
+
+    Run the version-assertion test from a directory holding a `unicodedata2.py` that reports the
+    PINNED version (16.0) and a `sitecustomize.py` that pre-seeds one, first with a trailing empty
+    PYTHONPATH entry and then with a relative "." entry. If the child let the working directory onto
+    sys.path, it would pick up an impostor, ingest would load cleanly, and
+    test_assertion_fails_on_wrong_version would fail.
+    """
+    import shutil
+    import tempfile
+
+    work = tempfile.mkdtemp(prefix="skew-cwd-")
+    old_cwd, old_pp = os.getcwd(), os.environ.get("PYTHONPATH")
+    try:
+        with open(os.path.join(work, "unicodedata2.py"), "w", encoding="utf-8") as f:
+            f.write(
+                "import unicodedata as _u\n"
+                "unidata_version = '16.0.0'\n"
+                "def normalize(form, s):\n"
+                "    return _u.normalize(form, s)\n"
+            )
+        # A relative "." entry also names the working directory. A sitecustomize.py there would run at
+        # child startup and pre-seed the module cache ahead of the stub.
+        with open(os.path.join(work, "sitecustomize.py"), "w", encoding="utf-8") as f:
+            f.write(
+                "import sys, types, unicodedata as _u\n"
+                "_m = types.ModuleType('unicodedata2')\n"
+                "_m.unidata_version = '16.0.0'\n"
+                "_m.normalize = _u.normalize\n"
+                "sys.modules['unicodedata2'] = _m\n"
+            )
+        os.chdir(work)
+        for extra in ("", "."):  # a trailing empty entry, then a relative "." entry: both the cwd
+            os.environ["PYTHONPATH"] = (old_pp or "") + os.pathsep + extra
+            test_assertion_fails_on_wrong_version()
+        print("  [ok] the stale-version child ignores the working directory (empty and '.' entries)")
+    finally:
+        os.chdir(old_cwd)
+        if old_pp is None:
+            os.environ.pop("PYTHONPATH", None)
+        else:
+            os.environ["PYTHONPATH"] = old_pp
+        shutil.rmtree(work, ignore_errors=True)
 
 
 # CAN-6: the discriminator proof must not depend on the host. It used to compare the pinned DB with
@@ -181,6 +233,7 @@ def test_post13_inputs_are_live_discriminators() -> None:
 def main() -> int:
     print("== ingest Unicode-skew negative tests ==")
     test_assertion_fails_on_wrong_version()
+    test_assertion_child_ignores_the_working_directory()
     test_post13_inputs_are_live_discriminators()
     print("INGEST UNICODE-SKEW NEGATIVE TESTS: PASS")
     return 0

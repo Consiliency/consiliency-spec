@@ -2,16 +2,16 @@
   "package": {
     "npm": "@consiliency/spec",
     "pypi": "consiliency-spec",
-    "version": "0.7.0"
+    "version": "0.7.1"
   },
   "public_files": [
     {
       "path": "canon/README.md",
-      "sha256": "7bf3792f600911b0cacc1241f96027cccbe52a6cd3115acabdba1a9bdf8bf004"
+      "sha256": "9987944d62e4f58ab5dc23377ae5725a523bab60475927960a57a02a9bfb0416"
     },
     {
       "path": "canon/SPEC.md",
-      "sha256": "969abdbd66c3b2395f379528b1dc87e51c9eb2cb573ac3609a919510e9a9ebd9"
+      "sha256": "a1cfb6f5b8b3446ff9787e2fe484762c9cbde95d14961d57c2cc85cd4f74e23b"
     },
     {
       "path": "canon/bindings/pyo3/README.md",
@@ -67,7 +67,7 @@
     },
     {
       "path": "canon/conformance/test_unicode_skew.py",
-      "sha256": "e58cb53b6bf226bf3de8268338d38dd3ceb3748f8d1c809fa47221acbe2144af"
+      "sha256": "cbf689d3939dd2188fb90461c25fa97d623b1ce0aff4927b4c130e253eaec4c3"
     },
     {
       "path": "canon/conformance/wasm_surrogate_finding.mjs",
@@ -83,7 +83,7 @@
     },
     {
       "path": "canon/core/cbindgen.toml",
-      "sha256": "f71d1288c8b10ebf21d574c4e4261f181c844a44c564c142570eb70070258681"
+      "sha256": "c9ea45dcf39944ffcd246ffbbc241f0403c1dc4514e0ec0211cf9616a61fff75"
     },
     {
       "path": "canon/core/include/canon_core.h",
@@ -99,7 +99,7 @@
     },
     {
       "path": "canon/core/src/c_abi.rs",
-      "sha256": "14bafae0fc725b457c6e43289c686b2dfcf44615a140caf9057f7b56e4393f27"
+      "sha256": "706b7ce0421682fc24ce493c1a63ef90aad46e6ff7e2e6489626ba7d74293ed8"
     },
     {
       "path": "canon/core/src/lib.rs",
@@ -107,7 +107,7 @@
     },
     {
       "path": "canon/core/tests/c_abi_smoke.c",
-      "sha256": "edc8bcad1a5dd83e735d74bef47ec5bb1a7f67049539d17ecc119aab6b5246b8"
+      "sha256": "8e67d4bc49dcbfe671fe0b503a3cd99ffcd7c09a2bb69749da1061493fbfc162"
     },
     {
       "path": "canon/core/tests/parity.rs",
@@ -155,7 +155,7 @@
     },
     {
       "path": "consiliency_spec/__init__.py",
-      "sha256": "0c7467376be926ec4c3c8f7549dae3a4dfe5b635327618287d1c68550071074d"
+      "sha256": "9a921a9cfbc48cece49a1f31dcb65c5808f588d6938f272baa88bf9101b551a2"
     },
     {
       "path": "consiliency_spec/_bundle/spec_core/__init__.py",
@@ -191,7 +191,7 @@
     },
     {
       "path": "consiliency_spec/certificate_verifier.py",
-      "sha256": "f2a9e8ff8eaaa41c52f04caf48aec124965cd051bbdfa21755b2ad868ca8e524"
+      "sha256": "067884b3b05edb3b50d21ef73438d2711280c08bf9a19e77c5d4eb67a2336924"
     },
     {
       "path": "consiliency_spec/outside_agent_router.py",
@@ -231,15 +231,11 @@
     },
     {
       "path": "spec-graph/schema/spec-graph.schema.json",
-      "sha256": "56522e115206009219c43e96c56f99ebef6cee0c5e690649a3c23deeadd4cdde"
+      "sha256": "7071af380f957fa42f762316b0aae12ef3e93d55e416e9bbad100da87ea56a5a"
     },
     {
       "path": "spec-parity/SEMANTICS.md",
-      "sha256": "ef1495adec117fda56332dfd886fac9464fdc76b864b2716d5ee463de05e2244"
-    },
-    {
-      "path": "spec-parity/conformance/check.sh",
-      "sha256": "1ea6667bfc838887ec5a71fb840bf590f0663e87a3a9eab9c7eb2ac5b0c5fe1c"
+      "sha256": "9c9e176954ae304c179935476cab2f2020c4d4ad4ff40cbf6ec9cf670bea24d0"
     },
     {
       "path": "spec-parity/conformance/check_xg0_envelope.sh",
@@ -247,7 +243,7 @@
     },
     {
       "path": "spec-parity/kind-alignment.json",
-      "sha256": "828cebaca779678cf7b954ec91c1ae4673792c9db216569e6d57ff50de3dc652"
+      "sha256": "5431a35c37fa267698ab7d8d54672a90a5755767f42c66336a4ba090995ff481"
     },
     {
       "path": "spec-parity/permitted-freedom-vocab.json",
@@ -255,7 +251,7 @@
     },
     {
       "path": "spec-parity/schemas/certificate.schema.json",
-      "sha256": "7563893b1e2f72daceda903d28ccafcb0484a262fd5f84597b9636478c76adc9"
+      "sha256": "98ccfc63fb3bd570c6a390d2d80bea9d5bafcb851930dc86e6f511d7358e2ef3"
     },
     {
       "path": "spec-parity/schemas/ec-reproducibility-attestation.schema.json",
@@ -263,7 +259,7 @@
     },
     {
       "path": "spec-parity/schemas/ec.schema.json",
-      "sha256": "bbff69ea33143f11aac644bf663e0d92f5d70d888262119bb879499772ace14e"
+      "sha256": "b1fe921fbd02e75ad3a541862f833adc6e28c41735141cb60392a2fe511cc1eb"
     },
     {
       "path": "spec-parity/schemas/kind-alignment.schema.json",
@@ -279,15 +275,15 @@
     },
     {
       "path": "spec-parity/schemas/result-state.schema.json",
-      "sha256": "ba630803ea489cd15b1be8c3857f3378114a477bd6cb383ee552b703f038b9fb"
+      "sha256": "eec98a7fdc500a9f3885bdcfc865454e9c45721e123186593b81f13b7a42af3b"
     },
     {
       "path": "spec-parity/schemas/run-descriptor.schema.json",
-      "sha256": "e6710b2dfaf6e139c8aa5173583202edf0f60edea399a17c34d75cea2dbb6f19"
+      "sha256": "8e04d95e98649f292168e8e0c27cf3194d5103b7db25e747d2ad098424dd8cd6"
     },
     {
       "path": "spec-parity/schemas/waiver.schema.json",
-      "sha256": "f541b78af044017cfbc23992be59676fe1250eec7af6fe63961c56f2c093c310"
+      "sha256": "65362589b7ee411976c2de54e536916aba8bea48e57156c26761c0a517a52ea6"
     },
     {
       "path": "src/spec_core/__init__.py",

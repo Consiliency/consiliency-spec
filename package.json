@@ -1,6 +1,6 @@
 {
   "name": "@consiliency/spec",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Public Consiliency canon-core v2 package: Rust core, dep-free TypeScript/Python canon ports, vectors, and public schemas.",
   "license": "Apache-2.0",
   "type": "module",
@@ -63,7 +63,6 @@
     "spec-engine/authority/authority-event.schema.json",
     "spec-graph/schema/spec-graph.schema.json",
     "spec-parity/SEMANTICS.md",
-    "spec-parity/conformance/check.sh",
     "spec-parity/conformance/check_xg0_envelope.sh",
     "spec-parity/kind-alignment.json",
     "spec-parity/permitted-freedom-vocab.json",
