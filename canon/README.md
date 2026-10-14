@@ -1,8 +1,7 @@
 # canon v2
 
-The canonical-serialization + content-addressing contract for `spec` (spine contract **S1**,
-roadmap Phase **0A**). One serialization, identical bytes in every language, content-addressed by
-domain-separated SHA-256.
+The canonical-serialization + content-addressing contract for `spec`. One serialization, identical
+bytes in every language, content-addressed by domain-separated SHA-256.
 
 > **canon v1 → v2 (NFCBOUNDARY).** Unicode NFC moved OUT of `canonical_bytes` to the **ingestion
 > boundary** (`py/canon_ingest.py`); canon v2 is Unicode-DB-independent and the digest prefix is

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "consiliency-spec"
-version = "0.7.0"
+version = "0.7.1"
 description = "Public Consiliency canon-core v2 package: Rust core, dep-free TypeScript/Python canon ports, vectors, and public schemas."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -83,7 +83,6 @@ packages = ["consiliency_spec"]
 "spec-engine/authority/authority-event.schema.json" = "consiliency_spec/_data/spec-engine/authority/authority-event.schema.json"
 "spec-graph/schema/spec-graph.schema.json" = "consiliency_spec/_data/spec-graph/schema/spec-graph.schema.json"
 "spec-parity/SEMANTICS.md" = "consiliency_spec/_data/spec-parity/SEMANTICS.md"
-"spec-parity/conformance/check.sh" = "consiliency_spec/_data/spec-parity/conformance/check.sh"
 "spec-parity/conformance/check_xg0_envelope.sh" = "consiliency_spec/_data/spec-parity/conformance/check_xg0_envelope.sh"
 "spec-parity/kind-alignment.json" = "consiliency_spec/_data/spec-parity/kind-alignment.json"
 "spec-parity/permitted-freedom-vocab.json" = "consiliency_spec/_data/spec-parity/permitted-freedom-vocab.json"
@@ -183,7 +182,6 @@ only-include = [
 "spec-engine/authority/authority-event.schema.json" = "spec-engine/authority/authority-event.schema.json"
 "spec-graph/schema/spec-graph.schema.json" = "spec-graph/schema/spec-graph.schema.json"
 "spec-parity/SEMANTICS.md" = "spec-parity/SEMANTICS.md"
-"spec-parity/conformance/check.sh" = "spec-parity/conformance/check.sh"
 "spec-parity/conformance/check_xg0_envelope.sh" = "spec-parity/conformance/check_xg0_envelope.sh"
 "spec-parity/kind-alignment.json" = "spec-parity/kind-alignment.json"
 "spec-parity/permitted-freedom-vocab.json" = "spec-parity/permitted-freedom-vocab.json"

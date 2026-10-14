@@ -58,7 +58,7 @@
     },
     "ec_reproducible": {
       "type": "boolean",
-      "description": "MEASURED OR FALSE (ENG-1): true iff the producing run MEASURED E(C) to be byte-reproducible (Benchmark C: E(C) extracted twice by independent extractor invocations, canonical bytes identical). A frozen/pinned/fixture E(C) that the run did not re-extract is NOT measured and is false. When false the certificate is ADVISORY and downstream gates MUST NOT treat it as authoritative. Never changes a finding or result_state."
+      "description": "MEASURED OR FALSE: true iff the producing run MEASURED E(C) to be byte-reproducible (Benchmark C: E(C) extracted twice by independent extractor invocations, canonical bytes identical). A frozen/pinned/fixture E(C) that the run did not re-extract is NOT measured and is false. When false the certificate is ADVISORY and downstream gates MUST NOT treat it as authoritative. Never changes a finding or result_state."
     },
     "spec_authority": {
       "type": "string",
@@ -112,7 +112,7 @@
     },
     "extraction_coverage": {
       "$ref": "result-state.schema.json#/$defs/extraction_coverage_summary",
-      "description": "OPTIONAL, HASHED (inside the certificate digest preimage). ENG-6: present ONLY when E(C)'s extraction was NOT fully observed — `partial` (the realized adapter measured unextracted source: unparseable files, unlisted on-disk source files, syntax-error trees, uncompiled .proto) or `unmeasured`. A certificate carrying it can never be read as full coverage: under it no prohibition passes, a completeness absence is unknown and closure is unknown (SEMANTICS sec 4.2 / 7.1 / 7.3). Absent when the extraction was measured full or the E(C) declares no extraction_coverage (hand-authored fixture). Mirrors finding_set.extraction_coverage."
+      "description": "OPTIONAL, HASHED (inside the certificate digest preimage). Present ONLY when E(C)'s extraction was NOT fully observed — `partial` (the realized adapter measured unextracted source: unparseable files, unlisted on-disk source files, syntax-error trees, uncompiled .proto) or `unmeasured`. A certificate carrying it can never be read as full coverage: under it no prohibition passes, a completeness absence is unknown and closure is unknown (SEMANTICS sec 4.2 / 7.1 / 7.3). Absent when the extraction was measured full or the E(C) declares no extraction_coverage (hand-authored fixture). Mirrors finding_set.extraction_coverage."
     },
     "locator": {
       "type": "object",

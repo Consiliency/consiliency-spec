@@ -21,7 +21,7 @@
     "greenfield": {
       "source_ref": "internal design note (interface_boundary.py + interface-boundary-spec.md:70-139)",
       "kind_values_status": "CONFIRMED",
-      "kind_values_note": "OPEN-1 RESOLVED (via IF-0-PUBKINDS-1). The greenfield node `kind` values are now reconciled against the published closed set in the greenfield producer's interface_boundary.py: SYMBOL_NODE_KINDS = frozenset({module, class, interface, struct, trait, function, method}). The node-kind rows below cover EXACTLY that set. Versus the prior NodeKind proxy this added `struct` (greenfield emits it for Go/Rust record types) and dropped the dead `field`/`property` rows (greenfield never emits them; their tsc-source `field_declaration`/`property_declaration` and protobuf `field` spellings remain under their own realized_source keys). The IR SHAPE is unchanged (nodes[]{boundary_id,kind,name,qualified_name,file,line-span,signature,parent_boundary_id,provenance} + edges[]{from/to boundary_id, type imports|calls|dependencies, resolution resolved|ambiguous|unresolved, is_internal}). A greenfield kind outside this closed set still uses the unmapped_realized_kind fallback rule below.",
+      "kind_values_note": "OPEN-1 RESOLVED (against the producer's published closed set). The greenfield node `kind` values are now reconciled against the published closed set in the greenfield producer's interface_boundary.py: SYMBOL_NODE_KINDS = frozenset({module, class, interface, struct, trait, function, method}). The node-kind rows below cover EXACTLY that set. Versus the prior NodeKind proxy this added `struct` (greenfield emits it for Go/Rust record types) and dropped the dead `field`/`property` rows (greenfield never emits them; their tsc-source `field_declaration`/`property_declaration` and protobuf `field` spellings remain under their own realized_source keys). The IR SHAPE is unchanged (nodes[]{boundary_id,kind,name,qualified_name,file,line-span,signature,parent_boundary_id,provenance} + edges[]{from/to boundary_id, type imports|calls|dependencies, resolution resolved|ambiguous|unresolved, is_internal}). A greenfield kind outside this closed set still uses the unmapped_realized_kind fallback rule below.",
       "edge_types": ["imports", "calls", "dependencies"],
       "edge_resolution_states": ["resolved", "ambiguous", "unresolved"]
     },
@@ -84,7 +84,7 @@
       "realized_kind": "struct",
       "desired_kind": "type",
       "alignment": "exact",
-      "note": "greenfield emits `struct` for Go/Rust record types (published closed set, interface_boundary.py:27-29 via IF-0-PUBKINDS-1). A struct/record carries a type definition; mapped to `type`. MIRRORS the tsc-source `struct -> type (exact)` and protobuf `message -> type (exact)` rows, so the matrix stays internally consistent across realized sources. Before this row a greenfield struct node fell to unmapped_realized_kind -> unsupported."
+      "note": "greenfield emits `struct` for Go/Rust record types (published closed set, interface_boundary.py:27-29). A struct/record carries a type definition; mapped to `type`. MIRRORS the tsc-source `struct -> type (exact)` and protobuf `message -> type (exact)` rows, so the matrix stays internally consistent across realized sources. Before this row a greenfield struct node fell to unmapped_realized_kind -> unsupported."
     },
     {
       "realized_source": "greenfield",

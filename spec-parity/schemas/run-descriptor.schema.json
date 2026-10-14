@@ -20,7 +20,7 @@
     "as_of": {
       "type": "string",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
-      "description": "The run's deterministic evaluation DATE (ISO-8601 calendar date, YYYY-MM-DD) -- never the wall clock. Waiver expiry is decided against it (SEMANTICS sec 8): a waiver whose `expiry` is before `as_of` is expired and suppresses nothing (an expiry ON the as_of date still suppresses: expiry is end-of-day UTC). REQUIRED whenever waivers are supplied -- the engine refuses to evaluate waivers without it (ENG-2)."
+      "description": "The run's deterministic evaluation DATE (ISO-8601 calendar date, YYYY-MM-DD) -- never the wall clock. Waiver expiry is decided against it (SEMANTICS sec 8): a waiver whose `expiry` is before `as_of` is expired and suppresses nothing (an expiry ON the as_of date still suppresses: expiry is end-of-day UTC). REQUIRED whenever waivers are supplied -- the engine refuses to evaluate waivers without it."
     }
   }
 }

@@ -113,7 +113,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["origin"],
-      "description": "Draft-S provenance marker (IF-0-BOOT-1, brownfield freeze). ENVELOPE-ONLY: NON-HASHED — does NOT enter the graph digest OR the node logical_id (a node with vs without provenance is byte-identical in both ids), exactly like rationale/notes. Records how a bootstrapped node originated: code_derived (E(C) scaffold), doc_derived (docs intent), llm_proposed (NL intake draft built from an LLM-proposed nl_ir), human_authored (ratified intent). A node WITHOUT a provenance block is treated as human_authored (the pre-brownfield default — a hand-authored S is an authority).",
+      "description": "Draft-S provenance marker (the brownfield bootstrap freeze). ENVELOPE-ONLY: NON-HASHED — does NOT enter the graph digest OR the node logical_id (a node with vs without provenance is byte-identical in both ids), exactly like rationale/notes. Records how a bootstrapped node originated: code_derived (E(C) scaffold), doc_derived (docs intent), llm_proposed (NL intake draft built from an LLM-proposed nl_ir), human_authored (ratified intent). A node WITHOUT a provenance block is treated as human_authored (the pre-brownfield default — a hand-authored S is an authority).",
       "properties": {
         "origin": {
           "type": "string",
@@ -177,7 +177,7 @@
         "rationale": { "type": "string", "description": "ENVELOPE-ONLY non-hashed rationale." },
         "notes": { "type": "string", "description": "ENVELOPE-ONLY non-hashed notes." },
         "provenance": { "$ref": "#/$defs/node_provenance" },
-        "unratified": { "const": true, "description": "Draft-S marker (IF-0-BOOT-1): the node is still an UNRATIFIED bootstrap draft (a human has not asserted its intent). TRUE-OR-ABSENT: omit it for a ratified node — an explicit `false` is rejected (it would break the DSL round-trip, since the truthiness-based envelope render drops a falsy field while Normalize preserves it). ENVELOPE-ONLY: NON-HASHED — does not enter the graph digest OR logical_id. Absent = ratified/not-a-draft. A never-ratified, all-code-derived S is NOT an authority (anti-vacuity rule)." },
+        "unratified": { "const": true, "description": "Draft-S marker (the brownfield bootstrap freeze): the node is still an UNRATIFIED bootstrap draft (a human has not asserted its intent). TRUE-OR-ABSENT: omit it for a ratified node — an explicit `false` is rejected (it would break the DSL round-trip, since the truthiness-based envelope render drops a falsy field while Normalize preserves it). ENVELOPE-ONLY: NON-HASHED — does not enter the graph digest OR logical_id. Absent = ratified/not-a-draft. A never-ratified, all-code-derived S is NOT an authority (anti-vacuity rule)." },
         "source_position": { "$ref": "#/$defs/source_position" },
 
         "logical_id": { "$ref": "#/$defs/derived_logical_id" },

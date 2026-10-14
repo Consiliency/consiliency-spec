@@ -32,6 +32,15 @@ Every software project has two things: a **blueprint** (what it's *supposed* to 
 
 The six parity dimensions: **completeness**, **soundness**, **closure**, **prohibition**, **revision-alignment**, **acceptance** (`spec-engine-projection:v5`; certificates from before 0.7.0 carry the first five).
 
+### Acceptance scope 0.7.1 — patch
+
+`0.7.1` keeps projection `spec-engine-projection:v5`, certificate `schema_version` `"2"` and canon-core
+`0.4.0`; no certificate, finding-set or payload digest moves. The reference verifier gains the
+`acceptance_scope` check (see "Verify a certificate" below). The `authority_id` pattern in
+`ec.schema.json` and `result-state.schema.json` ends in a lookahead, so it refuses a trailing newline
+and needs a regex engine with lookahead (not RE2). `spec-parity/conformance/check.sh`, which needs
+engine files that are not public, is removed. See [`CHANGELOG.md`](CHANGELOG.md).
+
 ### Acceptance evidence 0.7.0 — breaking
 
 `0.7.0` moves the projection to `spec-engine-projection:v5`: certificates gain a sixth dimension,
@@ -115,7 +124,7 @@ The `consiliency_spec` module is a thin reader over the digest-pinned public fil
 import hashlib
 import consiliency_spec
 
-consiliency_spec.__version__                  # the package version, e.g. "0.7.0"
+consiliency_spec.__version__                  # the package version, e.g. "0.7.1"
 
 # The manifest: {"schema_version", "package", "source", "public_files": [{"path", "sha256"}, ...]}
 manifest = consiliency_spec.load_manifest()
@@ -199,6 +208,13 @@ What it checks:
   `finding_summaries` must be one per finding the certificate lists, titled by code, and roll up to
   each dimension's state.
   `require_authoritative=True` needs both `desired_graph` and `ec`.
+- **Acceptance rows** (certificates with an `acceptance` dimension, §7.6). `acceptance_evidence`
+  (given `E(C)`): each `acceptance_results` row copies the `E(C)` record it names (`record_digest`,
+  `authority`, `authority_id`, pipeline mode and engagement, verdict role, result state), a row with
+  no record is `unknown`, and the rows are strictly increasing by `criterion_logical_id`.
+  `acceptance_scope` (given `desired_graph=S'`, since `0.7.1`): every row names an
+  `acceptance_criterion` of `S'`. Which in-scope criteria have rows is not checked; that needs
+  re-grading.
 
 What `valid` does not prove is origin. Anyone can edit a certificate and re-hash it, which yields a
 different certificate that is consistent with itself. The digest is the certificate's identity (§9):

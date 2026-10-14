@@ -10,7 +10,7 @@
 //! canon algorithm. It is additive and feature-gated (`c-binding`, off by default); the pyo3 and
 //! wasm bindings are untouched.
 //!
-//! CALLING / OWNERSHIP CONTRACT (this is IF-0-DABI-1; the Dart `dart:ffi` layer pins it)
+//! CALLING / OWNERSHIP CONTRACT (the frozen C ABI; the Dart `dart:ffi` layer pins it)
 //! ------------------------------------------------------------------------------------
 //! - INPUT strings are NUL-terminated UTF-8 C strings (`const char *`), owned by the caller. The
 //!   engine reads them; it never frees or retains them.
