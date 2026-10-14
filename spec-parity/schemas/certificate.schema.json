@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://spec.consiliency/spec-parity/certificate.schema.json",
-  "title": "Parity certificate (Phase 3a)",
+  "title": "Parity certificate",
   "description": "What a parity certificate MUST pin. This is the UNION of the internal storage `certificates` record shape and the richer design task (canon/idmodel versions, projection-algo version, per-dim results). The certificate is a DIGEST-BEARING record: its top-level `digest` field is computed with the canon `certificate` profile (`spec-canon:v2:certificate\\n`) and is EXCLUDED from its own preimage (canon sec 8). PRODUCE ONCE, STORE VERBATIM, never recompute (canon sec 9). NO JSON FLOATS. This schema is co-designed with the consumer-integration phase; fields here that consumers also need (digest byte-match domain, parity-gate vs policy-gate) are flagged OPEN, see SEMANTICS.md sec 9.",
   "type": "object",
   "additionalProperties": false,
@@ -68,6 +68,7 @@
     "authority_ref": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$",
+      "not": {"pattern": "\\n"},
       "description": "OPTIONAL, HASHED. The authority-ledger `entry_digest` of the ratify event the producer cites as making S authoritative, recorded verbatim when the caller supplies one (only for a `grounded` S). The engine does NOT verify it; a verifier resolves it against the authority ledger. It cannot be a ratify of THIS certificate (that event signs this certificate's digest). Absent when none was supplied."
     },
     "code_head_sha": {

@@ -23,11 +23,11 @@ N(projection) -> finding_set + certificate   # the 6-dimension parity checker (p
 
 ## 0. Inputs, identity, and the non-negotiables
 
-- **`S`** — a desired-state graph authored in the Phase-2 metamodel: nodes of kind `component | capability |
+- **`S`** — a desired-state graph authored in the desired metamodel: nodes of kind `component | capability |
   interface | operation | type | state | invariant | error | event | security_rule | performance | prohibition |
   acceptance_criterion`, plus decomposition edges. Content-addressed by idmodel v1.
-- **`E(C)`** — the realized Interface Boundary IR (greenfield) and/or treesitter-chunker boundary/chunk
-  output, consumed through Phase-1's cleaned API. Nodes carry Tier-2 occurrence ids (idmodel sec 5); their
+- **`E(C)`** — the realized Interface Boundary IR (realized source `greenfield`) and/or treesitter-chunker boundary/chunk
+  output, consumed through the extractors' cleaned API. Nodes carry Tier-2 occurrence ids (idmodel sec 5); their
   Tier-1 logical ids are computed per idmodel sec 3.
 - **Identity is idmodel's.** Desired entities are keyed by Tier-1 `logical_id`; realized facts carry Tier-2
   `occurrence_id`. Cross-revision continuity is the **correspondence map** (idmodel sec 6), never a raw hash.
@@ -335,7 +335,7 @@ lists is a source file, including languages outside the on-disk catalog that tsc
 - **unmeasured** — `extraction_coverage` is present but not a measurement (`status: "unmeasured"`: the adapter
   was handed an IR carrying no coverage record). Graded exactly like **partial**: an unmeasured extraction
   never claims full coverage, so a producer that forgets to measure surfaces as non-`pass`.
-- **declared** — `E(C)` carries **no** `extraction_coverage` at all: a hand-authored / greenfield fixture
+- **declared** — `E(C)` carries **no** `extraction_coverage` at all: a hand-authored / `greenfield`-source fixture
   `E(C)` (no extraction marker, below). Its producer's `modeled_domains` declaration stands alone (the v1
   rule). The adapters always emit the field, so a live extraction is never `declared`. An **extracted**
   `E(C)` with no `extraction_coverage` key, such as a frozen pre-v2 capture or a hand-stripped one, is
@@ -397,7 +397,7 @@ extraction never yields a prohibition `pass`. A finer rule could only arrive as 
 ### 4.3 Prohibitions the extractor cannot observe
 
 The `capability_registration` and `external` domains are precisely the ones that bite pmcp's Non-Goals ("no
-new gateway tool/handler/store") — these are not direct Interface-Boundary facts. If the Phase-1 `E(C)`
+new gateway tool/handler/store") — these are not direct Interface-Boundary facts. If the `E(C)`
 extractor does not surface registration facts for the relevant subgraph, `coverage` is `partial` → the
 prohibition returns **`unknown`**, recorded as `prohibition_unobservable`. It is **never** a silent `pass` or
 green. When the extractor is later extended to surface those facts, the same prohibition can resolve to
@@ -482,7 +482,7 @@ is still `fail`.
 
 ## 5. Kind-alignment matrix
 
-The mapping from realized kinds (greenfield Interface Boundary IR kinds + treesitter-chunker boundary/chunk
+The mapping from realized kinds (Interface Boundary IR kinds, source `greenfield`, + treesitter-chunker boundary/chunk
 kinds) to spec desired kinds is the **data file `spec-parity/kind-alignment.json`** (schema:
 `schemas/kind-alignment.schema.json`). That file is the single source of truth; this section narrates it and
 pins the handling rules.
@@ -512,7 +512,7 @@ pins the handling rules.
   coalesced wrapper remains eligible for closure classification (sec 3).
 - **Unmapped desired kind** (a future metamodel kind): never silently dropped; its checks return `unsupported`,
   recorded `unmapped_desired_kind`.
-- **Ambiguous mapping** (e.g. greenfield `property` → `type` or `operation`): the desired graph's own declared
+- **Ambiguous mapping** (e.g. `greenfield`-source `property` → `type` or `operation`): the desired graph's own declared
   kind, resolved via correspondence, wins; if undecidable → `unknown` + `ambiguous_kind_alignment`.
 - **BAML types** (decision D3, no matrix change). BAML has no realized source of its own: the BAML adapter
   extracts the *generated* Python SDK with treesitter-chunker, so a BAML `class` reaches the engine through
@@ -522,16 +522,16 @@ pins the handling rules.
   row does not mis-grade BAML types. Changing the generic row would regrade every class in every language;
   a BAML-specific row would need a `baml` realized source (and a kind-alignment version bump).
 
-### 5.1 Greenfield realized kinds — `OPEN-1` RESOLVED
+### 5.1 Interface Boundary IR realized kinds (source `greenfield`) — `OPEN-1` RESOLVED
 
-Greenfield's node-`kind` values are now reconciled against the **published closed set** in
-the greenfield producer's `interface_boundary.py` (`SYMBOL_NODE_KINDS = frozenset({module, class, interface, struct,
-trait, function, method})`), as confirmed against that producer's published set. The greenfield rows in `kind-alignment.json` are
+The Interface Boundary IR producer's node-`kind` values are now reconciled against the **published closed set** in
+that producer's `SYMBOL_NODE_KINDS = frozenset({module, class, interface, struct,
+trait, function, method})`, as confirmed against that producer's published set. The `greenfield` rows in `kind-alignment.json` are
 flagged `CONFIRMED` and cover **exactly** that set. Versus the prior NodeKind proxy this **added
-`struct`** (greenfield emits it for Go/Rust record types — `struct → type`, mirroring the tsc-source `struct →
-type` and protobuf `message → type` rows) and **dropped the dead `field`/`property` rows** (greenfield never
+`struct`** (the producer emits it for Go/Rust record types — `struct → type`, mirroring the tsc-source `struct →
+type` and protobuf `message → type` rows) and **dropped the dead `field`/`property` rows** (the producer never
 emits them; the `field_declaration`/`property_declaration` tsc-source and protobuf `field` spellings remain
-under their own `realized_source` keys). A greenfield kind outside this closed set still uses the unmapped-kind
+under their own `realized_source` keys). A `greenfield`-source kind outside this closed set still uses the unmapped-kind
 fallback. `OPEN-1` is **resolved**.
 
 ---
@@ -597,7 +597,7 @@ carries BOTH the `overall_result_state` and the per-dimension `dimension_results
 > `OPEN-4`: severity ordering of `unsupported`. v1 makes `unsupported` non-green (below `unknown` in
 > severity). Rationale: a checker gap on an in-scope check is a real "we didn't verify this" and should not
 > read as green. If consumers prefer `unsupported` to be neutral (green-eligible) for genuinely
-> out-of-checker-scope kinds, that is a 0C/4 gating-policy decision. Marked `OPEN-4`.
+> out-of-checker-scope kinds, that is a gating-policy decision for a later version. Marked `OPEN-4`.
 
 ### 6.5 The vacuity tripwire (no real code to certify)
 
@@ -750,10 +750,11 @@ floats, booleans and integers outside that domain are rejected. Log bodies are n
 `pipeline_mode` is `standalone`, `pipeline_optional` or `pipeline_required`; `pipeline_engaged`
 records whether an external acceptance pipeline actually engaged on this run. `authority` is a
 generic role, never a product name (next table). `authority_id` is an optional producer-declared
-name for the concrete owner (for example `agent-harness`, `example-ci` or another CI system's name).
-The WHOLE string must match `[a-z0-9][a-z0-9._/-]{0,127}`, so a trailing newline is refused (the
-schemas end the pattern with `(?![\s\S])` rather than `$`, which Python's `re` also lets match before
-a final newline). spec never interprets `authority_id`: it only copies it
+name for the concrete owner (for example `example-ci`, or a CI system's or an agent runtime's name).
+The WHOLE string must match `[a-z0-9][a-z0-9._/-]{0,127}`, so a trailing newline is refused: the
+schemas use the portable `^...$` pattern plus a sibling `"not": {"pattern": "\\n"}` guard, because
+Python's `re` also lets `$` match before a final newline (a validator that ignores `not` therefore
+admits `"<id>\n"`). spec never interprets `authority_id`: it only copies it
 into the result and binds it through `record_digest`. The stdlib `validate_ec` is at least as strict
 as the schema on record shape and authority consistency, and the engine fails closed; engine entry
 also rejects duplicate criterion records and ids that do not name an `acceptance_criterion` in S,
@@ -860,7 +861,7 @@ This mirrors the `unknown` philosophy: never overwrite "we don't know / it faile
   `prohibition_id` — the prohibition's idmodel Tier-1 `logical_id`, matching only
   `prohibition`-dimension findings whose `subject.desired_logical_id` is it.
 - **Validation** — waivers are validated against `waiver.schema.json` at every entry point
-  (`run_engine.py --waivers`, the spec-mcp `parity` tool) and structurally again inside `parity()`; an
+  (the engine CLI's `--waivers` option, the spec-mcp `parity` tool) and structurally again inside `parity()`; an
   invalid waiver is a configuration error raised **before** any finding is touched, never a silent
   (non-)suppression.
 - **suppressed_states** — a subset of `[fail, unknown]` only. A waiver can **never** suppress `unsupported`
@@ -893,7 +894,7 @@ separate hashed `certificate_id` field** — a hashed id would sit inside its ow
 non-hashed `certificate_id` mirror of `digest` may live in `locator` for storage indexing. **Produce once,
 store verbatim** (canon sec 9).
 
-A certificate MUST pin (union of the Storage `certificates` record shape and Phase-3a task item 8):
+A certificate MUST pin (union of the Storage `certificates` record shape and the certificate design's required fields):
 
 - **`schema_version`** — the **certificate schema version** (currently `"2"`, a `const` in
   `certificate.schema.json`; `"2"` since the authority-in-certificate bump, AUTH-1: hashed
@@ -957,13 +958,13 @@ A certificate MUST pin (union of the Storage `certificates` record shape and Pha
   certificate over a non-reproducible `E(C)` is **advisory** (`ec_reproducible:false`) and not gating
   (Benchmark C: parity over non-reproducible `E(C)` is meaningless). **Measured or false**: `parity()` takes `ec_reproducible` as an input defaulting to `false`; only a
   producer that actually *measured* it — extracted `E(C)` twice with independent extractor invocations and
-  found the canonical bytes identical (`src/spec_core/engine/realized/reproducibility.py`, used by the live realized
+  found the canonical bytes identical (the engine's reproducibility measurement, used by the live realized
   drivers) — passes `true`. A PINNED `E(C)` may be `true` only by citing a committed **reproducibility
   attestation** (`schemas/ec-reproducibility-attestation.schema.json`): a recorded two-extraction
   measurement against the real source whose compared digest equals the digest of the exact `E(C)` being
   certified (the graphbase pin: in-anger run, brownfield E2E, the spec-mcp `graphbase` subject). Any other
   run over a frozen / pinned / caller-supplied `E(C)` that it did not re-extract (the fixture engine gate,
-  `run_engine.py`, inline spec-mcp subjects, the spec-nl loop, the pip `evaluate()`) is `false`. The bit never changes a finding or a
+  the engine CLI, inline spec-mcp subjects, the spec-nl loop, the pip `evaluate()`) is `false`. The bit never changes a finding or a
   `result_state` (it sits outside the `finding_set_id` preimage); it changes only the certificate digest
   and whether downstream gates may treat the certificate as authoritative.
 - **`code_head_sha`** — the code HEAD the extract came from.
@@ -1094,7 +1095,7 @@ other version by name instead of checking it under another version's dimension r
     `extraction_coverage`; the protobuf `E(C)` walks nested messages / enums, lifts map key/value types onto
     the map field and records `oneof` grouping (REAL-6) — node identities of every pre-existing boundary are
     unchanged.
-- **`spec-engine-projection:v1`** — the original Phase-3b engine, and every change made to it before v2 without
+- **`spec-engine-projection:v1`** — the original engine, and every change made to it before v2 without
   a bump. Those changes are documented here retroactively; certificates pinned under v1 cannot be told apart by
   version across them, which is exactly the gap v2 closes (any later grading change MUST bump the version):
   wrapper-kind coalescing; revision_alignment over a continuity map; the permitted_freedom vocabulary as
@@ -1108,7 +1109,7 @@ other version by name instead of checking it under another version's dimension r
 
 A downstream verifier must not reconstruct a producer digest with its own encoder (canon sec 9:
 produce once, store verbatim). So the engine can hand back the exact bytes it hashed. With
-`parity(..., emit_preimages=True)` (CLI `run_engine.py --emit-preimages PATH`; the ingest package's
+`parity(..., emit_preimages=True)` (the engine CLI's `--emit-preimages PATH`; the ingest package's
 `evaluate(..., config={"emit_preimages": True})`) the result gains a `preimages` sidecar next to the
 `finding_set` and `certificate`:
 
@@ -1153,7 +1154,7 @@ both resolve with only the rules in this document.
    is in-scope (it hangs off the capability).
 2. **Closed-world domain (sec 4.1):** the prohibition declares `domain.type = capability_registration` — the
    bounded fact set = realized facts that register a gateway tool/handler/store within the frontier subgraph.
-3. **Observability (sec 4.3):** the Phase-1 `E(C)` extractor (greenfield Interface Boundary IR) surfaces
+3. **Observability (sec 4.3):** the `E(C)` extractor (Interface Boundary IR, source `greenfield`) surfaces
    boundaries + `imports|calls|dependencies` edges, but **registration facts are not direct Boundary-IR
    facts**. So `coverage(D, E(C)) = partial`.
 4. **Decision (sec 4.2):** no violating fact is observed AND coverage is partial → **`unknown`**, finding code
@@ -1171,7 +1172,7 @@ both resolve with only the rules in this document.
    (`frontier:true`), in-scope with its decomposition descendants.
 2. **Correspondence (sec 2):** the correspondence map resolves `computeTotal`'s Tier-1 `logical_id` to a
    realized `occurrence_id` for the run's revision (`match_origin: correspondence`).
-3. **Kind alignment (sec 5):** desired kind `operation`; realized greenfield kind `method` → `exact` per
+3. **Kind alignment (sec 5):** desired kind `operation`; realized `greenfield`-source kind `method` → `exact` per
    `kind-alignment.json`. Parity-bearing.
 4. **Completeness (sec 7.1):** a parity-bearing correspondence exists → element present → **`pass`** (no
    finding emitted for a pass).
@@ -1191,14 +1192,13 @@ both resolve with only the rules in this document.
 |---|---|---|
 | `OPEN-2` | chunker kinds are per-grammar/open-set; matrix is known-mappings + fallback, not exhaustive. | Inherent; the fallback rule (sec 5) handles it. Extend the matrix as grammars are characterized. |
 | `OPEN-3` | "May edges target subgraphs?" — affects whether a frontier endpoint can be a subgraph. v1: nodes only, subgraph endpoints resolve to root node. | Deferred metamodel decision. |
-| `OPEN-4` | Severity of `unsupported` in aggregation. v1: non-green (below `unknown`). | 0C/4 gating-policy co-design if consumers want it neutral. |
+| `OPEN-4` | Severity of `unsupported` in aggregation. v1: non-green (below `unknown`). | Gating-policy co-design with consumers, if they want it neutral. |
 | `OPEN-5` | Digest byte-match domain between emitter and downstream verifiers; `parity-gate` vs `policy-gate` checkpoint_type. | Deferred, co-designed with consumers. |
 
 **Resolved decisions:**
 
-- `OPEN-1` (greenfield exact node-`kind` value list) — **RESOLVED**. Greenfield published its closed kind set
-  `frozenset({module, class, interface, struct, trait, function, method})` at
-  the greenfield producer's `interface_boundary.py`; the greenfield rows in `kind-alignment.json`
+- `OPEN-1` (the Interface Boundary IR producer's exact node-`kind` value list) — **RESOLVED**. The producer published its closed kind set
+  `frozenset({module, class, interface, struct, trait, function, method})`; the `greenfield` rows in `kind-alignment.json`
   are reconciled to it and flagged `CONFIRMED` (struct added → `type`; dead `field`/`property` rows dropped).
   See sec 5.1.
 
@@ -1206,7 +1206,7 @@ Everything not listed here is fully pinned by this document + the three schemas 
 
 ---
 
-## 12. Delivery — the metadata-only portal payload (Phase 0C)
+## 12. Delivery — the metadata-only portal payload
 
 > **Status: v0 draft — pending portal co-design sign-off.** The portal repo is **fenced**; this section and
 > `schemas/portal-payload.schema.json` are drafted spec-side and **freeze after Wave-B review**. The shape may
@@ -1311,7 +1311,7 @@ asserted. Delivery therefore **refuses** it by default:
 - `deliver.deliver(certificate, finding_set, *, allow_draft=False)` raises `DraftCertificateRefused`;
 - `deliver_to_phase(..., allow_draft=False)` raises `DeliveryRefused(reason="draft_spec_authority")`
   before writing anything (CLI: `--allow-draft`);
-- `run_engine.py --emit payload` needs `--allow-draft`; the MCP `export`/`explain` tools need
+- the engine CLI's `--emit payload` needs `--allow-draft`; the MCP `export`/`explain` tools need
   `allow_draft: true` (else the broker error `draft_spec_authority`). `explain` applies it to a
   supplied payload too: a payload whose `spec_authority` is not exactly `grounded` (a draft, or a
   payload with no field) renders only with the opt-in, and the report labels it `DRAFT`. The MCP
@@ -1325,13 +1325,13 @@ payload gains the required `spec_authority` and the optional `authority_ref`.
 
 ## 13. Authority event protocol (`authority_event_protocol.v1`)
 
-The XG1 certificate proves **parity**. It does **not** confer authority for a consumer decision. Authority
+The parity certificate proves **parity**. It does **not** confer authority for a consumer decision. Authority
 is a separate, Portal-signed **authority event** in the `consiliency.authority_event_protocol.v1` shape,
-defined by the vendored, digest-pinned contract in `spec-engine/authority/vendor/`
-(`authority-event-protocol.schema.json`, `authority-key-registry.json`, `authority.py`; provenance in
-`vendor/PROVENANCE.md`). spec **verifies** these events at ingress (`spec-engine/authority/ingress.py`,
-served by `serve.py`), records them in an append-only ledger, and **delivers** one next to the certificate
-it is bound to (`spec-engine/deliver_to_phase.py`). The cert and the authority event travel together, but
+defined by a vendored, digest-pinned copy of the authority contract
+(`authority-event-protocol.schema.json`, `authority-key-registry.json` and the reference `authority.py`,
+with a provenance record). spec **verifies** these events at ingress (the engine's authority ingress,
+also served over HTTP), records them in an append-only ledger, and **delivers** one next to the certificate
+it is bound to (the engine's phase-delivery step). The cert and the authority event travel together, but
 they answer different questions:
 
 - the cert proves the producer's parity verdict for a specific `cert_digest` and `canon_version`;
@@ -1404,7 +1404,7 @@ for the exact key after applying revocation and supersession. Tampering, duplica
 revoked entries, superseded entries, and scope mismatches all fail closed.
 
 **Live protocol (`authority_event_protocol.v1`) binding.** On the live ingress → delivery path
-(`spec-engine/authority/ingress.py`, `spec-engine/deliver_to_phase.py`) the resolution key is the exact
+(the engine's authority ingress and its phase-delivery step) the resolution key is the exact
 seven-field audience plus the bound `cert_digest`, and entries are ordered by ledger append order. These
 rules are **normative** (MUST):
 
@@ -1437,7 +1437,7 @@ re-verifies it. Every append writes one newline-terminated row and fsyncs it, an
 the ledger also fsyncs its directory. A non-empty ledger whose final byte is not a newline has a **torn
 tail** (an interrupted append): ingress and delivery MUST refuse it with `ledger_torn_tail` and MUST NOT
 truncate it themselves. The operator repair is
-`python3 spec-engine/authority/ingress.py repair-torn-tail <ledger.jsonl>`. Without `--confirm` it is a
+the ingress tool's `repair-torn-tail <ledger.jsonl>` command. Without `--confirm` it is a
 dry run that reports the tail's kind. It verifies the intact prefix and then classifies the tail.
 
 - **Partial row:** an interrupted append, never acknowledged. With `--confirm` the repair archives the
@@ -1452,7 +1452,7 @@ dry run that reports the tail's kind. It verifies the intact prefix and then cla
   JSON, so this is damage, not a torn write. The repair MUST refuse it with the row's own reason
   (`ledger_tampered`, `ledger_chain_broken`, `decision_id_conflict`, …) and MUST NOT truncate it.
 
-`python3 spec-engine/authority/ingress.py verify-ledger <ledger.jsonl>` verifies a ledger without
+The ingress tool's `verify-ledger <ledger.jsonl>` command verifies a ledger without
 changing it. Both tools refuse a missing path with `ledger_not_found`.
 
 **Delivery head anchor (MUST).** The hash chain is an unkeyed, recomputable hash.
@@ -1528,7 +1528,7 @@ the vendored protocol schema), next to `spec-certificate.json`. spec owns the ve
 append-only ledger, and the resolver semantics above; it does **not** own the signing key, the consumer
 enforcement switch, or the downstream UI ratification flow.
 
-The earlier XG2 design (a `governance_bridge_decision` entry with a six-field audience and
+The earlier authority-event design (a `governance_bridge_decision` entry with a six-field audience and
 a keyless, hash-only "signature") is **superseded** by this protocol and is not implemented. Its
 schema `spec-engine/authority/authority-event.schema.json` is still published in the package for
 compatibility, but it is not normative and no spec code reads it.

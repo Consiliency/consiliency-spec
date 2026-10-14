@@ -1,6 +1,6 @@
 {
   "name": "@consiliency/spec",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Public Consiliency canon-core v2 package: Rust core, dep-free TypeScript/Python canon ports, vectors, and public schemas.",
   "license": "Apache-2.0",
   "type": "module",
@@ -56,6 +56,7 @@
     "consiliency_spec/py.typed",
     "docs/outside-agent-contract.md",
     "idmodel/correspondence/schema.json",
+    "rust-toolchain.toml",
     "schemas/outside-agent-route-verdict.schema.json",
     "schemas/outside-agent-submission.schema.json",
     "scripts/check_certificate_vectors.sh",

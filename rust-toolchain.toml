@@ -1,0 +1,7 @@
+# Rust toolchain pin for canon/core. rustup honours this file for every cargo/rustc invocation under
+# the repository, in CI and locally, so the canon-core gates build with the same compiler everywhere.
+# The CI workflows install the same channel; bump them together.
+[toolchain]
+channel = "1.99.0"
+profile = "minimal"
+targets = ["wasm32-unknown-unknown"]

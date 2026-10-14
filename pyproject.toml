@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "consiliency-spec"
-version = "0.7.1"
+version = "0.7.2"
 description = "Public Consiliency canon-core v2 package: Rust core, dep-free TypeScript/Python canon ports, vectors, and public schemas."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -76,6 +76,7 @@ packages = ["consiliency_spec"]
 "canon/vectors/gov-cross-repo-canon-vectors.json" = "consiliency_spec/_data/canon/vectors/gov-cross-repo-canon-vectors.json"
 "docs/outside-agent-contract.md" = "consiliency_spec/_data/docs/outside-agent-contract.md"
 "idmodel/correspondence/schema.json" = "consiliency_spec/_data/idmodel/correspondence/schema.json"
+"rust-toolchain.toml" = "consiliency_spec/_data/rust-toolchain.toml"
 "schemas/outside-agent-route-verdict.schema.json" = "consiliency_spec/_data/schemas/outside-agent-route-verdict.schema.json"
 "schemas/outside-agent-submission.schema.json" = "consiliency_spec/_data/schemas/outside-agent-submission.schema.json"
 "scripts/check_certificate_vectors.sh" = "consiliency_spec/_data/scripts/check_certificate_vectors.sh"
@@ -175,6 +176,7 @@ only-include = [
 "canon/vectors/gov-cross-repo-canon-vectors.json" = "canon/vectors/gov-cross-repo-canon-vectors.json"
 "docs/outside-agent-contract.md" = "docs/outside-agent-contract.md"
 "idmodel/correspondence/schema.json" = "idmodel/correspondence/schema.json"
+"rust-toolchain.toml" = "rust-toolchain.toml"
 "schemas/outside-agent-route-verdict.schema.json" = "schemas/outside-agent-route-verdict.schema.json"
 "schemas/outside-agent-submission.schema.json" = "schemas/outside-agent-submission.schema.json"
 "scripts/check_certificate_vectors.sh" = "scripts/check_certificate_vectors.sh"

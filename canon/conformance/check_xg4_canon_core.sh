@@ -83,6 +83,10 @@ fi
 [[ $# -eq 0 ]] || { echo "usage: $0 [--target <installed-wheel-or-unpacked-root>]" >&2; exit 2; }
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+# wasm-bindgen --target nodejs writes CommonJS glue (.js). Node reads a .js file's module type from the
+# nearest package.json, so a TMPDIR under a "type": "module" ancestor would load the glue as ESM and break
+# steps [5/9] onward. Pin the scratch tree to CommonJS so the result does not depend on where TMPDIR is.
+printf '{"type":"commonjs"}\n' > "$TMP/package.json"
 
 # cargo target dir may be redirected (e.g. CARGO_TARGET_DIR onto a build volume); discover it rather
 # than assuming canon/core/target so the BUILT artifacts are located wherever cargo actually put them.

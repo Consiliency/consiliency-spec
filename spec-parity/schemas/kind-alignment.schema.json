@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://spec.consiliency/spec-parity/kind-alignment.schema.json",
-  "title": "Kind-alignment matrix (Phase 3a)",
+  "title": "Kind-alignment matrix",
   "description": "Schema for kind-alignment.json. Realized kinds -> spec desired kinds. See SEMANTICS.md sec 5.",
   "type": "object",
   "required": ["version", "spec_desired_kinds", "realized_sources", "mappings", "fallback_rules"],

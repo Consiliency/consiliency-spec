@@ -1,8 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://spec.consiliency/spec-parity/result-state.schema.json",
-  "title": "Parity result state + per-dimension result + finding (Phase 3a)",
-  "description": "The result-state enum and the structures that carry it: per-dimension results and machine-readable findings. See SEMANTICS.md sec 6 (states) and sec 7 (dimensions). NO JSON FLOATS anywhere (canon v1 sec 6 forbids them): confidence/score fields are string-decimals.",
   "$defs": {
     "result_state": {
       "title": "result_state",
@@ -17,7 +15,8 @@
       "title": "string_decimal",
       "description": "A decimal in [0,1] as a STRING (canon forbids JSON floats). Pattern allows 0, 1, and 0.xxx forms.",
       "type": "string",
-      "pattern": "^(0|1|0\\.[0-9]+|1\\.0+)$"
+      "pattern": "^(0|1|0\\.[0-9]+|1\\.0+)$",
+      "not": {"pattern": "\\n"}
     },
     "finding": {
       "title": "finding",
@@ -75,14 +74,14 @@
       "additionalProperties": false,
       "required": ["criterion_logical_id", "result_state", "authority", "verdict_role"],
       "properties": {
-        "criterion_logical_id": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "criterion_logical_id": { "type": "string", "pattern": "^[0-9a-f]{64}$", "not": {"pattern": "\\n"} },
         "result_state": { "enum": ["pass", "fail", "unknown"] },
         "authority": { "enum": ["producer", "pipeline", null], "description": "producer: the run that executed the command owns its result; pipeline: an external acceptance authority owns the truth and this result is input to it; null: no record (SEMANTICS sec 7.6)." },
-        "authority_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]{0,127}(?![\\s\\S])", "description": "Copied unchanged from the evidence record when it carries one; never interpreted." },
+        "authority_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]{0,127}$", "not": {"pattern": "\\n"}, "description": "Copied unchanged from the evidence record when it carries one; never interpreted." },
         "verdict_role": { "enum": ["run_verdict", "pipeline_input", "unobserved"] },
         "pipeline_mode": { "enum": ["standalone", "pipeline_optional", "pipeline_required"] },
         "pipeline_engaged": { "type": "boolean" },
-        "record_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "canon semantic-content digest of the exact E(C) evidence record." }
+        "record_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$", "not": {"pattern": "\\n"}, "description": "canon semantic-content digest of the exact E(C) evidence record." }
       },
       "oneOf": [
         { "properties": { "result_state": { "const": "unknown" }, "authority": { "const": null }, "verdict_role": { "const": "unobserved" } }, "not": { "anyOf": [{ "required": ["pipeline_mode"] }, { "required": ["pipeline_engaged"] }, { "required": ["record_digest"] }, { "required": ["authority_id"] }] } },
@@ -108,7 +107,7 @@
   },
   "type": "object",
   "title": "finding_set",
-  "description": "The machine-readable finding set emitted by N(). Referenced by certificate.findings_ref.",
+  "description": "The machine-readable finding set emitted by N(). Referenced by certificate.findings_ref. Its $defs hold the result-state enum and the structures that carry it: per-dimension results and machine-readable findings. See SEMANTICS.md sec 6 (states) and sec 7 (dimensions). NO JSON FLOATS anywhere (canon v1 sec 6 forbids them): confidence/score fields are string-decimals.",
   "additionalProperties": false,
   "required": ["finding_set_id", "dimension_results", "findings", "overall_result_state"],
   "properties": {

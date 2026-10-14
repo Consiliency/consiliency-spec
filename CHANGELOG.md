@@ -3,6 +3,53 @@
 All notable changes to `@consiliency/spec` / `consiliency-spec` are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## 0.7.2 — RE2-portable schema patterns with `not` newline guards, pinned workflow actions
+
+A patch on `0.7.1`. Projection `spec-engine-projection:v5`, certificate `schema_version` `"2"` and
+canon-core `0.4.0` are unchanged, and no certificate, finding-set or payload digest moves. Public
+manifest rows move for the files listed below, and the manifest now pins **99 files** (was 98).
+
+### Changed
+
+- **Every schema `pattern` is RE2-portable.** All 46 patterns in the 12 schema files that carry
+  patterns are plain `^…$`, with no lookaround and no backreference, so RE2/Go, ECMA-262 and Python
+  read them alike. Each carries a sibling `not` that refuses a newline: `"not": {"pattern": "\\n"}`, or
+  `"not": {"type": "string", "pattern": "\\n"}` where the field is nullable (Python's `$` also matches
+  before a final newline). The outside-agent path pattern is class-only,
+  `^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$`, and its `not` refuses a newline **and** a `..` segment.
+  **The `not` keyword now carries those refusals**: a validator or a copy of a rule that reads only
+  `pattern` loses them. This **reverses the 0.7.1 advice** to validate with a regex engine that supports
+  lookahead: the `authority_id` pattern is `^…{0,127}$` again, with the `not` guard.
+- **Verifier.** `verify_certificate`'s schema check reads an unescaped `$` outside a character class as
+  the true end of the string (ECMA-262) and applies `not`, so it refuses a trailing newline in every
+  pattern-constrained field, each layer on its own. The `0.7.1` verifier accepted one in a
+  `$`-anchored field such as `authority_ref`.
+- **Outside-agent submission schema**: the `not` guards and the class-only path pattern, so its digest
+  moves. The route-verdict schema, the vector manifest and `docs/outside-agent-contract.md` are
+  unchanged; three outside-agent vectors change an example evidence path to
+  `docs/outside-agent-contract.md`.
+- **`rust-toolchain.toml`** is now part of this repository and the packages, so `canon/core` builds
+  with Rust `1.99.0` here, as in the canon-core gates.
+- **Workflows** pin every action to a full commit SHA (`actions/checkout`, `actions/setup-python`,
+  `actions/setup-node`, `pypa/gh-action-pypi-publish`). The PyPI publish action still pulls its
+  container image by a mutable tag.
+- **`canon/conformance/check_xg4_canon_core.sh`** marks its temp directory as CommonJS, so it passes
+  under a `TMPDIR` inside an ES-module package; **`canon/conformance/test_unicode_skew.py`** writes its
+  stub under a private temp directory, so parallel runs no longer collide.
+- **Documentation and schema text** (wording only): private engine paths and planning codes are
+  replaced by role names in `SEMANTICS.md`, `canon/SPEC.md`, the schema titles and descriptions,
+  `kind-alignment.json` and `permitted-freedom-vocab.json` (`kind_alignment_version` and the vocabulary
+  version are unchanged), and a bundled reference-module comment. The `greenfield` data key and values
+  are unchanged. `result-state.schema.json` and `waiver.schema.json` lose a shadowed duplicate
+  `title`/`description` (the effective schemas are unchanged).
+
+### Migration
+
+- Validate with any JSON Schema validator, RE2-based ones included, that applies `not`; keep `not`
+  wherever you copy a `pattern`.
+- Upgrade the verifier to `0.7.2`.
+- Re-record any per-file digests you pin, including the outside-agent submission schema's.
+
 ## 0.7.1 — the verifier's acceptance-scope check, a stricter `authority_id` pattern
 
 A patch on `0.7.0`. Projection `spec-engine-projection:v5`, certificate `schema_version` `"2"`,
@@ -23,7 +70,8 @@ finding-set or payload digest moves. Public manifest rows move for the files lis
 - **`authority_id` pattern** (`ec.schema.json`, `result-state.schema.json`): it now ends in the
   lookahead `(?![\s\S])` instead of `$`, which anchors the true end of the string in both Python `re`
   and ECMA-262 (`u` flag), so a trailing newline is refused. Validating with these schemas needs a
-  regex engine that supports lookahead; an RE2-based validator cannot compile the pattern.
+  regex engine that supports lookahead; an RE2-based validator cannot compile the pattern. (Reversed
+  in `0.7.2`: the pattern is plain `^…$` again, with a `not` newline guard.)
 - **Removed `spec-parity/conformance/check.sh`** from this repository and the packages. It needs engine
   files that are not public, so it could not run here. `spec-parity/conformance/check_xg0_envelope.sh`
   stays. The manifest now pins **98 files** (was 99).
@@ -45,7 +93,7 @@ finding-set or payload digest moves. Public manifest rows move for the files lis
 
 - Upgrade the verifier to `0.7.1` to get `acceptance_scope`, and pass `desired_graph=` where you hold
   `S'`.
-- Use a JSON Schema validator whose regex engine supports lookahead.
+- Use a JSON Schema validator whose regex engine supports lookahead (no longer needed from `0.7.2`).
 - Re-record any per-file digests you pin; drop `spec-parity/conformance/check.sh` from any file list.
 
 ## 0.7.0 — acceptance evidence (projection v5), Python 3.12 or later

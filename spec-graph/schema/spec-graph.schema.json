@@ -46,6 +46,7 @@
       "type": "string",
       "minLength": 1,
       "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_-]*)*$",
+      "not": {"pattern": "\\n"},
       "description": "Author-supplied dotted stable identifier (maps to idmodel qualified_symbol). Required on every node."
     },
     "tags": {
@@ -56,13 +57,13 @@
     "permitted_freedom": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "Phase-3a parity hook (SEMANTICS.md section 3): order-insensitive token set declaring what realized code may vary below the frontier without a soundness violation. FORMAL/hashed; sorted in Normalize like tags. Tokens MUST be drawn from the vocabulary spec-parity/permitted-freedom-vocab.json (the single source of truth; v1 = open_interface, order_insensitive_enum); an unknown token is a validation error in v1 (additive across versions). The same vocabulary drives the spec-engine soundness matcher (dispatch on rule_kind)."
+      "description": "Parity hook (SEMANTICS.md section 3): order-insensitive token set declaring what realized code may vary below the frontier without a soundness violation. FORMAL/hashed; sorted in Normalize like tags. Tokens MUST be drawn from the vocabulary spec-parity/permitted-freedom-vocab.json (the single source of truth; v1 = open_interface, order_insensitive_enum); an unknown token is a validation error in v1 (additive across versions). The same vocabulary drives the spec-engine soundness matcher (dispatch on rule_kind)."
     },
     "prohibition_domain": {
       "type": "object",
       "additionalProperties": false,
       "required": ["type"],
-      "description": "Closed-world domain descriptor for a prohibition (Phase-3a parity hook, SEMANTICS.md section 4). Bounds the fact set the prohibition is decided over; without it a prohibition is `unsupported`. The optional scan-predicate fields below pin the DECIDABLE assertion for a domain type (SEMANTICS section 4.1/4.4): a domain without its predicate has no scanner and stays `prohibition_domain_unscanned` -> `unsupported`. FORMAL/hashed — the set sub-fields (edge_types/forbidden_call_targets/kinds) are order-insensitive token sets sorted during Normalize; `type`/`allowed_rule` are hashed verbatim.",
+      "description": "Closed-world domain descriptor for a prohibition (Parity hook, SEMANTICS.md section 4). Bounds the fact set the prohibition is decided over; without it a prohibition is `unsupported`. The optional scan-predicate fields below pin the DECIDABLE assertion for a domain type (SEMANTICS section 4.1/4.4): a domain without its predicate has no scanner and stays `prohibition_domain_unscanned` -> `unsupported`. FORMAL/hashed — the set sub-fields (edge_types/forbidden_call_targets/kinds) are order-insensitive token sets sorted during Normalize; `type`/`allowed_rule` are hashed verbatim.",
       "properties": {
         "type": {
           "type": "string",
@@ -145,9 +146,9 @@
         "signature": { "$ref": "#/$defs/signature" },
         "tags": { "$ref": "#/$defs/tags" },
 
-        "frontier": { "type": "boolean", "description": "Phase-3a parity hook (SEMANTICS.md section 1.2.2): node is in-scope for a parity run. Default false. FORMAL/hashed." },
+        "frontier": { "type": "boolean", "description": "Parity hook (SEMANTICS.md section 1.2.2): node is in-scope for a parity run. Default false. FORMAL/hashed." },
         "permitted_freedom": { "$ref": "#/$defs/permitted_freedom" },
-        "domain": { "$ref": "#/$defs/prohibition_domain", "description": "prohibition: required closed-world domain (Phase-3a hook)." },
+        "domain": { "$ref": "#/$defs/prohibition_domain", "description": "prohibition: required closed-world domain (parity hook)." },
 
         "type_form": { "type": "string", "description": "type kind: record/enum/alias/..." },
         "members": {
@@ -169,7 +170,7 @@
         "rule": { "type": "string", "description": "security_rule: the requirement." },
         "budget": { "type": "string", "description": "performance: the budget, as a string (no floats per canon)." },
         "statement": { "type": "string", "description": "prohibition: the MUST-NOT statement." },
-        "observable": { "type": "boolean", "description": "prohibition: can an extractor observe a violation? false => Phase-3 unknown, never silent pass." },
+        "observable": { "type": "boolean", "description": "prohibition: can an extractor observe a violation? false => parity `unknown`, never a silent pass." },
         "given": { "type": "string", "description": "acceptance_criterion: precondition." },
         "when": { "type": "string", "description": "acceptance_criterion: action." },
         "then": { "type": "string", "description": "acceptance_criterion: expected outcome." },
@@ -241,6 +242,7 @@
     "derived_logical_id": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$",
+      "not": {"pattern": "\\n"},
       "description": "DERIVED: the node's logical_id as Normalize writes it (idmodel spec_revision_logical_id, file_role = level). Optional on input; when present it MUST equal the value recomputed from the node. This schema checks only the shape; the equality is enforced by spec_graph.validate (and the MCP validate tool, which runs it), so schema validation alone does not prove a carried id is genuine."
     },
     "derived_content_digest": {

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://spec.consiliency/spec-parity/ec.schema.json",
   "title": "Realized extract E(C) (engine input shape)",
-  "description": "The structural shape spec-engine requires of a realized extract E(C) before it projects it (SEMANTICS sec 0, entry validation). Written from the E(C)s every committed engine path feeds the engine (greenfield, treesitter-chunker, protobuf, BAML adapters and the hand-authored fixtures). It is deliberately OPEN (additionalProperties allowed): producers carry extra provenance, and the engine reads only the fields typed here. Graded content (extraction_coverage) is NOT shape-checked: a malformed coverage record is graded `unmeasured` by SEMANTICS sec 4.2, never rejected. Beyond this schema, projection.validate_ec also requires every boundary_id to be unique (JSON Schema cannot express uniqueness by a member key) and rejects every JSON float anywhere in E(C), including an integral one such as 2.0 (canon sec 6 forbids floats in canonical content; JSON Schema's `integer` type admits 2.0, so this rule cannot be stated here). A non-integral line_span entry such as 1.5 is rejected by both. projection.validate_ec is the stdlib mirror of this schema that the engine runs at entry; the two are kept in lockstep by spec-engine/test_engine.py.",
+  "description": "The structural shape the engine requires of a realized extract E(C) before it projects it (SEMANTICS sec 0, entry validation). Written from the E(C)s every committed engine path feeds the engine (the `greenfield`, treesitter-chunker, protobuf and BAML sources and the hand-authored fixtures). It is deliberately OPEN (additionalProperties allowed): producers carry extra provenance, and the engine reads only the fields typed here. Graded content (extraction_coverage) is NOT shape-checked: a malformed coverage record is graded `unmeasured` by SEMANTICS sec 4.2, never rejected. Beyond this schema, projection.validate_ec also requires every boundary_id to be unique (JSON Schema cannot express uniqueness by a member key) and rejects every JSON float anywhere in E(C), including an integral one such as 2.0 (canon sec 6 forbids floats in canonical content; JSON Schema's `integer` type admits 2.0, so this rule cannot be stated here). A non-integral line_span entry such as 1.5 is rejected by both. projection.validate_ec is the stdlib mirror of this schema that the engine runs at entry; the two are kept in lockstep by the engine's test suite.",
   "type": "object",
   "required": ["nodes"],
   "properties": {
@@ -34,14 +34,14 @@
       "additionalProperties": false,
       "required": ["criterion_logical_id", "argv", "exit_code", "log_sha256", "pipeline_mode", "pipeline_engaged", "authority"],
       "properties": {
-        "criterion_logical_id": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "criterion_logical_id": { "type": "string", "pattern": "^[0-9a-f]{64}$", "not": {"pattern": "\\n"} },
         "argv": { "type": "array", "minItems": 1, "prefixItems": [{ "type": "string", "minLength": 1 }], "items": { "type": "string" } },
         "exit_code": { "type": "integer", "minimum": -9007199254740991, "maximum": 9007199254740991 },
-        "log_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "SHA-256 of the command log bytes; no log payload is carried." },
+        "log_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "not": {"pattern": "\\n"}, "description": "SHA-256 of the command log bytes; no log payload is carried." },
         "pipeline_mode": { "enum": ["standalone", "pipeline_optional", "pipeline_required"] },
         "pipeline_engaged": { "type": "boolean", "description": "Whether the pipeline actually engaged on this run, including pipeline_optional." },
         "authority": { "enum": ["producer", "pipeline"], "description": "Who owns acceptance truth for this run (SEMANTICS sec 7.6): `producer`, the run that executed the command, owns its own result; `pipeline`, an external acceptance authority owns the truth and this result is input to it. Fixed by pipeline_mode and pipeline_engaged. Not a claim that any pipeline issued a verdict." },
-        "authority_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]{0,127}(?![\\s\\S])", "description": "Optional producer-declared name of the concrete owner (for example `agent-harness` or a CI system's name). Copied into the acceptance result and bound by record_digest; spec never interprets it." }
+        "authority_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._/-]{0,127}$", "not": {"pattern": "\\n"}, "description": "Optional producer-declared name of the concrete owner (for example a CI system's or an agent runtime's name). Copied into the acceptance result and bound by record_digest; spec never interprets it." }
       },
       "allOf": [
         { "if": { "properties": { "pipeline_mode": { "const": "standalone" } } }, "then": { "properties": { "pipeline_engaged": { "const": false } } } },
