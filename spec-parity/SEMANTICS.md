@@ -417,7 +417,7 @@ left `prohibition_domain_unscanned` → `unsupported` for want of a scanner, sec
 - `forbidden_call_targets` — an explicit, ordered list of **forbidden target tokens** (e.g. `["new Date",
   "Date.now", "Date"]`). These are matched against the edge's realized **target token** (the callee, as the
   extractor records it). Matching is **exact token equality** against the list (NOT a loose substring — so
-  `validateDateRange` does not false-positive and `new Date` is not missed). An `edge_set` domain with NO
+  `validateDateRange` does not false-positive). An `edge_set` domain with NO
   `forbidden_call_targets` (a bare `{type: edge_set, edge_types: [...]}`) declares no decidable assertion and
   stays `prohibition_domain_unscanned` → `unsupported` (the checker gap is real; sec 7.4).
 
@@ -426,8 +426,9 @@ shares a **semantic_path with a boundary in the prohibition's GOVERNED subgraph*
 the prohibition is `governed_by`-attached to (sec 10.1), expanded to their realized descendants (the bodies).
 This is sec 4.1's "within the frontier subgraph" made precise for a *governed* prohibition: the domain is
 bounded to **what the prohibition is attached to**, NOT the entire frontier. (An export-determinism
-prohibition `governed_by` `exportBundle` + `canonicalize` scans those two functions' call edges — ~9 edges in
-the real graphbase run — not unrelated frontier methods like `Graph.addNode`.) For each domain edge, the
+prohibition `governed_by` `exportBundle` + `canonicalize` scans those two functions' call edges — 12 edges in
+the recorded treesitter-chunker 6.0.0 graphbase run, versus 9 in the 5.3.0 capture — not unrelated frontier
+methods like `Graph.addNode`.) For each domain edge, the
 **fact slot** the prohibition reads is the edge's **target token** (the callee identifier). The decision then
 follows sec 4.2:
 
@@ -442,28 +443,46 @@ decide: violation -> fail ; else full -> pass ; else partial -> unknown (prohibi
 degrades a check that **depends on resolving an edge to a boundary** to `unknown` when the edge is
 `resolution = unresolved|ambiguous`. A forbidden-call-target scan does **NOT** depend on edge *resolution* —
 its fact slot is the **target token**, not the resolved boundary. The treesitter-chunker extractor records the
-target token for an unresolved/ambiguous call (e.g. `JSON.stringify`, `Object.keys`, `new Map` all surface as
-`calls` edges with `resolution: unresolved` but an intact `to` token), so a `new Date` call would surface its
-token identically. Therefore, **for a target-token scan, coverage is full iff every domain edge carries an
+target token for an unresolved/ambiguous call (e.g. `JSON.stringify`, `Object.keys`, and constructor
+callee `Map` in syntax IR 3.0 surface as `calls` edges with `resolution: unresolved` but an intact `to`
+token). Therefore, **for a target-token scan, coverage is full iff every domain edge carries an
 observable target token — edge `resolution` status does NOT reduce coverage.** This carve-out is *scoped to the
 token-presence scan*; it is NOT a blanket "unresolved edges are fully observable." A scan that needed the
 resolved callee boundary (e.g. "no call INTO module X" by boundary identity) would still take sec 5's
 `unresolved`/`ambiguous` → `unknown` degradation. (Empirically: over the real graphbase governed export
-subgraph — `exportBundle` + `canonicalize`, 9 `calls` edges — every edge carries an observable target token (0
-missing) and none is a Date token, so the in-anger determinism prohibition decides `pass` under full coverage.
+subgraph — `exportBundle` + `canonicalize`, 12 `calls` edges in the recorded 6.0.0 run — every edge carries
+an observable target token (0 missing) and none matches the Date list, so the in-anger determinism
+prohibition decides `pass` under full coverage. The historical 5.3.0 capture scanned 9 calls.
 Had any domain edge carried a missing/computed target token, coverage would be partial → `unknown`, never a
 silent pass.)
+
+**Exact-spelling limits (illustrative).** Under treesitter-chunker 6.0.0 syntax IR 3.0, a recognized
+call's reference is the raw callee source slice. An unresolved `new Date()` has token `Date`; the
+5.3.0 syntax IR 2.0 spelling was `new Date`. The example list covers these two constructor spellings
+and literal `Date.now`, but not `Date .now`, a newline-bearing `Date\n.now`, or `Date?.now`. Source
+whitespace, comments, line continuations, optional chaining and receiver/module aliases can change
+that exact slice. Such a nonmatching token is still observable: a clean scan can return `pass` with
+full coverage despite a wall-clock call. The scan does not normalize callees or expand aliases, so
+the list is not general detection of wall-clock use. Exact-token policies are extractor-version-bound
+and need a spelling audit when re-extracting. In E(C), the scan reads `to`; a resolved boundary id in
+that slot is distinct from the raw reference retained in `to_token`. No alternative match against
+`to_token` is implied. The recorded computed-call form `a["b"]()` emitted no call edge under either
+5.3.0 or 6.0.0: an omitted edge is not a present edge with a missing token and does not by itself
+make scan coverage partial. File extraction coverage does not establish call-form completeness.
 
 **Membership is by SEMANTIC PATH, not boundary_id (the occurrence-split guard).** tsc emits the SAME source
 symbol at one `semantic_path` as **multiple occurrence nodes** (e.g. a declaration + an overload), each with a
 distinct `@<content-hash>` `boundary_id`. The correspondence map (sec 2) matches the desired node to **one**
 occurrence, but the call edges may fire from a **sibling** occurrence at the same path (the implementation that
-carries the body). Scoping the domain by `boundary_id` alone would silently DROP that sibling's edges — and in
-the real graphbase run that sibling is exactly `bundle/canonicalize.ts::canonicalize` (the determinism-critical
-function the prohibition is about): its matched occurrence carried no call edges while its sibling occurrence
-emitted all four (`Object.keys`/`Array.isArray`/`sort`/`value.map`). A boundary_id-scoped scan would therefore
-have reported `pass` **without ever scanning canonicalize** — a silent green over an unobserved-but-governed
-slot. So `D` membership is by the GOVERNED boundaries' **semantic_paths**: an edge whose `from` boundary shares
+carries the body). Scoping the domain by `boundary_id` alone would silently DROP that sibling's edges. In the treesitter-chunker
+3.x graphbase captures where this guard was introduced, that sibling was exactly
+`bundle/canonicalize.ts::canonicalize` (the determinism-critical function the prohibition is about): its matched
+occurrence carried no call edges while its sibling occurrence emitted all four
+(`Object.keys`/`Array.isArray`/`sort`/`value.map`), so a boundary_id-scoped scan would have reported `pass`
+**without ever scanning canonicalize** — a silent green over an unobserved-but-governed slot. The 4.0.0 through
+5.3.0 captures attributed all four calls to the matched occurrence. In the recorded 6.0.0 capture the matched
+occurrence carries five call edges and its sibling carries one (`canonicalize`), which a boundary_id-scoped scan
+would omit. So `D` membership is by the GOVERNED boundaries' **semantic_paths**: an edge whose `from` boundary shares
 a semantic_path with any governed boundary (or its descendant body) is in the domain (a node lacking a
 semantic_path falls back to its boundary_id, so it is never excluded). This reconciles the occurrence split so
 every edge of a governed symbol is scanned.

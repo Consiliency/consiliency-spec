@@ -2,7 +2,7 @@
   "package": {
     "npm": "@consiliency/spec",
     "pypi": "consiliency-spec",
-    "version": "0.7.2"
+    "version": "0.8.0"
   },
   "public_files": [
     {
@@ -155,7 +155,7 @@
     },
     {
       "path": "consiliency_spec/__init__.py",
-      "sha256": "acac7f1c38ecb23e696642b55cb5bca24baa17671b16515a47a198e17b00a5bb"
+      "sha256": "6616ae84e45ac56a35eda45a9ea5a2886a46f275e419749d8bd78abc80fad9eb"
     },
     {
       "path": "consiliency_spec/_bundle/spec_core/__init__.py",
@@ -239,7 +239,7 @@
     },
     {
       "path": "spec-parity/SEMANTICS.md",
-      "sha256": "a279db4a915f95e8c8461631ac8ae27a37b4773901213d9bab6482db06754f36"
+      "sha256": "c5cd412862238b2fd71f37a250edcdf6c4102a041c15c8efb216ad262a4a35b2"
     },
     {
       "path": "spec-parity/conformance/check_xg0_envelope.sh",

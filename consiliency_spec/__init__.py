@@ -16,7 +16,7 @@ from .certificate_verifier import (
 
 SPEC_PACKAGE = "consiliency-spec"
 SPEC_NPM_PACKAGE = "@consiliency/spec"
-SPEC_VERSION = "0.7.2"
+SPEC_VERSION = "0.8.0"
 __version__ = SPEC_VERSION
 
 _MANIFEST = "consiliency-spec.public-manifest.json"

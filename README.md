@@ -32,6 +32,19 @@ Every software project has two things: a **blueprint** (what it's *supposed* to 
 
 The six parity dimensions: **completeness**, **soundness**, **closure**, **prohibition**, **revision-alignment**, **acceptance** (`spec-engine-projection:v5`; certificates from before 0.7.0 carry the first five).
 
+### Producer migration 0.8.0
+
+The 0.8.0 version boundary documents a producer input migration. The public verifier API,
+projection `spec-engine-projection:v5`, certificate schema `"2"`, canon-core `0.4.0` and Python 3.12
+floor stay unchanged. Stored certificates remain readable and keep their bytes. These packages do
+not contain the treesitter extractor or add a parser dependency.
+
+Producer integrations adopting treesitter-chunker 6.0.0 must audit exact forbidden-call spellings
+and regenerate affected inputs and certificates. Raw callee slices preserve qualification and
+formatting; a full-coverage scan can pass when an actual call has a different spelling or was not
+emitted as an edge. No alias expansion or callee normalization is implied. See SEMANTICS §4.4 and
+CHANGELOG.md for the bounded token and occurrence examples. All 99 public manifest files remain.
+
 ### Schema patterns 0.7.2 — patch
 
 `0.7.2` keeps projection `spec-engine-projection:v5`, certificate `schema_version` `"2"` and canon-core
