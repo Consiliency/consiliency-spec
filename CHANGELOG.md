@@ -3,6 +3,35 @@
 All notable changes to `@consiliency/spec` / `consiliency-spec` are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## 0.8.0 — explicit producer input migration and clarified exact-token limits
+
+The public verifier API, projection `spec-engine-projection:v5`, certificate schema `"2"`,
+canon-core `0.4.0` and Python 3.12 floor are unchanged. Existing stored certificates retain their
+bytes and remain readable under the same verifier contract. These packages do not include a
+treesitter extractor or gain a parser dependency.
+
+### Changed
+
+- SEMANTICS §4.4 explains that exact forbidden-call tokens are extractor-version-bound. A producer
+  adopting treesitter-chunker 6.0.0 syntax IR 3.0 observes raw callee slices: constructors, qualified
+  names, whitespace, comments, optional chaining and line continuations can change matching.
+  Full scan coverage does not guarantee that all call forms or policy spellings were observed.
+- The same section distinguishes the scanned `to` slot from retained `to_token`, omitted computed
+  call edges from present edges with missing targets, and the unchanged semantic-path membership
+  rule. Historical occurrence-split observations are dated and current counts are stated explicitly.
+- Coordinated version metadata, README and these release notes advance to 0.8.0. All 99 public
+  manifest files remain. Two manifest members change since 0.7.2: SEMANTICS and the version
+  constant in `consiliency_spec/__init__.py`. The verifier code and public schemas are unchanged.
+
+### Migration
+
+- Verifier-only callers need no API or certificate-schema migration.
+- Producer integrations adopting the new extractor baseline must audit forbidden-call lists,
+  regenerate affected inputs and certificates, and record changed digests. Preserve historical
+  records unchanged. Known spellings are finite controls, not alias or formatting normalization.
+- Keep the existing schema `not` newline/path guards when copying schemas. This release does not
+  remove the 0.7.2 validation requirements.
+
 ## 0.7.2 — RE2-portable schema patterns with `not` newline guards, pinned workflow actions
 
 A patch on `0.7.1`. Projection `spec-engine-projection:v5`, certificate `schema_version` `"2"` and
