@@ -9,9 +9,10 @@ already-NFC content (the entire committed corpus) while no longer depending on a
 
 The pin did not disappear — it MOVED. NFC is still defined against a Unicode version, and the Python
 and TypeScript ports must agree, so the ``unicodedata2`` backport pin (Node ICU 16.0) and the
-fail-closed version assertion live HERE now. Removing the pin from canon while forgetting to apply
-NFC at ingest would silently reintroduce cross-language NFC skew; this module is where ingest paths
-get it. See SPEC.md section 5 and canon/py/requirements.txt.
+fail-closed version assertion live HERE now (the stdlib DB stands in only where the backport is not
+installed and the stdlib already reports the pinned version, as on CPython 3.14). Removing the pin
+from canon while forgetting to apply NFC at ingest would silently reintroduce cross-language NFC
+skew; this module is where ingest paths get it. See SPEC.md section 5 and canon/py/requirements.txt.
 
 Public API:
     normalize_string(s) -> str                       # NFC a single external string
@@ -27,27 +28,43 @@ from typing import Any, Dict, Mapping
 # Unicode database pin (SPEC.md section 5) — RELOCATED from canon to the ingest boundary.
 #
 # NFC is defined against a Unicode version. Stdlib ``unicodedata`` is bound to whatever Unicode DB
-# the host CPython was built with (3.10 ships 13.0.0; newer builds differ), so it cannot guarantee
-# the SAME NFC as the TS port (Node ICU). We pin the maintained PyPI backport ``unicodedata2``
-# exactly to Node's Unicode version (16.0) and use it for ALL ingest NFC. See canon/py/requirements
-# .txt for the exact pin; the assertion below is fail-closed so a wrong build can NEVER silently
-# diverge.
+# the host CPython was built with (3.12 ships 15.0.0, 3.14 ships 16.0.0, later builds will differ),
+# so the host DB alone cannot guarantee the SAME NFC as the TS port (Node ICU). The database is
+# resolved in this order and asserted fail-closed below, so a wrong build can NEVER silently diverge:
+#   - the maintained PyPI backport ``unicodedata2`` when it is installed (pinned exactly to Node's
+#     Unicode version, 16.0; see canon/py/requirements.txt). An installed backport at any other
+#     version is a misconfiguration and refuses to load; it is never skipped in favour of the stdlib.
+#   - only when the backport is NOT installed: the stdlib DB, and only if it already reports the
+#     pinned version. The packages leave the backport out on CPython 3.14 (whose stdlib is Unicode
+#     16.0.0) through the marker ``python_version != '3.14' or platform_python_implementation !=
+#     'CPython'``; canon/conformance/test_unicode_skew.py proves the two 16.0 databases agree on
+#     every code point.
 # --------------------------------------------------------------------------- #
 EXPECTED_UNICODE = "16.0"  # major.minor; matches Node's process.versions.unicode
-
-try:
-    import unicodedata2 as unicodedata  # pinned Unicode 16.0 DB (see requirements.txt)
-except ImportError as exc:  # pragma: no cover - environment misconfiguration
-    raise ImportError(
-        "canon's ingest boundary requires the pinned 'unicodedata2' backport for a deterministic "
-        "Unicode DB (install canon/py/requirements.txt: unicodedata2==16.0.0). Stdlib 'unicodedata' "
-        "is bound to the host CPython build and would NOT match the TypeScript port byte-for-byte."
-    ) from exc
 
 
 def _unicode_major_minor(version: str) -> str:
     """Reduce a Unicode version string (e.g. '16.0.0') to 'major.minor' (e.g. '16.0')."""
     return ".".join(version.split(".")[:2])
+
+
+try:
+    import unicodedata2 as unicodedata  # pinned Unicode 16.0 DB (see requirements.txt)
+    UNICODE_DB_SOURCE = "unicodedata2"
+except ModuleNotFoundError as exc:
+    if exc.name != "unicodedata2":  # the backport is present but broken: never mask that
+        raise
+    import unicodedata as _stdlib_unicodedata
+
+    if _unicode_major_minor(_stdlib_unicodedata.unidata_version) != EXPECTED_UNICODE:
+        raise ImportError(
+            "canon's ingest boundary needs a Unicode %s database for a deterministic NFC: install the "
+            "pinned 'unicodedata2' backport (canon/py/requirements.txt: unicodedata2==16.0.0). This "
+            "interpreter's stdlib 'unicodedata' reports %s and would NOT match the TypeScript port "
+            "byte-for-byte." % (EXPECTED_UNICODE, _stdlib_unicodedata.unidata_version)
+        ) from exc
+    unicodedata = _stdlib_unicodedata
+    UNICODE_DB_SOURCE = "stdlib unicodedata"
 
 
 # Fail-closed version assertion (SPEC.md section 5). A mismatch here means the NFC DB in use is NOT
@@ -56,9 +73,9 @@ def _unicode_major_minor(version: str) -> str:
 _ACTUAL_UNICODE = _unicode_major_minor(unicodedata.unidata_version)
 if _ACTUAL_UNICODE != EXPECTED_UNICODE:
     raise RuntimeError(
-        "canon ingest Unicode DB mismatch: expected %s, got %s (from unicodedata2 %s). NFC "
+        "canon ingest Unicode DB mismatch: expected %s, got %s (from %s %s). NFC "
         "determinism across the Python and TypeScript ingest paths is not guaranteed; refusing to "
-        "load." % (EXPECTED_UNICODE, _ACTUAL_UNICODE, unicodedata.unidata_version)
+        "load." % (EXPECTED_UNICODE, _ACTUAL_UNICODE, UNICODE_DB_SOURCE, unicodedata.unidata_version)
     )
 
 

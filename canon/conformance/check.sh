@@ -40,12 +40,30 @@ echo "canon dir: $CANON_DIR"
 echo
 
 # --- 0. Pinned Unicode DB for the INGEST boundary (fail-closed) ---
-# canon v2 no longer needs a Unicode DB, but the INGEST boundary (canon/py/ingest.py) does — that is
-# where NFC now lives, pinned to Node's Unicode version. Install the exact pin so the ingest tests in
-# step 3 are reproducible in a clean CI (not just where it happens to be present).
-echo "[0/5] Pinned Unicode DB for the ingest boundary (unicodedata2)"
+# canon v2 no longer needs a Unicode DB, but the INGEST boundary (canon/py/canon_ingest.py) does — that
+# is where NFC now lives, pinned to Node's Unicode version. Install the pin (requirements.txt: the
+# unicodedata2 backport, which its marker leaves out on CPython 3.14), then load the ingest boundary
+# itself: its own fail-closed rule decides whether this interpreter has a Unicode 16.0 database (the
+# backport, or a stdlib that already reports 16.0 when the backport is absent) and which one it uses.
+echo "[0/5] Pinned Unicode DB for the ingest boundary"
 python3 -m pip install --quiet --disable-pip-version-check -r "$PY/requirements.txt"
-python3 -c "import unicodedata2; print('    unicodedata2', unicodedata2.unidata_version)"
+python3 -c "from spec_core.canon import canon_ingest as i; print('    ingest Unicode DB:', i.UNICODE_DB_SOURCE, i.unicodedata.unidata_version)"
+# SPEC_EXPECT_UNICODE_DB (set by CI on CPython 3.14: "stdlib unicodedata") pins WHICH database the gate
+# runs on, so CI proves the stdlib path for real: the backport must not even be importable, and the
+# ingest boundary must have chosen the stdlib.
+if [ -n "${SPEC_EXPECT_UNICODE_DB:-}" ]; then
+  python3 - "$SPEC_EXPECT_UNICODE_DB" <<'EXPECT'
+import importlib.util, sys
+from spec_core.canon import canon_ingest as i
+want = sys.argv[1]
+if i.UNICODE_DB_SOURCE != want:
+    sys.exit("FAIL: ingest loaded %r, but SPEC_EXPECT_UNICODE_DB is %r" % (i.UNICODE_DB_SOURCE, want))
+if want == "stdlib unicodedata" and importlib.util.find_spec("unicodedata2") is not None:
+    sys.exit("FAIL: SPEC_EXPECT_UNICODE_DB is the stdlib, but unicodedata2 is importable in this interpreter")
+print("    SPEC_EXPECT_UNICODE_DB=%s: confirmed (unicodedata2 importable: %s)"
+      % (want, importlib.util.find_spec("unicodedata2") is not None))
+EXPECT
+fi
 echo
 
 # --- 1. Python canon self-conformance ---

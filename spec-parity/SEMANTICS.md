@@ -137,10 +137,12 @@ frontier purposes. If the metamodel later admits subgraph endpoints as first-cla
 Before any dimension can run, `P` must decide, for each in-scope desired node `d`, which realized facts (if
 any) correspond to it. This uses idmodel:
 
-- **Primary:** the idmodel **correspondence map** (idmodel sec 6) entry whose continuity line contains `d`'s
-  Tier-1 `logical_id`, resolved to the realized `occurrence_id`(s) for the run's revision.
-- **Fallback (no correspondence entry):** compute the realized fact's Tier-1 `logical_id` and match by equality
-  to `d`'s `logical_id` for the same revision (idmodel sec 3).
+- **Primary:** an engine correspondence entry whose `desired_name` names S node `d` and whose
+  `realized_boundary_id` names an E(C) `boundary_id`, resolved to its occurrence id for the run's revision.
+- **Fallback (current versus historical):** the engine performs **no** logical-id fallback. With no
+  correspondence entry a desired node is unmatched (`match_origin: "none"`; the only other value is
+  `"correspondence"`). An earlier design described Tier-1 `logical_id` equality matching; that path
+  is not implemented.
 - **Kind gate:** a correspondence is only parity-bearing if the realized kind aligns to `d`'s desired kind per
   `kind-alignment.json` (sec 5). A correspondence whose realized kind has more than one candidate desired
   kind that correspondence cannot settle records `ambiguous_kind_alignment` and yields `unknown` for
@@ -148,8 +150,16 @@ any) correspond to it. This uses idmodel:
   is a soundness `fail kind_mismatch` (sec 7.2).
 
 The result of `P` is a **projection**: for each in-scope `d`, a `match` record = `{desired d,
-realized_occurrences[], match_origin (correspondence|logical_id|none), confidence}` — confidence as a
+realized_occurrences[], match_origin (correspondence|none), confidence}` — confidence as a
 string-decimal.
+
+**Engine correspondence input.** The input is an object `{entries: [...]}`, with optional `doc`,
+`ec_revision_id`, `spec_revision_id` and `idmodel_version`. Every entry requires non-empty strings
+`desired_name` (an S node name) and `realized_boundary_id` (an E(C) boundary_id), `lifecycle` (the
+idmodel lifecycle enum), `mapping_origin` (the idmodel origin enum), and `confidence` (a string decimal
+or non-negative scaled integer). `manual_override` is an optional boolean. Unknown entry keys are
+ignored. This is not the idmodel continuity map at `idmodel/correspondence/schema.json`, which uses
+`logical_id`/`occurrence_id` and is read as the optional revision correspondence.
 
 **Correspondence-entry resolution.** A map entry is parity-bearing only if
 it *resolves*. Each match record carries `correspondence_status` (and the entry's
@@ -891,7 +901,7 @@ This mirrors the `unknown` philosophy: never overwrite "we don't know / it faile
   deterministic **`as_of`** date (`schemas/run-descriptor.schema.json`, `YYYY-MM-DD`), never the wall clock:
   a waiver with `expiry < as_of` is expired; `expiry == as_of` still suppresses (end-of-day). A run that
   supplies waivers **must** carry `as_of` — the engine refuses to evaluate waivers without it.
-- **approver_ref** — a reference to the governance approval (ratification id / portal governance_event_id),
+- **approver_ref** — a reference to the governance approval (ratification id / consumer governance_event_id),
   not a name/timestamp. Wall-clock of approval is provenance → `locator` (non-hashed, canon sec 10).
 - **waiver_id** — canon `semantic-content` digest over the hashed content fields. Identifies the waiver by
   meaning; changing the reason/scope/expiry mints a new waiver (forces a fresh approval trail).
@@ -987,9 +997,12 @@ A certificate MUST pin (union of the Storage `certificates` record shape and the
   `result_state` (it sits outside the `finding_set_id` preimage); it changes only the certificate digest
   and whether downstream gates may treat the certificate as authoritative.
 - **`code_head_sha`** — the code HEAD the extract came from.
-- **`canon_version`, `idmodel_version`, `kind_alignment_version`, `projection_algo_version`** — every input
-  whose change can change the result is pinned, so a certificate is reproducible and two certificates that
-  legitimately differ can be told apart by version. **`canon_version` is `v2` since NFCBOUNDARY** (canon
+- **`canon_version`, `idmodel_version`, `kind_alignment_version`, `projection_algo_version`** — the certificate pins S
+  (`desired_graph_digest`, `spec_revision_digest`), E(C) (`ec_digest`), the waiver set and its evaluation
+  date when waivers apply (`waivers_ref`), and these version labels. It does **not** pin: the
+  correspondence map; the run descriptor's `frontier_selector`; the optional revision continuity map;
+  or the contents of the kind-alignment and permitted-freedom files (only their version labels are
+  pinned). Each can change the projection and findings. `findings_ref` binds the result, not those inputs. **`canon_version` is `v2` since NFCBOUNDARY** (canon
   relocated Unicode NFC out of the hash to the ingestion boundary; digest prefix `spec-canon:v1:`→
   `spec-canon:v2:`). This is a **certificate-version boundary**: every cert digest changed at v1→v2 by
   construction (the prefix is in the preimage), but **no parity verdict changed** — only the digests and
@@ -1006,7 +1019,7 @@ A certificate MUST pin (union of the Storage `certificates` record shape and the
   copies from the `finding_set` at `findings_ref`; they must not drift.
 - **`permitted_freedom_vocab_version`** — version of `permitted-freedom-vocab.json`; a vocab change can
   excuse (or stop excusing) a below-frontier deviation, so it is pinned alongside the other input versions.
-- **`findings_ref`** — digest pointer to the `finding_set` (pointer, not payload; portal `metadata_only`).
+- **`findings_ref`** — digest pointer to the `finding_set` (pointer, not payload; consumer `metadata_only`).
 - **`vacuity?`** — the sec 6.5 tripwire record, present only on a vacuous run (hashed).
 - **`extraction_coverage?`** — the sec 4.2 coverage summary, present only when the `E(C)` extraction was
   measured-partial or unmeasured (hashed). Its absence means measured-full or a declared (fixture) `E(C)`.
@@ -1060,7 +1073,7 @@ other version by name instead of checking it under another version's dimension r
   - **Default-closure prohibitions** (sec 1.2(3)): under the default closure every prohibition in `S`
     that no in-scope node is `governed_by` (governed nodes filtered by kind, unreachable from a
     capability, or none) is `unknown prohibition_outside_default_closure` (was silently out of scope).
-  - Not grading changes, in the same release: the portal payload carries the certificate's optional
+  - Not grading changes, in the same release: the consumer payload carries the certificate's optional
     `extraction_coverage` summary (sec 12.2); `kind-alignment.json` documents how BAML types are graded
     (sec 5, no version bump).
 - **`spec-engine-projection:v3`** (the authority-in-certificate release, certificate `schema_version`
@@ -1156,10 +1169,36 @@ The sidecar is **opt-in and outside every digest**. With the flag off, `parity()
 `{finding_set, certificate}` and every byte is unchanged. With it on, `finding_set` and `certificate`
 are still byte-identical, and the CLI's stdout does not change (the sidecar goes only to `PATH`).
 `emit_preimages` must be a boolean. The sidecar holds `S` content and findings, so it is **not
-metadata-only**: never deliver it as, or inside, a portal payload (sec 12). It is versioned by
+metadata-only**: never deliver it as, or inside, a consumer payload (sec 12). It is versioned by
 `sidecar_version`, not by the certificate `schema_version` or `projection_algo_version`.
 
 ---
+
+### 9.4 What a certificate does not pin: per-node states
+
+Per-node `pass` and in-scope `unknown` exist only in the projection, never as certificate fields.
+A consumer deriving per-node states uses one of these grades; a grade never exceeds the certificate's
+authority, and "certified" is not a per-node grade:
+
+- **`recomputed`** grades a recompute check over a delivered certificate, finding set and per-node map
+  when supplied S, E(C), correspondence and run descriptor reproduce all three byte-for-byte, for a
+  grounded, non-vacuous certificate with a reproducible E(C). It proves input sufficiency, not the
+  historical producer's input identity. A page is never graded `recomputed` because the same process
+  produced its map; it carries the grade of its own binding check.
+- **`consistency_checked`** means a producer-attested map agrees with an integrity-verified certificate
+  and finding set on every certified non-pass state, graph identity and key membership, for a grounded,
+  non-vacuous certificate with a reproducible E(C). Out-of-scope or unwitnessed pass stays
+  producer-attested.
+- **`advisory`** covers anything else. Draft and vacuous results withhold per-node states altogether.
+
+Integrity is not authenticity. Recomputing the certificate digest, `finding_set_id` and result
+consistency establishes internal consistency only. Authenticity needs an authority event (§13) or a
+trusted digest.
+
+A matched node's per-node `pass` means correspondence matched it and no non-pass finding names it,
+within the measured `extraction_coverage`. An in-scope prohibition's `pass` means its scan ran over
+E(C) without a non-pass finding; no correspondence is involved. Neither says anything about code
+outside E(C), call completeness or extraction completeness. No certificate schema or field changes.
 
 ## 10. Worked examples (the implementability test)
 
@@ -1225,14 +1264,14 @@ Everything not listed here is fully pinned by this document + the three schemas 
 
 ---
 
-## 12. Delivery — the metadata-only portal payload
+## 12. Delivery — the metadata-only delivery payload (`portal-payload`)
 
-> **Status: v0 draft — pending portal co-design sign-off.** The portal repo is **fenced**; this section and
-> `schemas/portal-payload.schema.json` are drafted spec-side and **freeze after Wave-B review**. The shape may
-> change once the portal co-designs it; until then it is a self-consistent, testable contract that the spec
-> side can produce and prove.
+> **Status: v0 draft — pending consumer co-design sign-off.** This section and
+> `schemas/portal-payload.schema.json` are drafted producer-side and **freeze after Wave-B review**.
+> The shape may change once the consumer co-designs it; until then it is a self-consistent, testable
+> contract the producer can produce and prove.
 
-A **delivery** is the metadata-only, render-ready **projection of a certificate** that a consumer (the portal)
+A **delivery** is the metadata-only, render-ready **projection of a certificate** that a consumer
 renders. It is NOT the certificate, and NOT the finding_set — it is a redacted, content-addressed *summary*.
 
 Schema: `schemas/portal-payload.schema.json`. Producer: the engine's delivery step, `project(certificate,
@@ -1253,7 +1292,7 @@ finding_set.finding_set_id` so a certificate can never be paired with the wrong 
 
 The payload is built by **allowlist**: only known-safe fields are copied in. Nothing is "copied then scrubbed".
 
-- **`certificate_digest`** — the certificate's authoritative identity (its `digest`). The portal can replay-
+- **`certificate_digest`** — the certificate's authoritative identity (its `digest`). The consumer can replay-
   verify against the stored certificate by this digest (canon §9 verbatim replay; `OPEN-5` byte-match domain).
 - **`spec_revision_digest`, `desired_graph_digest`, `ec_digest`, `code_head_sha`, `ec_revision_id`** — the
   provenance pins. All are **digests/ids** — content-addressed, **not fetchable URLs** (SSRF-safe).
@@ -1268,7 +1307,7 @@ The payload is built by **allowlist**: only known-safe fields are copied in. Not
   certificate value `grounded` delivers as `grounded`; an absent or other value (a schema-1
   certificate) is `draft`. A `draft` payload exists only when the consumer opted in (sec 12.6).
 - **`ec_reproducible`** + **`advisory`** — `advisory = not ec_reproducible`. A non-reproducible E(C) makes the
-  delivery **advisory** (the portal must not gate on it). Only an explicit `ec_reproducible: true` on the
+  delivery **advisory** (the consumer must not gate on it). Only an explicit `ec_reproducible: true` on the
   certificate is reproducible; an absent or non-boolean value delivers as `ec_reproducible: false`,
   `advisory: true` (fail-closed).
 - **`extraction_coverage?`** — the certificate's coverage summary (sec 4.2 / sec 9), copied verbatim iff
@@ -1297,7 +1336,7 @@ best-effort:
 - **Finding `message`** — explicitly NOT-meaning-bearing (`result-state.schema.json`) and the field most likely
   to carry incident detail in a real finding; the `title` is derived from `code` instead.
 - **Fetchable internal URLs** — every ref in the payload is a digest/id, never an `http(s)://internal-host`
-  URL. The portal resolves digests against its own trusted store; it never fetches a URL the payload hands it.
+  URL. The consumer resolves digests against its own trusted store; it never fetches a URL the payload hands it.
 
 **Proven, not asserted:** the conformance gate injects synthetic `evidence`/`secret` fields into BOTH the
 certificate AND a finding (findings are the higher-risk injection point — real evidence lives there) and proves
@@ -1315,9 +1354,9 @@ payloads and the identical `digest`. Volatile/provenance data (wall-clock, host)
 
 ### 12.5 OPEN (folds into `OPEN-5`)
 
-The exact byte-match domain the portal uses to replay-verify `certificate_digest`, and the final payload field
-set, are co-designed with the (fenced) portal post-Wave-B. `payload_schema_version` starts at `"0"` to signal
-the draft status; it bumps to `"1"` on portal sign-off.
+The exact byte-match domain the consumer uses to replay-verify `certificate_digest`, and the final payload field
+set, are co-designed with the consumer post-Wave-B. `payload_schema_version` starts at `"0"` to signal
+the draft status; it bumps to `"1"` on consumer sign-off.
 
 ---
 
@@ -1339,13 +1378,13 @@ asserted. Delivery therefore **refuses** it by default:
 The opt-in is explicit and literal: only `allow_draft=True` (not a truthy value) opts in. Opting in
 never upgrades the certificate: the payload carries `spec_authority: "draft"`, the consumer decides
 what a draft delivery may do, and the two-file delivery shape is unchanged. A grounded certificate
-needs no flag. `payload_schema_version` stays `"0"` (it bumps only on portal sign-off, sec 12.5); the
+needs no flag. `payload_schema_version` stays `"0"` (it bumps only on consumer sign-off, sec 12.5); the
 payload gains the required `spec_authority` and the optional `authority_ref`.
 
 ## 13. Authority event protocol (`authority_event_protocol.v1`)
 
 The parity certificate proves **parity**. It does **not** confer authority for a consumer decision. Authority
-is a separate, Portal-signed **authority event** in the `consiliency.authority_event_protocol.v1` shape,
+is a separate, issuer-signed **authority event** in the `consiliency.authority_event_protocol.v1` shape,
 defined by a vendored, digest-pinned copy of the authority contract
 (`authority-event-protocol.schema.json`, `authority-key-registry.json` and the reference `authority.py`,
 with a provenance record). spec **verifies** these events at ingress (the engine's authority ingress,
@@ -1354,7 +1393,7 @@ it is bound to (the engine's phase-delivery step). The cert and the authority ev
 they answer different questions:
 
 - the cert proves the producer's parity verdict for a specific `cert_digest` and `canon_version`;
-- the authority event proves that the Portal/org layer granted authority for that exact audience and cert.
+- the authority event proves that the authority issuer granted authority for that exact audience and cert.
 
 An event has four parts: the signed `core` (`authority_event_version`, `event_type` ∈
 {`ratify`, `revoke`, `supersede`}, `decision_id`, `audience`, `cert_digest`, `approver`, `key_id`,
@@ -1372,7 +1411,8 @@ digest of the certificate being delivered.
 
 ### 13.2 Signature, trust root, and separation of powers
 
-The Portal **mints** authority: it holds the Ed25519 private key and signs the domain-separated preimage
+The authority issuer (the key holder registered in the vendored `authority_key_registry.v1`)
+**mints** authority: it holds the Ed25519 private key and signs the domain-separated preimage
 `"spec-canon:v2:authority\n" ‖ canonical_core_bytes(core)` (canon-core v2 bytes of the `core`). spec is a
 **verifying ledger**: it holds no private key and never re-signs. It verifies every event against the
 vendored `authority_key_registry.v1` registry, which is authoritative for the scheme and public key (the
@@ -1405,7 +1445,7 @@ expired in the registry, is no longer deliverable.
 
 The `core.custody_binding.phase_loop_driver_allowed` field is schema-fixed to `false`: the **phase-loop
 driver cannot mint authority**. The driver may verify and route authority events; the authority-conferral
-event originates from the Portal/org layer only.
+event originates from the authority issuer only.
 
 ### 13.3 Append-only history, revocation, and supersession
 
@@ -1534,7 +1574,7 @@ delivery whose anchor has seen a longer head. The anchor does not help against:
   rolled-back head. The next anchored delivery then sees a fork and refuses, but the ledger itself is not
   repaired.
 
-Signatures are re-verified at delivery (§13.2), so a writer without the Portal key cannot forge an
+Signatures are re-verified at delivery (§13.2), so a writer without the authority issuer's key cannot forge an
 authority row; the consumer also re-verifies the delivered event. Closing the remaining gap needs
 checkpoints signed by a key the ledger writer does not hold (a tracked, cross-repo follow-up).
 

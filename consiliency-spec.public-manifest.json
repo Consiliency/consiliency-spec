@@ -2,16 +2,16 @@
   "package": {
     "npm": "@consiliency/spec",
     "pypi": "consiliency-spec",
-    "version": "0.8.0"
+    "version": "0.9.0"
   },
   "public_files": [
     {
       "path": "canon/README.md",
-      "sha256": "9987944d62e4f58ab5dc23377ae5725a523bab60475927960a57a02a9bfb0416"
+      "sha256": "2fcd3496e927317ebac992ad55e89819ec01c0261df2cd570ac6408f46cfb05b"
     },
     {
       "path": "canon/SPEC.md",
-      "sha256": "f83cc286b9dd9f6bfdad529e658af49db42c6733822aa4469bf806cfd5a3831f"
+      "sha256": "0d4c5666791a5bc3e66bd4d0114ae9003189b2d681130686ede4fe923aef8b6d"
     },
     {
       "path": "canon/bindings/pyo3/README.md",
@@ -23,7 +23,7 @@
     },
     {
       "path": "canon/conformance/check.sh",
-      "sha256": "93c58caa1d42ed7112623995e4864585a772edd99cbaa64794b5f11c0b4f885b"
+      "sha256": "02f13758bb92f3267748cc9f828e530d7a29f4d50c49e851cc8e92577eb24446"
     },
     {
       "path": "canon/conformance/check_dabi_cabi.sh",
@@ -31,7 +31,7 @@
     },
     {
       "path": "canon/conformance/check_published_canon_core.sh",
-      "sha256": "c5e4f10622b8e698e0a490921b4189b51d2fafb1729ce01b80a69c9d377a5ef8"
+      "sha256": "e26f75d2453e168f6a4b43fd53a7c417d94f6b8dc446ccd72ef554cdba86fea9"
     },
     {
       "path": "canon/conformance/check_xg4_canon_core.sh",
@@ -67,7 +67,7 @@
     },
     {
       "path": "canon/conformance/test_unicode_skew.py",
-      "sha256": "25ed252bf5d760626d5f8cd80e92b511924c9bcb16a1af10d22d938b2b4af8b4"
+      "sha256": "90d60d97633a117cee5ec7b67e6730ab1937fd228bcc56e3f80cf5bb96bcb5e0"
     },
     {
       "path": "canon/conformance/wasm_surrogate_finding.mjs",
@@ -75,11 +75,11 @@
     },
     {
       "path": "canon/core/Cargo.lock",
-      "sha256": "94cdfc0ca70d3dbdd3d215da6052016f85213455795b1b4e0d156a7319bc322f"
+      "sha256": "e973a96bed6a90c208800975f805f6ed0e96ef42d5f29d5d6e4a238171a4f0a0"
     },
     {
       "path": "canon/core/Cargo.toml",
-      "sha256": "b97528b2a730bcb11464d4851086ac948c4e448febada77fb15400a15ea5eefd"
+      "sha256": "7a44693497c2ef4bfc1c7ead79026c6b8ac605cb7aacf4c3c30733e7186702b3"
     },
     {
       "path": "canon/core/cbindgen.toml",
@@ -115,19 +115,19 @@
     },
     {
       "path": "canon/py/canon.py",
-      "sha256": "c7baf9db1c8835c1aad547b0d6b9e977c6ce9970d34e91df37bd2641d69cfb22"
+      "sha256": "62b723e598fef57e36ff6d2bd02dabad873bc8fc78fcdb3ce40e057585304170"
     },
     {
       "path": "canon/py/canon_ingest.py",
-      "sha256": "bd4cf1cc93cf2fe26af87e005f507661ba7f376f1e0bf1c65c2d3725589def74"
+      "sha256": "99883f36998742e6b41c12c05ba895100980a53ff331ef67884f853a54056505"
     },
     {
       "path": "canon/py/requirements.txt",
-      "sha256": "1ba06220d883ace9973cc096d33cbed984992716d63af4ba28f7dc9f376cf771"
+      "sha256": "e4dfb60b908a67b28e89e9585f3bf49084f7c65a39aa5ee5ad7acedac3162473"
     },
     {
       "path": "canon/py/test_canon.py",
-      "sha256": "a48c67f3a7225caaf380004a242ed5ab16301745bdae83eb7b0c7d6a2408e3a3"
+      "sha256": "699c3f53977ff630e6f0d0fe1f0eee811895fe1ec0acd582a21f38bc265c0b59"
     },
     {
       "path": "canon/ts/canon.test.ts",
@@ -155,7 +155,7 @@
     },
     {
       "path": "consiliency_spec/__init__.py",
-      "sha256": "6616ae84e45ac56a35eda45a9ea5a2886a46f275e419749d8bd78abc80fad9eb"
+      "sha256": "e00133cf3984222ff676f7d8cc007266793535273c30a3e30edede1e047400fd"
     },
     {
       "path": "consiliency_spec/_bundle/spec_core/__init__.py",
@@ -167,11 +167,11 @@
     },
     {
       "path": "consiliency_spec/_bundle/spec_core/canon/canon.py",
-      "sha256": "c7baf9db1c8835c1aad547b0d6b9e977c6ce9970d34e91df37bd2641d69cfb22"
+      "sha256": "62b723e598fef57e36ff6d2bd02dabad873bc8fc78fcdb3ce40e057585304170"
     },
     {
       "path": "consiliency_spec/_bundle/spec_core/canon/canon_ingest.py",
-      "sha256": "bd4cf1cc93cf2fe26af87e005f507661ba7f376f1e0bf1c65c2d3725589def74"
+      "sha256": "99883f36998742e6b41c12c05ba895100980a53ff331ef67884f853a54056505"
     },
     {
       "path": "consiliency_spec/_bundle/spec_core/graph/__init__.py",
@@ -223,7 +223,7 @@
     },
     {
       "path": "scripts/check_certificate_vectors.sh",
-      "sha256": "781ec3fb02625cd7eb5c7a2d653f150757e543ba2e7f267d6932cf9148350c99"
+      "sha256": "64de2971def3ac1cbb6d969b09f779aa06fde00e24214423bf4ed7b647bf2c96"
     },
     {
       "path": "scripts/check_outside_agent_vectors.sh",
@@ -239,7 +239,7 @@
     },
     {
       "path": "spec-parity/SEMANTICS.md",
-      "sha256": "c5cd412862238b2fd71f37a250edcdf6c4102a041c15c8efb216ad262a4a35b2"
+      "sha256": "cbfaf7fa1219bb37def22392241e45f89fde5af297281d9665f7c7b2f34a1c55"
     },
     {
       "path": "spec-parity/conformance/check_xg0_envelope.sh",
@@ -283,7 +283,7 @@
     },
     {
       "path": "spec-parity/schemas/run-descriptor.schema.json",
-      "sha256": "2f91322718bdf2919f5d51f02634b26eab9a76728b7b96e970c1229c81bfd89e"
+      "sha256": "7d6246d04513f8ae9e9f2d7fa656fcdd31d2a5cb2041cb306cee8bbd43fbe758"
     },
     {
       "path": "spec-parity/schemas/waiver.schema.json",
@@ -299,11 +299,11 @@
     },
     {
       "path": "src/spec_core/canon/canon.py",
-      "sha256": "c7baf9db1c8835c1aad547b0d6b9e977c6ce9970d34e91df37bd2641d69cfb22"
+      "sha256": "62b723e598fef57e36ff6d2bd02dabad873bc8fc78fcdb3ce40e057585304170"
     },
     {
       "path": "src/spec_core/canon/canon_ingest.py",
-      "sha256": "bd4cf1cc93cf2fe26af87e005f507661ba7f376f1e0bf1c65c2d3725589def74"
+      "sha256": "99883f36998742e6b41c12c05ba895100980a53ff331ef67884f853a54056505"
     },
     {
       "path": "test-vectors/certificate/manifest.json",

@@ -62,7 +62,10 @@ digests on every vector. Exit 0 = green; any divergence prints a diff and exits 
 - **Python 3** (stdlib `hashlib`) **plus `unicodedata2==16.0.0`** — the pinned Unicode 16.0 backport.
   In canon v2, canon itself needs no Unicode DB (it no longer normalizes); the pin is required by the
   **ingest boundary** (`py/canon_ingest.py`), which performs NFC and fail-closed-asserts the pinned
-  version at import (see `py/requirements.txt`; `check.sh` installs it). Stdlib `unicodedata` is
+  version at import (see `py/requirements.txt`; `check.sh` installs it). The packages leave the backport
+  out on CPython 3.14, whose stdlib reports Unicode 16.0.0; only there, with no backport installed, does
+  ingest fall back to stdlib `unicodedata` (and `test_unicode_skew.py` proves the two 16.0 databases
+  normalize every code point identically). Otherwise stdlib `unicodedata` is
   deliberately NOT used for ingest NFC: it is bound to the host CPython's Unicode version and would not
   match the Node port byte-for-byte.
 - **Node v24+** and **`tsx`** to run the `.ts` files. `check.sh` invokes `npx --yes tsx`, which

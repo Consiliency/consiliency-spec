@@ -17,6 +17,7 @@ now target `ingest`, not `canon`:
 Run: PYTHONPATH=src python3 canon/conformance/test_unicode_skew.py   (exit 0 = pass)
 """
 
+import hashlib
 import json
 import os
 import subprocess
@@ -142,6 +143,176 @@ def test_assertion_child_ignores_the_working_directory() -> None:
         shutil.rmtree(work, ignore_errors=True)
 
 
+def _ingest_child(prelude: str, stub_dir: str = ""):
+    """Import canon_ingest in a hermetic child after `prelude` has run; return (rc, stdout+stderr).
+
+    The child sees only `stub_dir` (when given) and src/ on its import path: `-P` keeps its working
+    directory off sys.path and the inherited PYTHONPATH is replaced, so nothing outside the prelude and
+    the stub directory can supply a Unicode database.
+    """
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join([p for p in (stub_dir, SRC) if p])
+    code = prelude + textwrap.dedent(
+        """
+        from spec_core.canon import canon_ingest
+        print("SOURCE=%s VERSION=%s" % (canon_ingest.UNICODE_DB_SOURCE,
+                                        canon_ingest.unicodedata.unidata_version))
+        """
+    )
+    proc = subprocess.run([sys.executable, "-P", "-c", code], env=env, capture_output=True, text=True)
+    return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+
+
+# The packages leave unicodedata2 out on CPython 3.14 (marker "python_version != '3.14' or
+# platform_python_implementation != 'CPython'"), whose stdlib reports Unicode 16.0.0. Without the
+# backport, ingest must use the stdlib only when it reports the pinned version, and fail closed otherwise.
+_NO_BACKPORT = "import sys\nsys.modules['unicodedata2'] = None  # the backport is not installed\n"
+_STDLIB_REPORTS = (
+    "import types, unicodedata as _real\n"
+    "_stub = types.ModuleType('unicodedata')\n"
+    "_stub.unidata_version = %r\n"
+    "_stub.normalize = _real.normalize\n"
+    "sys.modules['unicodedata'] = _stub\n"
+)
+
+
+def test_stdlib_fallback_only_at_the_pinned_version() -> None:
+    """Without the backport, a stdlib reporting 16.0 is used and any other stdlib version refuses."""
+    rc, out = _ingest_child(_NO_BACKPORT + _STDLIB_REPORTS % "16.0.0")
+    assert rc == 0 and "SOURCE=stdlib unicodedata VERSION=16.0.0" in out, (
+        "without unicodedata2, a stdlib reporting 16.0.0 must be used; got rc=%d:\n%s" % (rc, out))
+    for stale in ("15.0.0", "15.1.0", "17.0.0"):
+        rc, out = _ingest_child(_NO_BACKPORT + _STDLIB_REPORTS % stale)
+        assert rc != 0 and "needs a Unicode 16.0 database" in out, (
+            "without unicodedata2, a stdlib reporting %s must refuse to load; got rc=%d:\n%s"
+            % (stale, rc, out))
+    # A backport that is installed but broken (its import fails on a module of another name) is never
+    # masked by the stdlib: only the backport's own absence selects the fallback.
+    import shutil
+    import tempfile
+
+    stub_dir = tempfile.mkdtemp(prefix="skew-broken-")
+    try:
+        with open(os.path.join(stub_dir, "unicodedata2.py"), "w", encoding="utf-8") as f:
+            f.write("raise ModuleNotFoundError(\"No module named '_ud2_impl'\", name='_ud2_impl')\n")
+        rc, out = _ingest_child("", stub_dir)
+    finally:
+        shutil.rmtree(stub_dir, ignore_errors=True)
+    assert rc != 0 and "_ud2_impl" in out and "SOURCE=" not in out, (
+        "a broken unicodedata2 must not fall back to the stdlib; got rc=%d:\n%s" % (rc, out))
+    # And the real host: with no backport, this interpreter's stdlib either loads (it reports 16.0)
+    # or refuses; it never loads under another version.
+    import unicodedata as host
+    rc, out = _ingest_child(_NO_BACKPORT)
+    if ingest._unicode_major_minor(host.unidata_version) == ingest.EXPECTED_UNICODE:
+        assert rc == 0 and "SOURCE=stdlib unicodedata" in out, out
+    else:
+        assert rc != 0 and "needs a Unicode 16.0 database" in out, out
+    print("  [ok] without unicodedata2 the stdlib is used only at Unicode 16.0 (host stdlib %s)"
+          % host.unidata_version)
+
+
+# The ingest-relevant Unicode 16.0 table of the unicodedata2 16.0.0 backport, pinned as one digest so the
+# database ingest ACTUALLY loads is held to the backport even where the backport is not installed (CI on
+# CPython 3.14 runs the stdlib path with no backport anywhere). Generator:
+#   PYTHONPATH=src python3 canon/conformance/test_unicode_skew.py --print-table-digest
+# which reads ONLY the backport and refuses without it. Rows per code point (surrogates excluded): the
+# canonical combining class and the UTF-8 hex of NFC, NFD, NFKC, NFKD and NFC(NFD).
+UNICODE16_TABLE_SHA256 = "cf605bfde7c36aa5c7a99a882ded7cdf51bf6fb6249c0db61a847b71b66de741"
+
+
+def _table_digest(db) -> str:
+    h = hashlib.sha256()
+    for cp in range(0x110000):
+        if 0xD800 <= cp <= 0xDFFF:
+            continue
+        ch = chr(cp)
+        nfd = db.normalize("NFD", ch)
+        row = [b"%X" % cp, b"%d" % db.combining(ch)] + [
+            db.normalize(form, ch).encode("utf-8").hex().encode()
+            for form in ("NFC", "NFD", "NFKC", "NFKD")] + [db.normalize("NFC", nfd).encode("utf-8").hex().encode()]
+        h.update(b":".join(row) + b"\n")
+    return h.hexdigest()
+
+
+def test_loaded_database_matches_the_pinned_backport_table() -> None:
+    """The database canon_ingest loaded (backport or 16.0 stdlib) reproduces the pinned table of the
+    unicodedata2 16.0.0 backport exactly, so ingest NFC is the backport's on every host it loads on."""
+    got = _table_digest(ingest.unicodedata)
+    assert got == UNICODE16_TABLE_SHA256, (
+        "ingest's %s %s normalization table %s != the pinned unicodedata2 16.0.0 table %s"
+        % (ingest.UNICODE_DB_SOURCE, ingest.unicodedata.unidata_version, got, UNICODE16_TABLE_SHA256))
+    print("  [ok] loaded DB (%s %s) == pinned unicodedata2 16.0.0 table %s... on every code point"
+          % (ingest.UNICODE_DB_SOURCE, ingest.unicodedata.unidata_version, got[:16]))
+
+
+def test_stdlib_and_backport_agree_when_both_are_16() -> None:
+    """Where the host stdlib and the backport both report 16.0 (CPython 3.14 with unicodedata2), the
+    two databases must give byte-identical normalization for every code point, so a 3.14 install
+    without the backport normalizes exactly as one with it. Skipped (with a note) on any other host."""
+    import unicodedata as stdlib
+    try:
+        import unicodedata2 as backport
+    except ModuleNotFoundError as exc:
+        if exc.name != "unicodedata2":
+            raise
+        print("  [skip] unicodedata2 not installed; stdlib/backport agreement not checked here")
+        return
+    if (ingest._unicode_major_minor(stdlib.unidata_version) != ingest.EXPECTED_UNICODE
+            or ingest._unicode_major_minor(backport.unidata_version) != ingest.EXPECTED_UNICODE):
+        print("  [skip] stdlib %s / unicodedata2 %s: not both at %s"
+              % (stdlib.unidata_version, backport.unidata_version, ingest.EXPECTED_UNICODE))
+        return
+    diffs = []
+    for cp in range(0x110000):
+        if 0xD800 <= cp <= 0xDFFF:
+            continue
+        ch = chr(cp)
+        for prop in ("combining", "category", "bidirectional", "east_asian_width", "mirrored"):
+            if getattr(stdlib, prop)(ch) != getattr(backport, prop)(ch):
+                diffs.append("U+%04X %s" % (cp, prop))
+        if 0xAC00 <= cp <= 0xD7A3:
+            # Precomposed Hangul syllables decompose algorithmically (The Unicode Standard, section 3.12). CPython 3.14's
+            # decomposition() reports that arithmetic decomposition and unicodedata2 reports "";
+            # the property is a reporting difference only (NFC/NFD of these agree, checked below), and
+            # ingest uses normalize() alone. Pin exactly that difference so any other one fails.
+            s_index = cp - 0xAC00
+            parts = [0x1100 + s_index // 588, 0x1161 + (s_index % 588) // 28]
+            if s_index % 28:
+                parts.append(0x11A7 + s_index % 28)
+            if (backport.decomposition(ch) != ""
+                    or stdlib.decomposition(ch) not in ("", " ".join("%04X" % p for p in parts))):
+                diffs.append("U+%04X decomposition" % cp)
+        elif stdlib.decomposition(ch) != backport.decomposition(ch):
+            diffs.append("U+%04X decomposition" % cp)
+        for form in ("NFC", "NFD", "NFKC", "NFKD"):
+            if stdlib.normalize(form, ch) != backport.normalize(form, ch):
+                diffs.append("U+%04X %s" % (cp, form))
+        nfd = backport.normalize("NFD", ch)
+        if stdlib.normalize("NFC", nfd) != backport.normalize("NFC", nfd):  # composition + exclusions
+            diffs.append("U+%04X NFC(NFD)" % cp)
+    def strings(node):  # every key and string value in a vector, valid or not
+        if isinstance(node, str):
+            yield node
+        elif isinstance(node, list):
+            for item in node:
+                yield from strings(item)
+        elif isinstance(node, dict):
+            for key, item in node.items():
+                yield key
+                yield from strings(item)
+
+    with open(VECTORS, encoding="utf-8") as f:
+        for v in json.load(f):
+            for s in strings(v):
+                for form in ("NFC", "NFD"):
+                    if stdlib.normalize(form, s) != backport.normalize(form, s):
+                        diffs.append("vector %s %s" % (v["name"], form))
+    assert not diffs, "stdlib and unicodedata2 16.0 disagree: %s" % diffs[:20]
+    print("  [ok] stdlib unicodedata %s == unicodedata2 %s on every code point (6 properties, Hangul "
+          "syllable decomposition() reporting aside; 4 forms; NFC of each NFD) and every vector input" % (stdlib.unidata_version, backport.unidata_version))
+
+
 # CAN-6: the discriminator proof must not depend on the host. It used to compare the pinned DB with
 # the host's stdlib `unicodedata`, skipping every input whose marks the stdlib already knew: 1 of 3
 # inputs was live on a Unicode-15 CPython (3.12, the CI interpreter) and 0 of 3 on any Unicode-16
@@ -190,11 +361,11 @@ def test_post13_inputs_are_live_discriminators() -> None:
     comparison is kept as an informational line only.
     """
     import unicodedata as stdlib_unicodedata  # host CPython DB (version varies by CPython build)
-    pinned = ingest.unicodedata  # unicodedata2 16.0.0
+    pinned = ingest.unicodedata  # unicodedata2 16.0.0, or a 16.0 stdlib where the backport is absent
 
     stdlib_ver = ingest._unicode_major_minor(stdlib_unicodedata.unidata_version)
     pinned_ver = ingest._unicode_major_minor(pinned.unidata_version)
-    print("  stdlib unicodedata=%s  pinned(unicodedata2)=%s" % (stdlib_ver, pinned_ver))
+    print("  stdlib unicodedata=%s  pinned(%s)=%s" % (stdlib_ver, ingest.UNICODE_DB_SOURCE, pinned_ver))
 
     def stale_ccc(ch):
         return 0 if ord(ch) in POST13_MARKS else pinned.combining(ch)
@@ -240,10 +411,22 @@ def main() -> int:
     print("== ingest Unicode-skew negative tests ==")
     test_assertion_fails_on_wrong_version()
     test_assertion_child_ignores_the_working_directory()
+    test_stdlib_fallback_only_at_the_pinned_version()
+    test_stdlib_and_backport_agree_when_both_are_16()
+    test_loaded_database_matches_the_pinned_backport_table()
     test_post13_inputs_are_live_discriminators()
     print("INGEST UNICODE-SKEW NEGATIVE TESTS: PASS")
     return 0
 
 
+def _print_table_digest() -> int:
+    """Generator for UNICODE16_TABLE_SHA256: the backport's table only; refuses without the backport."""
+    import unicodedata2
+    if unicodedata2.unidata_version != "16.0.0":
+        raise SystemExit("unicodedata2 %s is not 16.0.0" % unicodedata2.unidata_version)
+    print(_table_digest(unicodedata2))
+    return 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(_print_table_digest() if sys.argv[1:] == ["--print-table-digest"] else main())

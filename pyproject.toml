@@ -4,20 +4,20 @@ build-backend = "hatchling.build"
 
 [project]
 name = "consiliency-spec"
-version = "0.8.0"
+version = "0.9.0"
 description = "Public Consiliency canon-core v2 package: Rust core, dep-free TypeScript/Python canon ports, vectors, and public schemas."
 readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Consilience Labs LLC" }]
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 keywords = ["consiliency", "spec", "canon", "canonicalization", "schema"]
 
 [project.optional-dependencies]
-ingest = ["unicodedata2==16.0.0"]
+ingest = ["unicodedata2==16.0.0; python_version != '3.14' or platform_python_implementation != 'CPython'"]
 outside-agent = ["jsonschema>=4.18"]
 # consiliency_spec.verify_certificate(): the pinned Unicode DB that binding a desired graph needs
 # (spec_graph.graph_digest applies NFC at canon's ingest boundary), plus full JSON Schema checks.
-verify = ["unicodedata2==16.0.0", "jsonschema>=4.18"]
+verify = ["unicodedata2==16.0.0; python_version != '3.14' or platform_python_implementation != 'CPython'", "jsonschema>=4.18"]
 
 [project.urls]
 Homepage = "https://github.com/Consiliency/consiliency-spec"
