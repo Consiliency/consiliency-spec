@@ -267,7 +267,10 @@ String output is `"` + escaped-contents + `"`.
 > no NFC and depends on no Unicode DB version** — the pin moved to the ingest boundary
 > (`py/canon_ingest.py`), which **pins Python to the `unicodedata2==16.0.0` backport** (NOT stdlib
 > `unicodedata`, which is bound to the host CPython build — 13.0.0 on CPython 3.10) and **asserts at
-> import time, fail-closed**, that its Unicode version reduces to `16.0`. All production ingest is
+> import time, fail-closed**, that its Unicode version reduces to `16.0`. Only when the backport is not
+> installed does it use stdlib `unicodedata`, and only if that already reports `16.0` (CPython 3.14,
+> where the packages omit the backport by marker); an installed backport at another version refuses to
+> load, and `conformance/test_unicode_skew.py` proves the stdlib and backport 16.0 databases agree. All production ingest is
 > Python; the TypeScript canon port is the conformance reference and needs no ingest normalizer.
 > `conformance/check.sh` installs the pin and runs (a) canon self-conformance + cross-language
 > byte-identity, and (b) the ingest-boundary tests — `test_ingest_nfc.py` (feed NON-NFC input through
@@ -514,11 +517,16 @@ removing a vendored implementation.
   *after* Unicode 13 (their NFC could differ between ports). Resolution (canon v1; the pin now lives at the
   v2 ingest boundary):
   - **Pinned Unicode version: 16.0** (matches Node's `process.versions.unicode`).
-  - **Python NFC now uses the `unicodedata2==16.0.0` backport** (exact pin in `py/requirements.txt`), NOT
-    stdlib `unicodedata`. `unicodedata2.unidata_version` is `16.0.0` → reduces to `16.0`, byte-identical NFC
-    to Node ICU 16.0 (confirmed on every vector by the cross-language gate).
-  - **Fail-closed version assertion at import time** in BOTH ports (`canon.py` and `canon.ts`): the Unicode
-    version they use must reduce to `16.0` or they refuse to load — a mismatch can never silently diverge.
+  - **Python NFC uses the `unicodedata2==16.0.0` backport** (exact pin in `py/requirements.txt`) whenever
+    it is installed. `unicodedata2.unidata_version` is `16.0.0` → reduces to `16.0`, byte-identical NFC
+    to Node ICU 16.0 (confirmed on every vector by the cross-language gate). Only when the backport is
+    absent does the ingest boundary use stdlib `unicodedata`, and only if the stdlib already reports `16.0`
+    (CPython 3.14, where the packages omit the backport by environment marker); any other stdlib version
+    refuses to load, and an installed backport at another version refuses too (see the §5 pin note above
+    and `conformance/test_unicode_skew.py`, which proves the stdlib and backport 16.0 databases agree).
+  - **Fail-closed version assertion at import time** in the ingest boundary (`py/canon_ingest.py`, which
+    canon v1's `canon.py` / `canon.ts` assertion moved to): the Unicode version it uses must reduce to `16.0`
+    or it refuses to load — a mismatch can never silently diverge.
   - **Post-13 conformance vectors** added (`post13-nfc-reorder-telugu-nukta`, `…-arabic-pepet`,
     `…-two-new-marks`) using combining marks assigned in Unicode 15.0/16.0 (U+0C3C ccc=7, U+0897 ccc=230,
     U+1715 ccc=9). Their NFC canonical-reordering differs under a Unicode-13 DB (those marks read as ccc=0)

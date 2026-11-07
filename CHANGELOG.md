@@ -3,6 +3,53 @@
 All notable changes to `@consiliency/spec` / `consiliency-spec` are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## 0.9.0 — Python 3.14 or later, canon-core 0.5.0, stdlib Unicode 16.0 on CPython 3.14
+
+**BREAKING: Python 3.14 or later is required** (`requires-python = ">=3.14"`; was 3.12). pip will not
+install 0.9.0 on 3.12 or 3.13; 0.8.0 stays published and installable there. The public verifier API,
+projection `spec-engine-projection:v5` and certificate schema `"2"` are unchanged. Stored certificates
+keep their bytes, and no canon byte, vector or digest changes.
+
+### Changed
+
+- **Python 3.14 or later.** Both public workflows set up Python 3.14.
+- **canon-core 0.5.0** (tag `canon-core-v0.5.0`): pyo3 0.23 -> 0.30, and the Python binding is a
+  single CPython 3.14 wheel. The built binding emits bytes identical to the reference ports on every
+  corpus and engine-boundary vector. `canon/core/Cargo.toml` and `Cargo.lock` move, and
+  `check_published_canon_core.sh` checks the published `0.5.0`.
+- **`unicodedata2` is omitted on CPython 3.14.** The `verify` and `ingest` extras and
+  `canon/py/requirements.txt` pin `unicodedata2==16.0.0; python_version != '3.14' or
+  platform_python_implementation != 'CPython'`; CPython 3.14's stdlib database is Unicode 16.0.0. The
+  ingest boundary (`canon_ingest.py`, and its copies in the package bundle and `src/`) uses the stdlib
+  database only when the backport is not installed and the stdlib reports 16.0; otherwise it fails
+  closed as before, and an installed backport at another version is still refused.
+  `canon/conformance/test_unicode_skew.py` checks the fallback rule and that the stdlib and backport
+  16.0 databases agree on every code point (all four normalization forms and five character
+  properties; the one difference, Hangul-syllable `decomposition()` reporting, is pinned and unused by
+  NFC). It can also hold the loaded database to a pinned digest of the backport's normalization table,
+  so the agreement check runs without the backport installed.
+- The Python canon port (`canon/py/canon.py` and its byte copies) encodes an exact `str` that needs no
+  escaping without the per-character loop. Escaping, surrogate errors and `str` subclass iteration are
+  unchanged, and no canonical byte or digest changes.
+- `canon/SPEC.md`, `canon/README.md` and `scripts/check_certificate_vectors.sh` describe the Unicode
+  16.0 rule above.
+- SEMANTICS states the certificate pin limits, the per-node grade and pass meanings and the current
+  correspondence behavior precisely, in consumer-neutral language. The run-descriptor schema's
+  `correspondence` description names the engine correspondence input shape. No matching behavior,
+  schema constraint, certificate, finding-set or verdict changes.
+- Version metadata, README and these release notes advance to 0.9.0. All 99 public manifest files
+  remain; manifest hashes move for the files above, the canon tests and docs, and the version constant
+  in `consiliency_spec/__init__.py`.
+
+### Migration
+
+- Move to Python 3.14 or later, or keep `consiliency-spec==0.8.0` / `@consiliency/spec@0.8.0` on 3.12 and
+  3.13.
+- Verifier callers need no API, schema or certificate migration. On CPython 3.14, `[verify]` no
+  longer installs `unicodedata2`; leaving an older backport installed in the environment is refused.
+- Keep the 0.7.2 schema `not` newline/path guards and the 0.8.0 exact-token audit when copying
+  schemas or policies; this release removes neither.
+
 ## 0.8.0 — explicit producer input migration and clarified exact-token limits
 
 The public verifier API, projection `spec-engine-projection:v5`, certificate schema `"2"`,

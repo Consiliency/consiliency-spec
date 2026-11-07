@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Reference certificate verifier over the public vectors in test-vectors/certificate/
-# (consiliency_spec.verify_certificate; needs jsonschema and unicodedata2==16.0.0).
+# (consiliency_spec.verify_certificate; needs jsonschema and a Unicode 16.0 database: CPython 3.14's stdlib,
+# else unicodedata2==16.0.0).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

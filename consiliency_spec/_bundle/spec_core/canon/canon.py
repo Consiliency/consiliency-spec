@@ -65,8 +65,15 @@ class CanonError(ValueError):
 # String encoding (SPEC.md section 5)
 # --------------------------------------------------------------------------- #
 
+# Any character requiring the existing escaping or surrogate-rejection loop below.
+_STRING_SPECIAL = re.compile(r'["\\\x00-\x1f\ud800-\udfff]')
+
+
 def _encode_string(s: str) -> str:
     # canon v2 does NOT normalize: callers deliver already-NFC content (see canon/py/canon_ingest.py).
+    # Preserve str subclasses' iteration behavior by leaving them on the original path.
+    if type(s) is str and _STRING_SPECIAL.search(s) is None:
+        return '"' + s + '"'
     out = ['"']
     for ch in s:
         cp = ord(ch)

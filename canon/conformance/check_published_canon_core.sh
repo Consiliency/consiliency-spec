@@ -31,7 +31,8 @@
 #   1  a real failure — a reachable registry MISSING the pinned version (yank) included;
 #   3  SKIPPED: a registry stayed unreachable through the preflight retries, or (locally) this
 #      interpreter has no published wheel. It used to exit 0 here, i.e. report green.
-# Under CANON_STRICT=1 (the hosted CI step, a runner with egress and a cp312 interpreter) either skip
+# Under CANON_STRICT=1 (the hosted CI step, a runner with egress and an interpreter that has the
+# pinned release's wheel: cp314, the only wheel canon-core ships from 0.5.0) either skip
 # is a hard FAIL (exit 1) instead: a required check must never pass without having run.
 #
 # The boundary vectors (steps 4-6) are the TREE's file, run against the PUBLISHED engines, so a
@@ -41,8 +42,9 @@
 # self-tests, cargo test, XG4). Fold that file into engine_boundary_vectors.json when VERSION is
 # repinned to a release that satisfies it (done at the 0.4.0 repin: duplicate-key-f1..f6; it is empty).
 #
-# Local run: set CANON_PY to an interpreter that has a published wheel (cp312 wheels ship), e.g.
-#   CANON_PY=python3.12 bash canon/conformance/check_published_canon_core.sh
+# Local run: the default interpreter is `python3`; canon-core 0.5.0 onwards ships a cp314 wheel only,
+# so that must be CPython 3.14 (the repo's floor). CANON_PY names another interpreter, e.g.
+#   CANON_PY=python3.14 bash canon/conformance/check_published_canon_core.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -52,9 +54,9 @@ BOUNDARY="$CONF/engine_boundary_vectors.json"
 
 NPM_PKG="@consiliency/canon-core"
 PYPI_PKG="consiliency-canon-core"
-# Pinned to the latest PUBLISHED canon-core: 0.4.0, from tag canon-core-v0.4.0, equal to the tree's
+# Pinned to the latest PUBLISHED canon-core: 0.5.0, from tag canon-core-v0.5.0, equal to the tree's
 # canon/core/Cargo.toml, so step [3] requires the published corpus to be byte-equal to the tree.
-VERSION="0.4.0"
+VERSION="0.5.0"
 PYBIN="${CANON_PY:-python3}"
 # The crate version in the tree. Equal to VERSION except during a PRE-RELEASE WINDOW: the tree
 # already carries the next canon-core (Cargo.toml bumped, corpus extended) but the tag has not been

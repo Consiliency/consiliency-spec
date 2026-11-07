@@ -185,9 +185,117 @@ def native_failures():
     return failures
 
 
+def string_failures():
+    """Independent string oracle, including every scalar and every Python surrogate code point.
+
+    Keep explicit comparisons alive under -O. These checks run in the existing canon gate, and
+    use the public API so a bad string shortcut cannot hide behind the private helper's output.
+    """
+    failures = []
+
+    def encoded(text):
+        parts = []
+        for ch in text:
+            cp = ord(ch)
+            if ch == '"':
+                parts.append(b'\\"')
+            elif ch == "\\":
+                parts.append(b"\\\\")
+            elif cp < 32:
+                parts.append(("\\u%04x" % cp).encode("ascii"))
+            else:
+                parts.append(ch.encode("utf-8"))
+        return b'"' + b"".join(parts) + b'"'
+
+    def check(text):
+        expected = encoded(text)
+        actual = canon.canonical_bytes(text)
+        if actual != expected:
+            raise AssertionError("string bytes differ for %r" % text[:80])
+        # Both object key and value dispatch must use the same exact encoding.
+        if canon.canonical_bytes({text: [text]}) != b"{" + expected + b":[" + expected + b"]}":
+            raise AssertionError("nested key/value string bytes differ for %r" % text[:80])
+
+    try:
+        # Every code point, including unassigned/noncharacters, independent of any Unicode DB.
+        for cp in range(0x110000):
+            ch = chr(cp)
+            if 0xD800 <= cp <= 0xDFFF:
+                continue
+            expected = encoded(ch) if cp < 32 or ch in ('"', "\\") else b'"' + ch.encode("utf-8") + b'"'
+            if canon.canonical_bytes(ch) != expected:
+                raise AssertionError("single scalar bytes differ at U+%04X" % cp)
+        boundaries = list(range(33)) + [34, 35, 47, 91, 92, 93, 126, 127, 128, 255, 256,
+                                      0x7FF, 0x800, 0xD7FF, 0xE000, 0xFFFF, 0x10000, 0x10FFFF]
+        for cp in boundaries:
+            for text in (chr(cp), "prefix" + chr(cp), chr(cp) + "suffix", "a" + chr(cp) + "z"):
+                check(text)
+        for text in ("", "ordinary ASCII", "e\u0301", "é日本語😀\u2028\u2029", "x" * 100000,
+                     "é😀" * 10000, 'a"b\\c\x00\n\x1f\x7f😀' * 1000,
+                     "x" * 100000 + "\n", '"' + "x" * 100000):
+            check(text)
+        for cp in range(0xD800, 0xE000):
+            # Earlier escapes must not hide or change the FIRST surrogate's exact error.
+            text = '"\\\x00' + chr(cp) + "\udfff\ud800"
+            expected = "unpaired surrogate U+%04X is not allowed in canonical content" % cp
+            for value in (chr(cp), "prefix" + chr(cp), text, {text: "v"}, {"k": [text]}):
+                try:
+                    canon.canonical_bytes(value)
+                except canon.CanonError as error:
+                    if str(error) != expected:
+                        raise AssertionError("surrogate error differs at U+%04X: %s" % (cp, error))
+                else:
+                    raise AssertionError("surrogate accepted at U+%04X" % cp)
+        # Python strings holding an explicit UTF-16 pair remain rejected at the first code point.
+        for text in ("\ud800\udc00", "\udfff\ud800", "x" * 100000 + "\ud800"):
+            cp = next(ord(ch) for ch in text if 0xD800 <= ord(ch) <= 0xDFFF)
+            try:
+                canon.canonical_bytes(text)
+            except canon.CanonError as error:
+                if str(error) != "unpaired surrogate U+%04X is not allowed in canonical content" % cp:
+                    raise AssertionError("long/pair surrogate error differs")
+            else:
+                raise AssertionError("long/pair surrogate accepted")
+
+        class IteratedString(str):
+            def __iter__(self):
+                return iter('iterated"\\\n😀')
+
+            def __radd__(self, other):
+                raise AssertionError("string subclass concatenation replaced iteration")
+
+            def __str__(self):
+                raise AssertionError("string subclass coercion replaced iteration")
+
+        class SurrogateString(str):
+            def __iter__(self):
+                return iter("\udabc\ud800")
+
+        class PlainString(str):
+            pass
+
+        subclass = IteratedString("safe storage")
+        expected = encoded('iterated"\\\n😀')
+        if canon.canonical_bytes(subclass) != expected:
+            raise AssertionError("overridden str iteration changed")
+        if canon.canonical_bytes({subclass: [subclass]}) != b"{" + expected + b":[" + expected + b"]}":
+            raise AssertionError("nested str subclass iteration changed")
+        check(PlainString("plain😀"))
+        try:
+            canon.canonical_bytes(SurrogateString("safe storage"))
+        except canon.CanonError as error:
+            if str(error) != "unpaired surrogate U+DABC is not allowed in canonical content":
+                raise AssertionError("str subclass surrogate error changed")
+        else:
+            raise AssertionError("str subclass surrogate accepted")
+    except Exception as error:  # noqa: BLE001
+        failures.append("string encoding: %s: %s" % (type(error).__name__, error))
+    return failures
+
+
 def test():
     vectors = load()
-    failures = boundary_failures() + boundary_failures(BOUNDARY_NEXT, MIN_BOUNDARY_NEXT) + native_failures()
+    failures = boundary_failures() + boundary_failures(BOUNDARY_NEXT, MIN_BOUNDARY_NEXT) + native_failures() + string_failures()
     n_error = sum(1 for vec in vectors if vec.get("expect_error"))
     if len(vectors) - n_error < MIN_VALID or n_error < MIN_ERROR:
         failures.append("corpus has %d valid / %d reject vectors (< %d / %d); it looks truncated"

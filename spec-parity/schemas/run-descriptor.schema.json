@@ -11,7 +11,7 @@
     "run_id": { "type": "string", "description": "A stable human-chosen label for the run. Not hashed into the certificate." },
     "spec_graph": { "type": "string", "minLength": 1, "description": "Path (relative to this descriptor) of the desired-state graph S." },
     "ec": { "type": "string", "minLength": 1, "description": "Path (relative to this descriptor) of the realized E(C) extract." },
-    "correspondence": { "type": "string", "minLength": 1, "description": "Path (relative to this descriptor) of the idmodel correspondence map." },
+    "correspondence": { "type": "string", "minLength": 1, "description": "Path (relative to this descriptor) of the engine correspondence input: an object whose entries each name desired_name (an S node name), realized_boundary_id (an E(C) boundary_id), lifecycle, mapping_origin and confidence (SEMANTICS sec 2, \"Engine correspondence input\"). Not the idmodel continuity map (idmodel/correspondence/schema.json)." },
     "frontier_selector": {
       "type": "array",
       "items": { "type": "string" },
