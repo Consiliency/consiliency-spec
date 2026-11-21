@@ -3,6 +3,42 @@
 All notable changes to `@consiliency/spec` / `consiliency-spec` are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## 0.9.1 — shared strict JSON decoder for the certificate verifier
+
+A patch on 0.9.0. The public verifier API, its verdicts, reasons and messages, projection
+`spec-engine-projection:v5`, certificate schema `"2"`, canon bytes, vectors and stored certificates are
+unchanged, and the Python 3.14 floor and canon-core `0.5.0` still apply.
+0.9.0 stays published; it is superseded by 0.9.1, not by a defect, and may stay pinned.
+
+### Added
+
+- `src/spec_core/canon/canon_text.py` and its byte copy in `consiliency_spec/_bundle/spec_core/canon/`:
+  canon's strict JSON-text decode. It parses with canon's number grammar (a fraction or exponent
+  spelling and a bare `-0` are floats and are refused, as are an integer beyond ±(2^53 − 1), `NaN` and
+  `Infinity`, at every number token, including one a later duplicate key would overwrite), refuses a
+  duplicated object key, and holds the result to canon's structural and numeric domain. Both copies
+  are manifest members, so the manifest has 101 files (was 99). The verifier loads the bundled copy
+  from its checked bytes, like canon.
+
+### Changed
+
+- `consiliency_spec/certificate_verifier.py` decodes certificate text with `canon_text`: it calls
+  `json.loads` with that module's hooks and then its `check_domain`, in its own frame, and names a
+  refusal with `canon_text`'s messages, which are the verifier's previous messages. Its verdict, reason
+  or `RecursionError` at every caller stack depth is that of 0.9.0.
+- The `spec_core/canon/__init__.py` docstring (in `src/` and in the bundle) names `canon_text`.
+- `consiliency-spec.public-manifest.json` records `source.authority_contract_version` `"0.7.2"` (was
+  `"0.6.5"`), the last published consiliency-contract release. Nothing in these packages reads it.
+- Version metadata, README and these release notes advance to 0.9.1. `package.json` lists both new files
+  and `pyproject.toml` maps the `src/` copy (the bundled copy ships inside the `consiliency_spec`
+  package). Manifest hashes move for the verifier, both
+  `canon/__init__.py` copies and the version constant in `consiliency_spec/__init__.py`.
+
+### Migration
+
+- None for verifier callers. A consumer that pins the manifest's own digest re-records it at 0.9.1;
+  the per-file digests of the 95 unchanged members stay valid.
+
 ## 0.9.0 — Python 3.14 or later, canon-core 0.5.0, stdlib Unicode 16.0 on CPython 3.14
 
 **BREAKING: Python 3.14 or later is required** (`requires-python = ">=3.14"`; was 3.12). pip will not

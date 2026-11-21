@@ -1,6 +1,6 @@
 {
   "name": "@consiliency/spec",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Public Consiliency canon-core v2 package: Rust core, dep-free TypeScript/Python canon ports, vectors, and public schemas.",
   "license": "Apache-2.0",
   "type": "module",
@@ -47,6 +47,7 @@
     "consiliency_spec/_bundle/spec_core/canon/__init__.py",
     "consiliency_spec/_bundle/spec_core/canon/canon.py",
     "consiliency_spec/_bundle/spec_core/canon/canon_ingest.py",
+    "consiliency_spec/_bundle/spec_core/canon/canon_text.py",
     "consiliency_spec/_bundle/spec_core/graph/__init__.py",
     "consiliency_spec/_bundle/spec_core/graph/spec_graph.py",
     "consiliency_spec/_bundle/spec_core/idmodel/__init__.py",
@@ -80,6 +81,7 @@
     "src/spec_core/canon/__init__.py",
     "src/spec_core/canon/canon.py",
     "src/spec_core/canon/canon_ingest.py",
+    "src/spec_core/canon/canon_text.py",
     "test-vectors/certificate/manifest.json",
     "test-vectors/certificate/pass-demo/certificate.json",
     "test-vectors/certificate/pass-demo/certificate.tampered-verdict.json",

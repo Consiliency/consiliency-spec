@@ -2,7 +2,7 @@
   "package": {
     "npm": "@consiliency/spec",
     "pypi": "consiliency-spec",
-    "version": "0.9.0"
+    "version": "0.9.1"
   },
   "public_files": [
     {
@@ -155,7 +155,7 @@
     },
     {
       "path": "consiliency_spec/__init__.py",
-      "sha256": "e00133cf3984222ff676f7d8cc007266793535273c30a3e30edede1e047400fd"
+      "sha256": "fce7a956b2f7d09593c311e8bfa9a6ed31e421e67bfa0b82e4daae646375e4d5"
     },
     {
       "path": "consiliency_spec/_bundle/spec_core/__init__.py",
@@ -163,7 +163,7 @@
     },
     {
       "path": "consiliency_spec/_bundle/spec_core/canon/__init__.py",
-      "sha256": "aea51da98e5bc45d765f6c344e1a9ed472b1168a57a611a45b414cb9ef52eb9b"
+      "sha256": "53d9af30306ae006647beb929e90c7268f6e5481b741a289bd37c54cffcba656"
     },
     {
       "path": "consiliency_spec/_bundle/spec_core/canon/canon.py",
@@ -172,6 +172,10 @@
     {
       "path": "consiliency_spec/_bundle/spec_core/canon/canon_ingest.py",
       "sha256": "99883f36998742e6b41c12c05ba895100980a53ff331ef67884f853a54056505"
+    },
+    {
+      "path": "consiliency_spec/_bundle/spec_core/canon/canon_text.py",
+      "sha256": "01db7290cb4da8a4d16cf0d066e0cf7cccff18d8d747dd7639ebd1b2d60ecebc"
     },
     {
       "path": "consiliency_spec/_bundle/spec_core/graph/__init__.py",
@@ -191,7 +195,7 @@
     },
     {
       "path": "consiliency_spec/certificate_verifier.py",
-      "sha256": "680b951f0ca94e662ce6f50d90e6ba178b6710e95ae74b8bc3495ce6ae684fc1"
+      "sha256": "000ac114b393788ecd0bafc50fbb4aeee98aad203cfde2966f4913547f1773b3"
     },
     {
       "path": "consiliency_spec/outside_agent_router.py",
@@ -295,7 +299,7 @@
     },
     {
       "path": "src/spec_core/canon/__init__.py",
-      "sha256": "aea51da98e5bc45d765f6c344e1a9ed472b1168a57a611a45b414cb9ef52eb9b"
+      "sha256": "53d9af30306ae006647beb929e90c7268f6e5481b741a289bd37c54cffcba656"
     },
     {
       "path": "src/spec_core/canon/canon.py",
@@ -304,6 +308,10 @@
     {
       "path": "src/spec_core/canon/canon_ingest.py",
       "sha256": "99883f36998742e6b41c12c05ba895100980a53ff331ef67884f853a54056505"
+    },
+    {
+      "path": "src/spec_core/canon/canon_text.py",
+      "sha256": "01db7290cb4da8a4d16cf0d066e0cf7cccff18d8d747dd7639ebd1b2d60ecebc"
     },
     {
       "path": "test-vectors/certificate/manifest.json",
@@ -404,7 +412,7 @@
   ],
   "schema_version": "consiliency.spec.public_canon_manifest.v1",
   "source": {
-    "authority_contract_version": "0.6.5",
+    "authority_contract_version": "0.7.2",
     "canon_version": "spec-canon:v2",
     "repo": "Consiliency/consiliency-spec"
   }
