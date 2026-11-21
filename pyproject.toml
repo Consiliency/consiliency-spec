@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "consiliency-spec"
-version = "0.9.0"
+version = "0.9.1"
 description = "Public Consiliency canon-core v2 package: Rust core, dep-free TypeScript/Python canon ports, vectors, and public schemas."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -100,6 +100,7 @@ packages = ["consiliency_spec"]
 "src/spec_core/canon/__init__.py" = "consiliency_spec/_data/src/spec_core/canon/__init__.py"
 "src/spec_core/canon/canon.py" = "consiliency_spec/_data/src/spec_core/canon/canon.py"
 "src/spec_core/canon/canon_ingest.py" = "consiliency_spec/_data/src/spec_core/canon/canon_ingest.py"
+"src/spec_core/canon/canon_text.py" = "consiliency_spec/_data/src/spec_core/canon/canon_text.py"
 "test-vectors/certificate/manifest.json" = "consiliency_spec/_data/test-vectors/certificate/manifest.json"
 "test-vectors/certificate/pass-demo/certificate.json" = "consiliency_spec/_data/test-vectors/certificate/pass-demo/certificate.json"
 "test-vectors/certificate/pass-demo/certificate.tampered-verdict.json" = "consiliency_spec/_data/test-vectors/certificate/pass-demo/certificate.tampered-verdict.json"
@@ -200,6 +201,7 @@ only-include = [
 "src/spec_core/canon/__init__.py" = "src/spec_core/canon/__init__.py"
 "src/spec_core/canon/canon.py" = "src/spec_core/canon/canon.py"
 "src/spec_core/canon/canon_ingest.py" = "src/spec_core/canon/canon_ingest.py"
+"src/spec_core/canon/canon_text.py" = "src/spec_core/canon/canon_text.py"
 "test-vectors/certificate/manifest.json" = "test-vectors/certificate/manifest.json"
 "test-vectors/certificate/pass-demo/certificate.json" = "test-vectors/certificate/pass-demo/certificate.json"
 "test-vectors/certificate/pass-demo/certificate.tampered-verdict.json" = "test-vectors/certificate/pass-demo/certificate.tampered-verdict.json"

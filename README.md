@@ -32,6 +32,16 @@ Every software project has two things: a **blueprint** (what it's *supposed* to 
 
 The six parity dimensions: **completeness**, **soundness**, **closure**, **prohibition**, **revision-alignment**, **acceptance** (`spec-engine-projection:v5`; certificates from before 0.7.0 carry the first five).
 
+### Shared strict decoder 0.9.1 — patch
+
+0.9.1 is a patch on 0.9.0: the Python 3.14 floor and canon-core `0.5.0` still apply. 0.9.0 stays published;
+it is superseded by 0.9.1, not by a defect, and may stay pinned. The verifier's strict JSON-text decode moves into
+`spec_core.canon.canon_text`, which ships in `src/spec_core/canon/` and in the verifier bundle beside
+canon; the verifier's verdicts, reasons and messages are unchanged, as are projection
+`spec-engine-projection:v5`, certificate schema `"2"`, canon bytes, vectors and stored certificates. The
+manifest has 101 files (was 99) and records `authority_contract_version` `"0.7.2"`. See CHANGELOG.md for
+the files whose bytes change.
+
 ### Python 3.14 floor 0.9.0
 
 **0.9.0 requires Python 3.14 or later** (`requires-python = ">=3.14"`; it was 3.12). pip will not
@@ -198,8 +208,8 @@ npm: `npm install @consiliency/spec` ships the same public files. Import them th
 
 `consiliency_spec.verify_certificate` (new in 0.5.1) is the reference verifier for a parity certificate
 (`SEMANTICS.md` §9). It re-derives everything the certificate pins that you can recompute, using only
-what this package ships: the bundled canon v2 port, the spec-graph and idmodel reference modules
-(`consiliency_spec/_bundle/`) and the public schemas. It never re-grades.
+what this package ships: the bundled canon v2 port and its strict JSON-text decode, the spec-graph and
+idmodel reference modules (`consiliency_spec/_bundle/`) and the public schemas. It never re-grades.
 
 ```bash
 pip install "consiliency-spec[verify]"   # jsonschema (always required); unicodedata2==16.0.0 except on CPython 3.14 (to bind S)

@@ -2,8 +2,8 @@
 
 ``verify_certificate()`` re-derives everything a certificate pins that a consumer can recompute,
 using only what this package ships: the bundled canon v2 port, idmodel and spec-graph reference
-modules (``consiliency_spec/_bundle/spec_core/``, the engine's own ``canon.py``, ``idmodel.py`` and
-``spec_graph.py``) and the public schemas. It never re-grades: it checks that the certificate is
+modules (``consiliency_spec/_bundle/spec_core/``, the engine's own ``canon.py``, ``canon_text.py``,
+``idmodel.py`` and ``spec_graph.py``) and the public schemas. It never re-grades: it checks that the certificate is
 well-formed, consistent with the ``digest`` it carries and with itself, and that the inputs a caller
 holds are the inputs it certifies.
 
@@ -126,8 +126,6 @@ PASS = "pass"
 FAIL = "fail"
 
 CANON_VERSION = "v2"
-_MAX_BARE_INT = 2 ** 53 - 1
-_MAX_DEPTH = 128
 #: Non-hashed envelope keys (canon section 10): never part of a digest preimage.
 _ENVELOPE_KEYS = ("locator",)
 _INTENT_LEVELS = frozenset({"contract", "architecture"})
@@ -211,8 +209,8 @@ class CertificateVerification:
 # --------------------------------------------------------------------------------------------- #
 # Loading the bundled reference modules
 #
-# canon.py, canon_ingest.py, idmodel.py and spec_graph.py ship as the spec_core subpackage of
-# consiliency_spec/_bundle and import one another RELATIVELY. Every file is manifest-pinned and
+# canon.py, canon_text.py, canon_ingest.py, idmodel.py and spec_graph.py ship as the spec_core
+# subpackage of consiliency_spec/_bundle and import one another RELATIVELY. Every file is manifest-pinned and
 # executed from the exact bytes whose sha256 was checked, never through the import system: each runs
 # as `consiliency_spec._bundle.spec_core.<...>`, its package registered first, so a relative import
 # such as `from ..canon import canon` binds the checked module. Every name is in sys.modules only for
@@ -224,11 +222,14 @@ class CertificateVerification:
 _BUNDLE = "consiliency_spec/_bundle"
 _CORE = "consiliency_spec._bundle.spec_core"
 _CANON = _CORE + ".canon.canon"
+# The strict JSON-text decode, shared with spec_core.engine.delivered_verify.
+_CANON_TEXT = _CORE + ".canon.canon_text"
 # (module name, manifest path), packages before their modules.
 _CANON_FILES = (
     (_CORE, _BUNDLE + "/spec_core/__init__.py"),
     (_CORE + ".canon", _BUNDLE + "/spec_core/canon/__init__.py"),
     (_CANON, _BUNDLE + "/spec_core/canon/canon.py"),
+    (_CANON_TEXT, _BUNDLE + "/spec_core/canon/canon_text.py"),
 )
 _SPEC_GRAPH = _CORE + ".graph.spec_graph"
 _GRAPH_FILES = (
@@ -342,6 +343,13 @@ def _canon() -> Any:
         return _LOADED[_CANON]
 
 
+def _canon_text() -> Any:
+    with _LOCK:
+        if _CANON_TEXT not in _LOADED:
+            _load(_CANON_FILES)
+        return _LOADED[_CANON_TEXT]
+
+
 def _spec_graph() -> Any:
     with _LOCK:
         if _SPEC_GRAPH not in _LOADED:
@@ -367,68 +375,36 @@ class _DecodeError(ValueError):
     pass
 
 
-def _no_duplicate_keys(pairs: List[Tuple[str, Any]]) -> Dict[str, Any]:
-    out: Dict[str, Any] = {}
-    for key, value in pairs:
-        if key in out:
-            raise _DecodeError("duplicate object key %r" % key)
-        out[key] = value
-    return out
-
-
-def _check_domain(value: Any, depth: int = 0) -> Any:
-    """Copy a parsed value into canon's domain or raise _DecodeError: string keys only, no floats,
-    integers within +/-(2^53 - 1), at most canon's 128 nesting levels."""
-    if value is None or isinstance(value, (bool, str)):
-        return value
-    if isinstance(value, int):
-        if not -_MAX_BARE_INT <= value <= _MAX_BARE_INT:
-            raise _DecodeError("integer beyond +/-(2^53 - 1)")
-        return value
-    if isinstance(value, float):
-        raise _DecodeError("floats are forbidden in canonical content")
-    if isinstance(value, Mapping):
-        if depth >= _MAX_DEPTH:
-            raise _DecodeError("nesting depth exceeds the maximum of %d" % _MAX_DEPTH)
-        out = {}
-        for key, item in value.items():
-            if not isinstance(key, str):
-                raise _DecodeError("object keys must be strings")
-            out[key] = _check_domain(item, depth + 1)
-        return out
-    if isinstance(value, (list, tuple)):
-        if depth >= _MAX_DEPTH:
-            raise _DecodeError("nesting depth exceeds the maximum of %d" % _MAX_DEPTH)
-        return [_check_domain(item, depth + 1) for item in value]
-    raise _DecodeError("unsupported value type %s" % type(value).__name__)
-
-
 def _decode(value: JsonInput, what: str) -> Any:
-    """Text/bytes: parse strictly with canon's number hooks. Mapping: check it is in canon's domain.
-    Raises TypeError for a wrong argument type (misuse) and _DecodeError for bad content."""
-    canon = _canon()
-    if isinstance(value, (bytes, bytearray)):
-        try:
-            value = bytes(value).decode("utf-8")
-        except UnicodeDecodeError:
-            raise _DecodeError("%s is not valid UTF-8" % what) from None
-    if isinstance(value, str):
-        try:
-            parsed = json.loads(value, parse_int=canon._parse_bare_int,
-                                parse_float=canon._parse_bare_float,
-                                parse_constant=canon._reject_constant,
-                                object_pairs_hook=_no_duplicate_keys)
-        except _DecodeError:
-            raise
-        except canon.CanonError as e:
-            raise _DecodeError(str(e)) from None
-        except RecursionError:
-            raise _DecodeError("nesting depth exceeds the maximum of %d" % _MAX_DEPTH) from None
-        except json.JSONDecodeError as e:
-            raise _DecodeError("invalid JSON: %s" % e.msg) from None
-        return _check_domain(parsed)
-    if isinstance(value, Mapping):
-        return _check_domain(value)
+    """Text/bytes: parse strictly with canon's number hooks, refusing duplicate keys. Mapping: check
+    it is in canon's domain. The hooks, the duplicate-key refusal, the domain check and the messages
+    are the bundled ``spec_core.canon.canon_text``, the decode ``spec_core.engine.delivered_verify``
+    also uses; its ``parse`` is spelled out here so json.loads and the recursive check_domain run in
+    this frame, at the stack depth they always had. Raises TypeError for a wrong argument type
+    (misuse) and _DecodeError for bad content."""
+    strict = _canon_text()
+    try:
+        if isinstance(value, (bytes, bytearray)):
+            try:
+                value = bytes(value).decode("utf-8")
+            except UnicodeDecodeError:
+                raise _DecodeError(strict.NOT_UTF8 % what) from None
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value, **strict.LOADS_HOOKS)
+            except strict.StrictTextError:
+                raise
+            except strict.canon.CanonError as e:
+                raise _DecodeError(str(e)) from None
+            except RecursionError:
+                raise _DecodeError(strict.DEPTH_MESSAGE) from None
+            except json.JSONDecodeError as e:
+                raise _DecodeError(strict.INVALID_JSON % e.msg) from None
+            return strict.check_domain(parsed)
+        if isinstance(value, Mapping):
+            return strict.check_domain(value)
+    except strict.StrictTextError as e:
+        raise _DecodeError(str(e)) from None
     raise TypeError("%s must be a mapping, JSON text or UTF-8 bytes, got %s"
                     % (what, type(value).__name__))
 
